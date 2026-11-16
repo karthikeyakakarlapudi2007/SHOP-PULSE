@@ -5,8 +5,8 @@ export type PageRoute =
   | 'dashboard' 
   | 'sales' 
   | 'inventory' 
-  | 'scanner' 
   | 'insights'
+  | 'scanner'
   | 'settings';
 
 export type RecentSale = {

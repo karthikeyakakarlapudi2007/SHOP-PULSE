@@ -6,6 +6,8 @@ Preserves page ordering and extracts word-level bounding boxes for digital docum
 
 from abc import ABC, abstractmethod
 import io
+import re
+import zlib
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -18,6 +20,10 @@ from services.grocery_ocr.schemas.ocr import (
     OCRLine,
     OCRPageResult,
     OCRWord,
+)
+from services.grocery_ocr.processors.text_line_reconstructor import (
+    TextLineReconstructor,
+    build_ocr_document_from_raw_text,
 )
 
 logger = get_logger("processors.pdf_processor")
@@ -149,10 +155,20 @@ class BasePDFProcessor(IPDFProcessor):
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
                     pages_bytes.append(buf.getvalue())
-            return pages_bytes
+            if pages_bytes:
+                return pages_bytes
         except Exception as pl_exc:
             logger.error("pdfplumber rasterization also failed: %s", pl_exc)
-            return pages_bytes
+
+        # Scanned PDF embedded image fallback
+        if not pages_bytes:
+            jpegs = re.findall(b"(\xff\xd8\xff.*?\xff\xd9)", content, re.DOTALL)
+            if jpegs:
+                best_img = max(jpegs, key=len)
+                if len(best_img) > 100:
+                    pages_bytes.append(best_img)
+
+        return pages_bytes
 
     def extract_digital_text(self, content: bytes) -> Optional[OCRDocumentResult]:
         """
@@ -215,63 +231,67 @@ class BasePDFProcessor(IPDFProcessor):
                     )
 
             total_words = sum(len(p.words) for p in pages_result)
-            if total_words < 10:
-                logger.debug("Digital extraction found only %d words (< 10 threshold); marking scanned", total_words)
-                return None
-
-            return OCRDocumentResult(
-                pages=pages_result,
-                total_pages=len(pages_result),
-                full_text="\n\n".join(full_text_parts),
-                average_confidence=100.0,
-                engine_name="digital_pdf_extractor",
-                engine_version="1.0.0",
-                preprocessing_metadata={"is_digital_stream": True},
-            )
+            if total_words >= 10:
+                return OCRDocumentResult(
+                    pages=pages_result,
+                    total_pages=len(pages_result),
+                    full_text="\n\n".join(full_text_parts),
+                    average_confidence=100.0,
+                    engine_name="digital_pdf_extractor",
+                    engine_version="1.0.0",
+                    preprocessing_metadata={"is_digital_stream": True},
+                )
         except Exception as exc:
             logger.debug("Direct digital text extraction failed or not supported for this PDF: %s", exc)
-            return None
+
+        # Fallback for synthetic/simple stream PDFs
+        stream_text = self._extract_raw_pdf_stream_text(content)
+        if stream_text and len(stream_text.split()) >= 4:
+            return self._build_document_from_raw_text(stream_text)
+
+        return None
+
+    def _extract_raw_pdf_stream_text(self, content: bytes) -> str:
+        all_lines: List[str] = []
+        candidate_streams = []
+        for s in re.findall(b"stream[\r\n]+(.*?)[\r\n]+endstream", content, re.DOTALL):
+            for attempt in (lambda b: zlib.decompress(b), lambda b: zlib.decompress(b, -15), lambda b: b):
+                try:
+                    candidate_streams.append(attempt(s))
+                    break
+                except Exception:
+                    continue
+        if not candidate_streams:
+            candidate_streams.append(content)
+
+        token_pattern = re.compile(
+            r"\((.*?)\)\s*(?:Tj|'|\")|\[(.*?)\]\s*TJ|T\*|([-+]?\d*\.?\d+)\s+([-+]?\d*\.?\d+)\s+T[dD]", re.DOTALL
+        )
+        for raw_stream in candidate_streams:
+            stream_text = raw_stream.decode("latin1", errors="ignore")
+            for block in re.findall(r"BT(.*?)ET", stream_text, re.DOTALL):
+                parts: List[str] = []
+                for match in token_pattern.finditer(block):
+                    if match.group(1) is not None:
+                        txt = match.group(1).replace(r"\(", "(").replace(r"\)", ")").strip()
+                        if txt:
+                            parts.append(txt)
+                    elif match.group(2) is not None:
+                        combined = "".join(re.findall(r"\((.*?)\)", match.group(2))).strip()
+                        if combined:
+                            parts.append(combined)
+                    elif match.group(0).startswith("T*") or (match.group(4) and abs(float(match.group(4))) > 0.001):
+                        if parts:
+                            all_lines.append("    ".join(parts))
+                            parts = []
+                if parts:
+                    all_lines.append("    ".join(parts))
+        return "\n".join(all_lines)
+
+    def _build_document_from_raw_text(self, text: str) -> OCRDocumentResult:
+        return build_ocr_document_from_raw_text(text, filename="stream.pdf", base_y=20.0, line_height=30.0)
 
     def _group_words_into_lines(self, words: List[OCRWord]) -> List[OCRLine]:
-        """Groups words on a page into horizontal text lines based on vertical overlap."""
-        if not words:
-            return []
-
-        # Sort words primarily top-to-bottom, then left-to-right
-        sorted_words = sorted(words, key=lambda w: (w.bbox.y0, w.bbox.x0))
-        lines: List[List[OCRWord]] = []
-
-        for w in sorted_words:
-            placed = False
-            for line_words in lines:
-                rep = line_words[0]
-                overlap = min(w.bbox.y1, rep.bbox.y1) - max(w.bbox.y0, rep.bbox.y0)
-                min_h = min(w.bbox.height, rep.bbox.height)
-                if min_h > 0 and (overlap / min_h) >= 0.5:
-                    line_words.append(w)
-                    placed = True
-                    break
-            if not placed:
-                lines.append([w])
-
-        ocr_lines: List[OCRLine] = []
-        for line_idx, line_words in enumerate(lines):
-            line_words.sort(key=lambda w: w.bbox.x0)
-            line_text = " ".join(w.text for w in line_words).strip()
-            x0 = min(w.bbox.x0 for w in line_words)
-            y0 = min(w.bbox.y0 for w in line_words)
-            x1 = max(w.bbox.x1 for w in line_words)
-            y1 = max(w.bbox.y1 for w in line_words)
-            ocr_lines.append(
-                OCRLine(
-                    line_number=line_idx,
-                    text=line_text,
-                    words=line_words,
-                    bbox=BoundingBox(x0=x0, y0=y0, x1=x1, y1=y1),
-                    confidence=100.0,
-                )
-            )
-
-        # Sort lines top-to-bottom
-        ocr_lines.sort(key=lambda l: l.bbox.y0)
-        return ocr_lines
+        """Groups words on a page into horizontal text lines using spatial reconstruction."""
+        reconstructor = TextLineReconstructor()
+        return reconstructor.reconstruct_lines(words)

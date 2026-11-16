@@ -13,14 +13,15 @@ interface LanguageContextType {
   languages: LanguageMeta[];
 }
 
-const STORAGE_KEY = 'shoppulse_language';
+const STORAGE_KEY = 'shelfora_language';
+const LEGACY_STORAGE_KEY = 'shoppulse_language';
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<LanguageCode>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
       if (saved && LANGUAGES.some((l) => l.code === saved)) {
         return saved as LanguageCode;
       }
@@ -42,6 +43,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLanguageState(code);
     try {
       localStorage.setItem(STORAGE_KEY, code);
+      localStorage.setItem(LEGACY_STORAGE_KEY, code);
     } catch {
       // Ignore localStorage errors
     }
@@ -49,7 +51,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const t = (key: string, params?: Record<string, string | number>): string => {
     const keys = key.split('.');
-    
+
     // Try current language
     let result: any = translationsMap[language];
     for (const k of keys) {

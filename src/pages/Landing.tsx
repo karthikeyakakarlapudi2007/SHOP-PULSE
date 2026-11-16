@@ -1,193 +1,366 @@
 import React, { useState } from 'react';
 import { 
-  Activity, 
   ArrowRight, 
-  Store,
-  Globe,
+  Globe, 
+  Layers, 
+  Mic, 
+  BarChart3, 
+  ChevronRight,
   ShieldCheck,
-  Sparkles
+  Menu,
+  X
 } from 'lucide-react';
-import { Button } from '../components/Button';
 import type { PageRoute } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useAuth } from '../hooks/useAuth';
 import { LanguageSelectorModal } from '../components/LanguageSelectorModal';
+import { ShelforaLogo } from '../components/branding/ShelforaLogo';
 
-interface LandingProps {
+export interface LandingProps {
   setActivePage: (page: PageRoute) => void;
 }
 
 export const Landing: React.FC<LandingProps> = ({ setActivePage }) => {
-  const { t, currentLanguageMeta } = useLanguage();
+  const { currentLanguageMeta } = useLanguage();
   const { firebaseUser } = useAuth();
   const [isLangModalOpen, setIsLangModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleFeatureClick = (targetPage: PageRoute) => {
+    if (firebaseUser) {
+      setActivePage(targetPage);
+    } else {
+      setActivePage('login');
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#F7F5EF] text-[#202923] font-sans">
+    <div className="min-h-screen bg-[#FAF8F2] text-[#252D29] font-sans flex flex-col selection:bg-[#E8F3ED] selection:text-[#123D32]">
       
       {/* ========================================================= */}
-      {/* 1. MOBILE NATIVE ONBOARDING VIEW (Shown on mobile devices) */}
+      {/* 1. CLEAN HORIZONTAL NAVIGATION BAR                        */}
       {/* ========================================================= */}
-      <div className="md:hidden min-h-[100dvh] flex flex-col justify-between p-5 sm:p-6 select-none pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
-        
-        {/* Mobile Top Header */}
-        <div className="flex items-center justify-between pt-1">
-          <span className="inline-flex items-center text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#234B3A] bg-[#E5EEE6] px-3 py-1 rounded-full border border-[#52745D]/30">
-            {t('landing.kiranaTechBadge')}
-          </span>
+      <header className="bg-white border-b border-[#E5EAE5] sticky top-0 z-40 transition-shadow">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          
+          {/* Left: Shelfora Logo & Tagline */}
+          <div className="flex items-center gap-3">
+            <ShelforaLogo variant="horizontal" size="md" showTagline={true} />
+          </div>
 
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#234B3A]">
-              <ShieldCheck className="w-4 h-4 text-[#234B3A] shrink-0" />
-              <span>{t('landing.madeForBharat')}</span>
-            </span>
-
+          {/* Right: Language selector + Login / Signup (Desktop) */}
+          <div className="hidden md:flex items-center gap-3">
+            {/* Language Selector */}
             <button
+              type="button"
               onClick={() => setIsLangModalOpen(true)}
-              aria-label="Change Language"
-              className="w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg hover:bg-[#E5EEE6] text-[#69736C] transition-colors cursor-pointer"
+              className="px-3.5 py-2 rounded-full bg-[#FAF8F2] hover:bg-[#E8F3ED] text-[#123D32] border border-[#DDE9DF] flex items-center gap-2 text-xs font-semibold transition-colors cursor-pointer"
               title="Change Language"
+              aria-label="Change Language"
             >
-              <Globe className="w-4 h-4 text-[#234B3A]" />
+              <Globe className="w-3.5 h-3.5 text-[#16866A] shrink-0" />
+              <span>{currentLanguageMeta.nativeName}</span>
+            </button>
+
+            {firebaseUser ? (
+              <button
+                type="button"
+                onClick={() => setActivePage('dashboard')}
+                className="px-5 py-2.5 rounded-full bg-[#123D32] hover:bg-[#0A241D] text-white text-sm font-semibold transition-all shadow-xs hover:shadow-sm cursor-pointer"
+              >
+                Go to Dashboard
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActivePage('login')}
+                  className="px-5 py-2.5 rounded-full text-sm font-semibold text-[#123D32] hover:text-[#0A241D] hover:bg-[#FAF8F2] border border-transparent hover:border-[#DDE9DF] transition-all cursor-pointer"
+                >
+                  Log In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePage('signup')}
+                  className="px-5 py-2.5 rounded-full bg-[#123D32] hover:bg-[#0A241D] text-white text-sm font-semibold transition-all shadow-xs hover:shadow-sm cursor-pointer"
+                >
+                  Create Account
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Mobile Right Controls: Language Button & Hamburger */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={() => setIsLangModalOpen(true)}
+              className="p-2 rounded-full bg-[#FAF8F2] border border-[#DDE9DF] text-[#123D32] flex items-center justify-center cursor-pointer min-h-[40px] min-w-[40px]"
+              aria-label="Change Language"
+            >
+              <Globe className="w-4 h-4 text-[#16866A]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-full bg-[#FAF8F2] border border-[#DDE9DF] text-[#123D32] flex items-center justify-center cursor-pointer min-h-[40px] min-w-[40px]"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5 text-[#123D32]" /> : <Menu className="w-5 h-5 text-[#123D32]" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Center Hero Card */}
-        <div className="my-auto py-6 flex flex-col items-center text-center">
-          
-          {/* Logo Squircle with SP and Sparkle Badge */}
-          <div className="relative mb-5">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white shadow-xs border border-[#E3E5DE] flex items-center justify-center p-3">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#234B3A] flex items-center justify-center text-white font-extrabold text-2xl tracking-wider shadow-xs select-none">
-                SP
-              </div>
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center text-slate-900 shadow-xs">
-              <Sparkles className="w-3 h-3 fill-slate-900 text-slate-900" />
-            </div>
-          </div>
-
-          {/* Typography */}
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-[#202923] tracking-tight">
-            ShopPulse
-          </h1>
-          
-          <p className="text-sm sm:text-base text-[#234B3A] font-bold mt-1">
-            {t('landing.mobileRegionalSub')}
-          </p>
-
-          <p className="text-xs sm:text-sm text-[#69736C] font-normal mt-3 max-w-xs">
-            {t('landing.smartInventorySub')}
-          </p>
-
-          {/* 3-Dot Carousel Indicator */}
-          <div className="flex items-center justify-center gap-1.5 mt-7">
-            <span className="w-2 h-2 rounded-full bg-[#D5E4D7]"></span>
-            <span className="w-5 h-2 rounded-full bg-[#234B3A]"></span>
-            <span className="w-2 h-2 rounded-full bg-[#D5E4D7]"></span>
-          </div>
-        </div>
-
-        {/* Mobile Bottom Action Buttons */}
-        <div className="w-full max-w-sm mx-auto pb-2">
-          <button
-            onClick={() => setActivePage(firebaseUser ? 'dashboard' : 'login')}
-            className="w-full py-3.5 min-h-[48px] bg-[#234B3A] hover:bg-[#18382B] active:scale-[0.98] text-white font-bold text-base rounded-lg shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <span>{t('landing.getStarted')}</span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setActivePage('dashboard')}
-            className="mt-3 text-xs font-semibold text-[#69736C] hover:text-[#202923] text-center w-full block transition-colors cursor-pointer py-2 min-h-[38px] flex items-center justify-center"
-          >
-            {t('landing.enterDemoShop')}
-          </button>
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* 2. DESKTOP LANDING VIEW (Shown on md+ screens) */}
-      {/* ========================================================= */}
-      <div className="hidden md:flex md:flex-col min-h-screen">
-        {/* Header / Brand Bar */}
-        <nav className="bg-white/95 backdrop-blur-md border-b border-[#E3E5DE] sticky top-0 z-30 shadow-xs">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-lg bg-[#234B3A] flex items-center justify-center text-white shadow-xs shrink-0">
-                <Activity className="w-6 h-6 animate-pulse" />
-              </div>
-              <div>
-                <div className="flex items-baseline gap-0.5">
-                  <span className="text-xl font-extrabold text-[#202923] tracking-tight">Shop</span>
-                  <span className="text-xl font-extrabold text-[#234B3A] tracking-tight">Pulse</span>
-                </div>
-                <p className="text-[10px] font-medium text-[#69736C]">{t('dashboard.tagline')}</p>
-              </div>
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-[#E5EAE5] bg-white px-4 pt-3 pb-5 space-y-3 animate-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between py-1 text-xs text-[#5E6C64] font-medium border-b border-[#E5EAE5] pb-2">
+              <span>Smarter Grocery Management</span>
+              <span className="flex items-center gap-1 text-[#16866A]">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Made for Bharat</span>
+              </span>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                onClick={() => setIsLangModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-[#F7F5EF] hover:bg-[#E5EEE6] text-[#202923] border border-[#E3E5DE] flex items-center gap-1.5 transition-colors cursor-pointer text-xs font-bold"
-              >
-                <Globe className="w-4 h-4 text-[#234B3A] shrink-0" />
-                <span>{currentLanguageMeta.nativeName}</span>
-              </button>
-
+            <div className="pt-1 flex flex-col gap-2.5">
               {firebaseUser ? (
-                <Button variant="primary" size="sm" onClick={() => setActivePage('dashboard')} className="font-bold">
-                  {t('landing.launchDashboard')}
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setActivePage('dashboard');
+                  }}
+                  className="w-full py-3 rounded-xl bg-[#123D32] text-white font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                >
+                  <span>Open Dashboard</span>
+                  <ArrowRight className="w-4 h-4 text-[#E8F3ED]" />
+                </button>
               ) : (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => setActivePage('login')} className="font-semibold">
-                    {t('auth.loginHere')}
-                  </Button>
-                  <Button variant="primary" size="sm" onClick={() => setActivePage('signup')} className="font-bold">
-                    {t('auth.createAccount')}
-                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setActivePage('signup');
+                    }}
+                    className="w-full py-3 rounded-xl bg-[#123D32] text-white font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                  >
+                    <span>Create Free Account</span>
+                    <ArrowRight className="w-4 h-4 text-[#E8F3ED]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setActivePage('login');
+                    }}
+                    className="w-full py-3 rounded-xl bg-[#FAF8F2] hover:bg-[#F3EFE3] text-[#123D32] font-semibold text-sm border border-[#DDE9DF] flex items-center justify-center cursor-pointer min-h-[44px]"
+                  >
+                    <span>Log In to Existing Store</span>
+                  </button>
                 </>
               )}
             </div>
           </div>
-        </nav>
+        )}
+      </header>
 
-        {/* Hero Section */}
-        <section className="flex-1 py-12 sm:py-20 px-4 max-w-5xl mx-auto text-center flex flex-col items-center justify-center">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E5EEE6] text-[#234B3A] border border-[#52745D]/30 text-xs font-bold mb-6 shadow-xs">
-            <Store className="w-4 h-4 text-[#234B3A]" />
-            <span>{t('landing.heroBadge')}</span>
+      {/* ========================================================= */}
+      {/* 2. HERO SECTION (Centered, Spacious, Deep Forest Green)   */}
+      {/* ========================================================= */}
+      <main className="flex-1">
+        <section className="pt-20 pb-16 md:pt-28 md:pb-24 px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center justify-center">
+          
+          {/* Small Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E8F3ED] text-[#123D32] border border-[#16866A]/25 text-xs font-semibold tracking-wide mb-8 shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#16866A]" />
+            <span>Smarter Grocery Management</span>
           </div>
 
-          <h1 className="text-3xl sm:text-6xl font-extrabold text-[#202923] tracking-tight leading-tight max-w-3xl">
-            {t('landing.heroTitle')}
+          {/* Main Heading */}
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-[#123D32] tracking-tight leading-[1.12] max-w-4xl mx-auto">
+            Manage Your Store.<br className="hidden sm:inline" />
+            <span className="block mt-1 sm:mt-2">Know What to Do Next.</span>
           </h1>
 
-          <p className="mt-5 text-base sm:text-xl text-[#69736C] max-w-2xl font-normal leading-relaxed">
-            {t('landing.heroSub')}
+          {/* Supporting Description */}
+          <p className="mt-6 md:mt-8 text-base sm:text-lg md:text-xl text-[#5E6C64] max-w-2xl mx-auto leading-relaxed font-normal">
+            Shelfora helps grocery retailers manage inventory, process supplier invoices, track sales and make smarter business decisions.
           </p>
 
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 w-full max-w-sm justify-center">
-            <Button 
-              variant="primary" 
-              size="lg" 
-              onClick={() => setActivePage(firebaseUser ? 'dashboard' : 'login')}
-              icon={<ArrowRight className="w-5 h-5" />}
-              className="font-bold py-3.5"
+          {/* Primary & Secondary Call to Actions */}
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 w-full max-w-md mx-auto">
+            <button
+              type="button"
+              onClick={() => setActivePage(firebaseUser ? 'dashboard' : 'signup')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-full bg-[#123D32] hover:bg-[#0A241D] text-white font-semibold text-base transition-all shadow-sm hover:shadow-md cursor-pointer min-h-[48px]"
             >
-              {firebaseUser ? t('landing.launchDashboard') : (t('auth.loginBtn') || 'Sign In to Dashboard')}
-            </Button>
+              <span>Get Started</span>
+              <ArrowRight className="w-4 h-4 text-[#E8F3ED]" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('features');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-white hover:bg-[#FAF8F2] text-[#123D32] border border-[#DDE9DF] font-semibold text-base transition-all cursor-pointer min-h-[48px]"
+            >
+              <span>Explore Features</span>
+            </button>
           </div>
 
-          <p className="mt-3.5 text-xs font-medium text-[#69736C]">
-            Mobile-first. Built specifically for everyday shop owners.
-          </p>
+          {/* Trust Metric Strip */}
+          <div className="mt-12 inline-flex items-center gap-6 text-xs text-[#5E6C64]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#16866A]" />
+              Zero Hardware Required
+            </span>
+            <span className="hidden sm:inline-block text-[#DDE9DF]">·</span>
+            <span className="hidden sm:flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#16866A]" />
+              Works Offline & Cloud-Synced
+            </span>
+            <span className="hidden sm:inline-block text-[#DDE9DF]">·</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#16866A]" />
+              12 Indian Regional Languages
+            </span>
+          </div>
         </section>
-      </div>
 
+        {/* ========================================================= */}
+        {/* 3. FEATURE CARDS SECTION (3 Balanced Cards)               */}
+        {/* ========================================================= */}
+        <section id="features" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 md:pb-32">
+          <div className="text-center mb-12">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#16866A] mb-2">
+              Capabilities Built for Indian Kiranas
+            </h2>
+            <p className="text-2xl sm:text-3xl font-extrabold text-[#123D32] tracking-tight">
+              Everything Your Store Needs in One Place
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+            
+            {/* CARD 1 – Invoice Intelligence */}
+            <div 
+              onClick={() => handleFeatureClick('scanner')}
+              className="group bg-white border border-[#E5EAE5] rounded-2xl p-7 flex flex-col justify-between hover:border-[#16866A]/40 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer shadow-xs hover:shadow-sm"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-[#E8F3ED] flex items-center justify-center text-[#16866A] mb-5 group-hover:bg-[#123D32] group-hover:text-white transition-colors">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-[#123D32] tracking-tight mb-2.5">
+                  Invoice Intelligence
+                </h3>
+                <p className="text-sm text-[#5E6C64] leading-relaxed">
+                  Convert supplier invoices into structured grocery inventory data with intelligent extraction and validation.
+                </p>
+              </div>
+
+              <div className="mt-8 pt-4 border-t border-[#F3EFE3] flex items-center justify-between text-xs font-semibold text-[#16866A] group-hover:text-[#123D32]">
+                <span>Process wholesale bills</span>
+                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </div>
+            </div>
+
+            {/* CARD 2 – Voice-to-Bill */}
+            <div 
+              onClick={() => handleFeatureClick('sales')}
+              className="group bg-white border border-[#E5EAE5] rounded-2xl p-7 flex flex-col justify-between hover:border-[#16866A]/40 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer shadow-xs hover:shadow-sm"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-[#E8F3ED] flex items-center justify-center text-[#16866A] mb-5 group-hover:bg-[#123D32] group-hover:text-white transition-colors">
+                  <Mic className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-[#123D32] tracking-tight mb-2.5">
+                  Voice-to-Bill
+                </h3>
+                <p className="text-sm text-[#5E6C64] leading-relaxed">
+                  Create bills quickly using voice input with support for 12 Indian regional languages.
+                </p>
+              </div>
+
+              <div className="mt-8 pt-4 border-t border-[#F3EFE3] flex items-center justify-between text-xs font-semibold text-[#16866A] group-hover:text-[#123D32]">
+                <span>Speak to generate bill</span>
+                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </div>
+            </div>
+
+            {/* CARD 3 – Retail Analytics */}
+            <div 
+              onClick={() => handleFeatureClick('insights')}
+              className="group bg-white border border-[#E5EAE5] rounded-2xl p-7 flex flex-col justify-between hover:border-[#16866A]/40 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer shadow-xs hover:shadow-sm"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-[#E8F3ED] flex items-center justify-center text-[#16866A] mb-5 group-hover:bg-[#123D32] group-hover:text-white transition-colors">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <h3 className="text-lg font-bold text-[#123D32] tracking-tight mb-2.5">
+                  Retail Analytics
+                </h3>
+                <p className="text-sm text-[#5E6C64] leading-relaxed">
+                  Understand stock levels, sales performance, profit margins and restocking requirements.
+                </p>
+              </div>
+
+              <div className="mt-8 pt-4 border-t border-[#F3EFE3] flex items-center justify-between text-xs font-semibold text-[#16866A] group-hover:text-[#123D32]">
+                <span>View store insights</span>
+                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              </div>
+            </div>
+
+          </div>
+        </section>
+      </main>
+
+      {/* ========================================================= */}
+      {/* 4. CLEAN MINIMAL FOOTER                                   */}
+      {/* ========================================================= */}
+      <footer className="bg-white border-t border-[#E5EAE5] py-8 text-xs text-[#5E6C64]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <ShelforaLogo variant="compact" size="sm" />
+            <span className="font-bold text-[#123D32]">Shelfora</span>
+            <span className="text-[#DDE9DF]">·</span>
+            <span>Smarter Grocery Management.</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <button
+              type="button"
+              onClick={() => setActivePage('login')}
+              className="hover:text-[#123D32] transition-colors cursor-pointer"
+            >
+              Log In
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePage('signup')}
+              className="hover:text-[#123D32] transition-colors cursor-pointer"
+            >
+              Create Account
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePage('dashboard')}
+              className="hover:text-[#123D32] transition-colors cursor-pointer"
+            >
+              Store Dashboard
+            </button>
+            <span className="text-[#DDE9DF]">·</span>
+            <span className="font-medium text-[#123D32]">Help: 1800-SHELFORA</span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Global Language Selector Modal */}
       <LanguageSelectorModal
         isOpen={isLangModalOpen}
         onClose={() => setIsLangModalOpen(false)}
@@ -195,3 +368,5 @@ export const Landing: React.FC<LandingProps> = ({ setActivePage }) => {
     </div>
   );
 };
+
+export default Landing;

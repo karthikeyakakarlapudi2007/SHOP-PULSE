@@ -24,29 +24,29 @@ export const TopSellers: React.FC<TopSellersProps> = ({
   const getRankBadgeStyle = (index: number) => {
     switch (index) {
       case 0:
-        return 'bg-[#FEF9EB] text-[#A66A16] border-[#FDE68A] font-extrabold';
+        return 'bg-[#FBF4E7] text-[#A07828] border-[#D6AE62] font-extrabold';
       case 1:
-        return 'bg-[#E5EEE6] text-[#234B3A] border-[#52745D]/30 font-bold';
+        return 'bg-[#E7F3EE] text-[#153D32] border-[#23866A]/30 font-bold';
       case 2:
-        return 'bg-[#F2EFE9] text-[#52745D] border-[#E3E5DE] font-bold';
+        return 'bg-[#F3EFE3] text-[#23866A] border-[#DDE9DF] font-bold';
       default:
-        return 'bg-[#F7F5EF] text-[#69736C] border-[#E3E5DE] font-medium';
+        return 'bg-[#FAF8F2] text-[#5E6C64] border-[#DDE9DF] font-medium';
     }
   };
 
   return (
-    <div className="bg-white rounded-xl border border-[#E3E5DE] p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full transition-all">
+    <div className="bg-white rounded-2xl border border-[#DDE9DF] p-5 sm:p-6 shadow-card flex flex-col justify-between h-full transition-all">
       <div>
-        <div className="flex items-center justify-between pb-3 border-b border-[#E3E5DE]">
-          <h2 className="font-extrabold text-[#202923] text-base flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-[#FEF9EB] text-[#A66A16] flex items-center justify-center shrink-0 border border-[#FDE68A]">
-              <Flame className="w-4 h-4 text-[#A66A16]" />
+        <div className="flex items-center justify-between pb-3 border-b border-[#DDE9DF]">
+          <h2 className="font-extrabold text-[#252D29] text-base flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-[#FBF4E7] text-[#A07828] flex items-center justify-center shrink-0 border border-[#D6AE62]">
+              <Flame className="w-4 h-4 text-[#A07828]" />
             </span>
             <span>{t('dashboard.topSellers')}</span>
           </h2>
           <button
             onClick={() => setActivePage('insights')}
-            className="text-xs font-bold text-[#234B3A] hover:underline flex items-center gap-0.5 cursor-pointer"
+            className="text-xs font-bold text-[#153D32] hover:underline flex items-center gap-0.5 cursor-pointer"
           >
             <span>{t('dashboard.viewAll')}</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
@@ -54,9 +54,9 @@ export const TopSellers: React.FC<TopSellersProps> = ({
         </div>
 
         {/* Compact List */}
-        <div className="divide-y divide-[#E3E5DE] mt-1">
+        <div className="divide-y divide-[#DDE9DF] mt-1">
           {items.length === 0 ? (
-            <div className="py-8 text-center text-[#69736C] text-xs font-semibold">
+            <div className="py-8 text-center text-[#5E6C64] text-xs font-semibold">
               No sales recorded yet. Completed sales will rank top items here.
             </div>
           ) : (
@@ -74,17 +74,17 @@ export const TopSellers: React.FC<TopSellersProps> = ({
                     {idx + 1}
                   </span>
                   <div className="min-w-0">
-                    <p className="font-bold text-[#202923] text-sm truncate">
+                    <p className="font-bold text-[#252D29] text-sm truncate">
                       {item.name}
                     </p>
-                    <p className="text-xs text-[#69736C] font-medium">
+                    <p className="text-xs text-[#5E6C64] font-medium">
                       {item.category}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs font-bold text-[#202923] bg-[#F7F5EF] border border-[#E3E5DE] px-2.5 py-1 rounded-md">
+                  <span className="text-xs font-bold text-[#252D29] bg-[#FAF8F2] border border-[#DDE9DF] px-2.5 py-1 rounded-md">
                     {item.soldCount} {t('dashboard.sold')}
                   </span>
                 </div>
@@ -94,10 +94,10 @@ export const TopSellers: React.FC<TopSellersProps> = ({
         </div>
       </div>
 
-      <div className="pt-3 mt-1 border-t border-[#E3E5DE]">
+      <div className="pt-3 mt-1 border-t border-[#DDE9DF]">
         <button
           onClick={() => setActivePage('insights')}
-          className="w-full text-center text-xs font-bold text-[#234B3A] hover:underline transition-colors cursor-pointer py-1"
+          className="w-full text-center text-xs font-bold text-[#153D32] hover:underline transition-colors cursor-pointer py-1"
         >
           {t('insights.topSellingProducts')} →
         </button>

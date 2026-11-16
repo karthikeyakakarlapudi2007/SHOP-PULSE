@@ -4,8 +4,11 @@ import sqlite3
 from pathlib import Path
 
 # Add backend directory to sys.path
-backend_dir = Path(__file__).resolve().parent.parent / "backend"
+backend_dir = Path(__file__).resolve().parents[2] / "backend"
 sys.path.insert(0, str(backend_dir))
+venv_site = backend_dir / ".venv" / "Lib" / "site-packages"
+if venv_site.exists():
+    sys.path.insert(0, str(venv_site))
 
 def check_1_database():
     print("=" * 60)
@@ -29,9 +32,10 @@ def check_1_database():
     assert count > 0, "Inventory records were lost!"
 
     # Now verify via SQLAlchemy session exactly as used by invoice extraction
-    from db.session import SessionLocal
-    from db.models.product import Product
-    from db.models.shop import Shop
+    import importlib
+    SessionLocal = importlib.import_module("db.session").SessionLocal
+    Product = importlib.import_module("db.models.product").Product
+    Shop = importlib.import_module("db.models.shop").Shop
     
     db = SessionLocal()
     try:

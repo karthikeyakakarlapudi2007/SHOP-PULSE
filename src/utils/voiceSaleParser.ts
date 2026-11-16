@@ -111,7 +111,7 @@ export function parseVoiceSaleInput(
   
   // Split by connectors: comma, "and", "plus", "+", or semicolon
   const rawSegments = normalized
-    .split(/[,;\+]|\band\b|\bplus\b/g)
+    .split(/[,;+]|\band\b|\bplus\b/g)
     .map(s => s.trim())
     .filter(Boolean);
 

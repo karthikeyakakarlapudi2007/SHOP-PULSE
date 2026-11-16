@@ -1,7 +1,8 @@
 from typing import Optional, List, Any, Dict, Literal
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from schemas.product import ProductResponse
 
 
 class MrpLookupSchema(BaseModel):
@@ -143,6 +144,15 @@ class InvoiceConfirmItem(BaseModel):
     line_amount: Optional[float] = Field(None, ge=0, description="Line amount printed on the invoice")
     matched_product_id: Optional[UUID] = Field(None, description="Existing product ID if matched")
 
+    @model_validator(mode="before")
+    @classmethod
+    def map_product_name(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "name" not in data or not data["name"]:
+                if "product_name" in data and data["product_name"]:
+                    data["name"] = data["product_name"]
+        return data
+
     @field_validator("quantity")
     @classmethod
     def whole_units(cls, v: float) -> float:
@@ -171,5 +181,9 @@ class InvoiceConfirmResponse(BaseModel):
     created_at: datetime
     processing_status: Optional[str] = "CONFIRMED"
     review_status: Optional[str] = "REVIEWED"
+    saved_products: List[ProductResponse] = Field(
+        default_factory=list,
+        description="List of all saved and restocked product details with IDs, stock, and prices"
+    )
 
     model_config = ConfigDict(from_attributes=True)

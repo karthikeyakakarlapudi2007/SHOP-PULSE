@@ -1,6 +1,6 @@
 /**
  * @file start-backend.js
- * @description Cross-platform runner for the ShopPulse FastAPI backend.
+ * @description Cross-platform runner for the Shelfora FastAPI backend.
  * Automatically locates the project's virtual environment (.venv) or system Python.
  */
 
@@ -38,7 +38,7 @@ export function startBackend(options = {}) {
   const pythonBin = getPythonPath();
   const scriptPath = path.join(backendDir, 'main.py');
 
-  console.log(`[ShopPulse] Starting FastAPI backend with Python: ${pythonBin}`);
+  console.log(`[Shelfora] Starting FastAPI backend with Python: ${pythonBin}`);
 
   const child = spawn(pythonBin, [scriptPath], {
     cwd: rootDir,
@@ -50,7 +50,7 @@ export function startBackend(options = {}) {
   });
 
   child.on('error', (err) => {
-    console.error('[ShopPulse Backend Error]:', err.message);
+    console.error('[Shelfora Backend Error]:', err.message);
   });
 
   return child;

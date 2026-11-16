@@ -31,6 +31,38 @@ import type {
 import type { Product } from '../types/product';
 import { getFirebaseErrorMessage } from '../utils/firebaseErrorMapper';
 import { sendLowStockNotification, sendCriticalAlert } from './pushNotificationService';
+import { authApi } from '../api/auth';
+import { notificationsApi, type NotificationItem } from '../api/notifications';
+
+export function mapBackendNotificationToAlert(n: NotificationItem): Alert {
+  let alertType: AlertType = 'LOW_STOCK';
+  if (n.category === 'inventory') {
+    alertType = n.priority === 'critical' ? 'OUT_OF_STOCK' : 'LOW_STOCK';
+  } else if (n.category === 'sales') {
+    alertType = 'SALE_COMPLETED';
+  } else {
+    alertType = 'system';
+  }
+
+  return {
+    id: n.id,
+    productId: n.product_id,
+    productName: n.title,
+    type: alertType,
+    message: n.message,
+    priority: n.priority as AlertPriority,
+    isRead: Boolean(n.is_read),
+    createdAt: n.created_at,
+    resolvedAt: n.resolved_at,
+    shopId: n.shop_id,
+    title: n.title,
+    severity: n.priority as AlertPriority,
+    category: n.category,
+    deepLink: n.deep_link,
+    eventKey: n.event_key
+  };
+}
+
 
 function getAlertsCol(userId?: string) {
   const uid = userId || requireActiveUserId();
@@ -160,7 +192,9 @@ export async function createAlert(input: CreateAlertInput): Promise<Alert> {
     shopId: input.shopId || 'default',
     title: input.title,
     severity: input.priority,
-    recommendedOrderQuantity: input.recommendedOrderQuantity
+    recommendedOrderQuantity: input.recommendedOrderQuantity,
+    deviceId: input.deviceId,
+    category: input.category
   };
 
   if (isDemoMode()) {
@@ -185,6 +219,23 @@ export async function createAlert(input: CreateAlertInput): Promise<Alert> {
  * Fetch all alerts, with support for priority, type, read status, and pagination.
  */
 export async function getAlerts(options?: AlertFilterOptions): Promise<Alert[]> {
+  if (authApi.isAuthenticated()) {
+    try {
+      const res = await notificationsApi.getNotifications({
+        category: options?.type === 'system' ? 'system' : undefined,
+        priority: options?.priority,
+        is_read: options?.isRead,
+        limit: options?.limit || 50,
+      });
+      if (res && res.items && res.items.length > 0) {
+        return res.items.map(mapBackendNotificationToAlert);
+      }
+    } catch (apiErr) {
+      console.warn('Backend notifications API unavailable, falling back:', apiErr);
+    }
+  }
+
+
   const uid = getActiveUserId();
   if (!uid) return [];
 
@@ -257,6 +308,17 @@ export async function getUnreadAlerts(shopId?: string): Promise<Alert[]> {
  * Mark a specific alert as read.
  */
 export async function markAsRead(alertId: string): Promise<void> {
+  if (authApi.isAuthenticated()) {
+    try {
+      await notificationsApi.markAsRead(alertId);
+      window.dispatchEvent(new CustomEvent('shoppulse_alerts_changed'));
+      window.dispatchEvent(new CustomEvent('shelfora_alerts_changed'));
+      return;
+    } catch (err) {
+      console.warn('Backend markAsRead failed, trying fallback:', err);
+    }
+  }
+
   const uid = requireActiveUserId();
 
   if (isDemoMode()) {
@@ -279,6 +341,17 @@ export async function markAsRead(alertId: string): Promise<void> {
  * Mark all unread alerts as read in a single batch operation.
  */
 export async function markAllAsRead(shopId?: string): Promise<void> {
+  if (authApi.isAuthenticated()) {
+    try {
+      await notificationsApi.markAllAsRead();
+      window.dispatchEvent(new CustomEvent('shoppulse_alerts_changed'));
+      window.dispatchEvent(new CustomEvent('shelfora_alerts_changed'));
+      return;
+    } catch (err) {
+      console.warn('Backend markAllAsRead failed, trying fallback:', err);
+    }
+  }
+
   const uid = requireActiveUserId();
 
   if (isDemoMode()) {
@@ -331,6 +404,17 @@ export async function resolveAlert(alertId: string): Promise<void> {
  * Permanently delete an alert document.
  */
 export async function deleteAlert(alertId: string): Promise<void> {
+  if (authApi.isAuthenticated()) {
+    try {
+      await notificationsApi.deleteNotification(alertId);
+      window.dispatchEvent(new CustomEvent('shoppulse_alerts_changed'));
+      window.dispatchEvent(new CustomEvent('shelfora_alerts_changed'));
+      return;
+    } catch (err) {
+      console.warn('Backend deleteNotification failed, trying fallback:', err);
+    }
+  }
+
   const uid = requireActiveUserId();
 
   if (isDemoMode()) {

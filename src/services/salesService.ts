@@ -110,7 +110,7 @@ export async function createSale(
 export async function recordSale(
   input: CreateSaleInput,
   cashierId: string = 'Staff',
-  shopName: string = 'ShopPulse Store'
+  shopName: string = 'Shelfora Store'
 ): Promise<{ sale: Sale; receipt: ReceiptData }> {
   const sale = await createSale(input, cashierId, shopName);
   const receipt = generateReceipt(sale, shopName);

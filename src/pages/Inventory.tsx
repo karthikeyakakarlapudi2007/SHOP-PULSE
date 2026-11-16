@@ -63,7 +63,7 @@ export const Inventory: React.FC<InventoryProps> = ({
   onUpdateProduct,
   onDeleteProduct,
   searchRequest = null,
-  shopName = 'ShopPulse',
+  shopName = 'Shelfora',
 }) => {
   const { t } = useLanguage();
   const toast = useToast();

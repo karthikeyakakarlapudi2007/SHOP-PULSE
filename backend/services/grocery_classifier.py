@@ -1,5 +1,5 @@
 """
-Indian Grocery Classification, Normalization, and Pack-Size Extraction Engine for ShopPulse.
+Indian Grocery Classification, Normalization, and Pack-Size Extraction Engine for Shelfora.
 
 Provides:
 - Comprehensive Indian grocery taxonomy and alias normalization

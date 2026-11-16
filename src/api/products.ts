@@ -21,6 +21,7 @@ export interface ProductBackend {
   unit?: string | null;
   supplier_id?: string | null;
   sku?: string | null;
+  is_active?: boolean;
   stock_status: 'In Stock' | 'Low Stock' | 'Critical';
   created_at?: string | null;
   updated_at?: string | null;

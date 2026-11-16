@@ -13,5 +13,7 @@ export * from './dashboard';
 export * from './suppliers';
 export * from './purchases';
 export * from './voice';
-export * from './invoice';
 export * from './search';
+export * from './insights';
+export * from './notifications';
+

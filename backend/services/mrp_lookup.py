@@ -192,7 +192,7 @@ class CustomHttpMrpProvider:
         return None
 
     def _headers(self) -> Dict[str, str]:
-        headers = {"Accept": "application/json", "User-Agent": "ShopPulse-Backend/1.0"}
+        headers = {"Accept": "application/json", "User-Agent": "Shelfora-Backend/1.0"}
         key = (settings.MRP_API_KEY or "").strip()
         if key:
             scheme = (settings.MRP_API_AUTH_SCHEME or "").strip()

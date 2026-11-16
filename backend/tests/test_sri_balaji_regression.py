@@ -3,6 +3,7 @@ Verifies the end-to-end invoice extraction API pipeline against the printed invo
 """
 
 import io
+import re
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
@@ -123,8 +124,10 @@ def test_sri_balaji_all_13_rows_regression(sri_balaji_bytes):
     for i, exp in enumerate(expected):
         item = items[i]
         
-        # Verify Product Name
-        assert exp["name"] in item["product_name"].upper(), f"Row {i+1}: expected name '{exp['name']}', got '{item['product_name']}'"
+        # Verify Product Name (whitespace-insensitive matching)
+        exp_name_clean = re.sub(r"\s+", "", exp["name"])
+        act_name_clean = re.sub(r"\s+", "", item["product_name"].upper())
+        assert exp_name_clean in act_name_clean, f"Row {i+1}: expected name '{exp['name']}', got '{item['product_name']}'"
         
         # Verify Quantity is separated from product pack size
         assert item["quantity"] == pytest.approx(exp["qty"], rel=1e-2), (

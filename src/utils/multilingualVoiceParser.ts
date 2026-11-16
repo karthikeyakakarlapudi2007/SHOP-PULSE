@@ -1,6 +1,6 @@
 /**
  * @file multilingualVoiceParser.ts
- * @description Advanced multilingual natural language voice parser for ShopPulse POS.
+ * @description Advanced multilingual natural language voice parser for Shelfora POS.
  * Supports spoken speech in 12 Indian languages:
  * English, Telugu, Hindi, Tamil, Kannada, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Assamese.
  *
@@ -735,7 +735,7 @@ export function extractItemsFromClause(clause: string): ExtractedVoiceClause[] {
 
   // Split on clause conjunctions first: and, aur, mariyu, matrum, commas, semicolons, +, &, newlines
   const subChunks = text
-    .split(/[,;\n\+]|\b(?:and|aur|mariyu|matrum|mattu|tatha|evam|plus)\b|&/gi)
+    .split(/[,;\n+]|\b(?:and|aur|mariyu|matrum|mattu|tatha|evam|plus)\b|&/gi)
     .map((s) => s.trim())
     .filter(Boolean);
 

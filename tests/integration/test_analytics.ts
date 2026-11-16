@@ -20,7 +20,7 @@ if (typeof window === 'undefined') {
   (global as any).CustomEvent = class { constructor(public type: string, public detail?: any) {} };
 }
 
-async function runTests() {
+async function runAnalyticsTests() {
   console.log('================================================================');
   console.log('📊 Starting ShopPulse Phase 7 AI Business Analytics Tests');
   console.log('================================================================\n');
@@ -168,7 +168,9 @@ async function runTests() {
   console.log('================================================================\n');
 }
 
-runTests().catch(err => {
+runAnalyticsTests().catch(err => {
   console.error('Analytics test failed:', err);
   process.exit(1);
 });
+
+export {};

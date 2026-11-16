@@ -1,6 +1,6 @@
 /**
  * @file receiptGenerator.ts
- * @description Receipt generator and formatting utilities for ShopPulse POS.
+ * @description Receipt generator and formatting utilities for Shelfora POS.
  */
 
 import type { Sale, ReceiptData } from '../types/sale';
@@ -76,7 +76,7 @@ export function formatReceiptText(receipt: ReceiptData): string {
     `GRAND TOTAL:              ₹${receipt.total.toFixed(2)}`,
     doubleLine,
     'Thank You! Visit Again!',
-    'Powered by ShopPulse'
+    'Powered by Shelfora'
   ].filter(Boolean);
 
   return [...header, ...itemLines, ...footer].join('\n');

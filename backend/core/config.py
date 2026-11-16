@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "ShopPulse API"
+    PROJECT_NAME: str = "Shelfora API"
     API_V1_STR: str = "/api/v1"
     PORT: int = 8000
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]

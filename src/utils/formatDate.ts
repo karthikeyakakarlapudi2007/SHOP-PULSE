@@ -1,6 +1,6 @@
 /**
  * @file formatDate.ts
- * @description Date and timestamp formatting helpers for ShopPulse.
+ * @description Date and timestamp formatting helpers for Shelfora.
  * Belongs in `src/utils/formatDate.ts`.
  */
 

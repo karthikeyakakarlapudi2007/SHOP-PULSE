@@ -15,7 +15,7 @@ const API_BASE_URL = (isBrowser && env.DEV && (rawUrl === '' || rawUrl.includes(
   : (rawUrl ? rawUrl.replace(/\/+$/, '') : 'http://127.0.0.1:8000');
 const TOKEN_KEY = 'shoppulse_token';
 const NETWORK_ERROR_MESSAGE =
-  'Unable to connect to ShopPulse backend server. Please verify the backend is running on http://127.0.0.1:8000.';
+  'Unable to connect to Shelfora backend server. Please verify the backend is running on http://127.0.0.1:8000.';
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined | null>;
@@ -110,7 +110,7 @@ function toApiError(status: number, statusText: string, data: any, endpoint: str
     errorMessage = `Request failed with status ${status} (${statusText || 'Unknown Error'}).`;
   }
 
-  console.error(`[ShopPulse API] [${category}] (${status}) ${endpoint}:`, {
+  console.error(`[Shelfora API] [${category}] (${status}) ${endpoint}:`, {
     message: errorMessage,
     status: status,
     data,
@@ -173,7 +173,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       throw new ApiError('Request cancelled.', 0, networkError, 'ABORTED');
     }
     const category = networkError instanceof TypeError ? 'NETWORK_OR_CORS_FAILURE' : 'NETWORK_ERROR';
-    console.error(`[ShopPulse API] ${category} connecting to ${url}:`, networkError);
+    console.error(`[Shelfora API] ${category} connecting to ${url}:`, networkError);
     throw new ApiError(NETWORK_ERROR_MESSAGE, 0, networkError, category);
   }
 
@@ -219,7 +219,15 @@ export const apiClient = {
       body: body ? JSON.stringify(body) : undefined,
     }),
 
+  patch: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
+    request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+
   delete: <T>(endpoint: string, options?: RequestOptions) =>
+
     request<T>(endpoint, { ...options, method: 'DELETE' }),
 };
 
@@ -286,7 +294,7 @@ export function uploadWithProgress<T>(endpoint: string, body: FormData, options:
       }
     };
     xhr.onerror = () => {
-      console.error(`[ShopPulse API] NETWORK_OR_CORS_FAILURE uploading to ${url}`);
+      console.error(`[Shelfora API] NETWORK_OR_CORS_FAILURE uploading to ${url}`);
       reject(new ApiError(NETWORK_ERROR_MESSAGE, 0, null, 'NETWORK_OR_CORS_FAILURE'));
     };
     xhr.onabort = () => reject(new ApiError('Upload cancelled.', 0, null, 'ABORTED'));

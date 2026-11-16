@@ -1,5 +1,5 @@
 """
-Product and MRP Lookup Service for ShopPulse.
+Product and MRP Lookup Service for Shelfora.
 Looks up the shop's own inventory first, then the configured external MRP provider
 (services/mrp_lookup.py), which reports an explicit lookup status.
 

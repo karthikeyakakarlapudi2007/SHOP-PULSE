@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" fill="none">
+  <defs>
+    <linearGradient id="logo-forest" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#123D32" />
+      <stop offset="100%" stop-color="#0A241D" />
+    </linearGradient>
+    <linearGradient id="logo-emerald" x1="0" y1="12" x2="36" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1EA785" />
+      <stop offset="100%" stop-color="#16866A" />
+    </linearGradient>
+    <linearGradient id="logo-leaf" x1="8" y1="8" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E8F3ED" />
+      <stop offset="60%" stop-color="#16866A" />
+      <stop offset="100%" stop-color="#123D32" />
+    </linearGradient>
+  </defs>
+
+  <!-- Symbol on Left -->
+  <g transform="translate(8, 8)">
+    <rect x="0" y="0" width="48" height="48" rx="12" fill="url(#logo-forest)" />
+    <path d="M11 35C11 33.3431 12.3431 32 14 32H34C35.6569 32 37 33.3431 37 35C37 36.6569 35.6569 38 34 38H14C12.3431 38 11 36.6569 11 35Z" fill="url(#logo-emerald)" />
+    <rect x="13" y="25" width="22" height="4" rx="2" fill="#E8F3ED" />
+    <rect x="17" y="19" width="14" height="3.5" rx="1.75" fill="#FAF8F2" />
+    <path d="M12 21C11.5 14.5 15.5 10 21 9.5C21.5 14.5 17.5 19 12 21Z" fill="url(#logo-leaf)" />
+    <path d="M34 8L35.5 12.5L40 14L35.5 15.5L34 20L32.5 15.5L28 14L32.5 12.5L34 8Z" fill="#16866A" />
+  </g>
+
+  <!-- Typography on Right -->
+  <text x="68" y="36" font-family="'Inter', system-ui, sans-serif" font-size="22" font-weight="900" letter-spacing="2.5" fill="#123D32">SHELFORA</text>
+  <circle cx="218" cy="30" r="3" fill="#16866A" />
+  <text x="69" y="50" font-family="'Inter', system-ui, sans-serif" font-size="9" font-weight="600" letter-spacing="0.5" fill="#16866A">SMARTER GROCERY MANAGEMENT</text>
+</svg>

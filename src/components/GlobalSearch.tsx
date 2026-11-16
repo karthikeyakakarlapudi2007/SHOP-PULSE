@@ -178,7 +178,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose, onO
         className="bg-white w-full h-full sm:h-auto sm:max-h-[75vh] sm:max-w-2xl sm:rounded-xl shadow-xl border border-[#E2E8F0] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id={titleId} className="sr-only">Search ShopPulse</h2>
+        <h2 id={titleId} className="sr-only">Search Shelfora</h2>
         <div className="flex items-center gap-2 p-3 border-b border-[#E2E8F0] pt-[calc(0.75rem+env(safe-area-inset-top,0px))] sm:pt-3">
           <Search className="w-5 h-5 text-slate-400 shrink-0 ml-1" aria-hidden="true" />
           <input

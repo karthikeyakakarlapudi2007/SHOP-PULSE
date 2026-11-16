@@ -16,6 +16,7 @@ class ProductBase(BaseModel):
     unit: Optional[str] = Field("pcs", description="Unit of measurement")
     supplier_id: Optional[UUID] = Field(None, description="Supplier ID")
     sku: Optional[str] = Field(None, description="SKU or Barcode")
+    is_active: bool = Field(True, description="Whether product is active in catalog")
 
 class ProductCreate(ProductBase):
     mrp_source: Optional[MrpSource] = Field(None, description="Origin of the MRP value; defaults to MANUAL when an MRP is given")
@@ -32,6 +33,7 @@ class ProductUpdate(BaseModel):
     unit: Optional[str] = None
     supplier_id: Optional[UUID] = None
     sku: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class ProductResponse(ProductBase):
     id: UUID

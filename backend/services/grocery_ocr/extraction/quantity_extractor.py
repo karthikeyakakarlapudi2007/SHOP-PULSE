@@ -114,21 +114,36 @@ class BaseQuantityExtractor(IQuantityExtractor):
                 qty_val = parsed_num.value
                 confidence = min(confidence, parsed_num.confidence)
                 issues.extend(parsed_num.issues)
+            elif unit_col is not None and unit_col.column_index < len(row.cells):
+                u_cell_text = row.cells[unit_col.column_index].cleaned_text.strip()
+                # Fallback: check if unit column has combined quantity and unit (e.g. '10 BOR', '100 PCS', '1 BOR')
+                m_inline = re.match(r"^(\d+(?:\.\d+)?)\s*([a-zA-Z]+.*)$", u_cell_text)
+                if m_inline:
+                    qty_num_str = m_inline.group(1)
+                    inline_unit_text = m_inline.group(2).strip()
+                    parsed_num = self.numeric_parser.parse_quantity(qty_num_str)
+                    qty_val = parsed_num.value
+                    raw_qty_text = qty_num_str
+                    confidence = min(confidence, parsed_num.confidence)
+                else:
+                    qty_val = None
+                    confidence = 0.0
+                    issues.append("No quantity column detected or cell is out of range")
             else:
                 qty_val = None
                 confidence = 0.0
                 issues.append("No quantity column detected or cell is out of range")
 
-            # 2. Read unit from designated column
-            if unit_col is not None and unit_col.column_index < len(row.cells):
+            # 2. Read unit from designated column or inline
+            if inline_unit_text:
+                raw_unit_text = inline_unit_text
+                norm_u = self.unit_normalizer.normalize(inline_unit_text)
+                final_unit = norm_u.normalized_unit or inline_unit_text
+            elif unit_col is not None and unit_col.column_index < len(row.cells):
                 u_text = row.cells[unit_col.column_index].cleaned_text.strip()
                 raw_unit_text = u_text
                 norm_u = self.unit_normalizer.normalize(u_text)
-                final_unit = norm_u.normalized_unit
-            elif inline_unit_text:
-                raw_unit_text = inline_unit_text
-                norm_u = self.unit_normalizer.normalize(inline_unit_text)
-                final_unit = norm_u.normalized_unit
+                final_unit = norm_u.normalized_unit or u_text
             else:
                 final_unit = None
 

@@ -80,6 +80,7 @@ export interface CreateSaleInput {
     unit?: string;
     unitPrice?: number;
     price?: number;
+    total?: number;
   }>;
   paymentMethod: PaymentMethod;
   customerName?: string;

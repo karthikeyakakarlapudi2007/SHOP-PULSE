@@ -33,6 +33,8 @@ __pycache__/
 *.db-wal
 *.db-shm
 *.db-journal
+*.bak
+*.bak*
 
 # OCR models and the backend OCR language-data cache
 *.traineddata

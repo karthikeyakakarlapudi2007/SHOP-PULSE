@@ -85,7 +85,7 @@ class BaseFileValidator(IFileValidator):
             ext = ".pdf" if content.startswith(b"%PDF") else ".png"
 
         if ext not in self.config.supported_extensions:
-            msg = f"Unsupported file extension '{ext}'. Permitted: {sorted(self.config.supported_extensions)}"
+            msg = f"Unsupported file format / Unsupported file extension '{ext}'. Permitted: {sorted(self.config.supported_extensions)}"
             logger.warning("Validation rejected: %s", msg)
             raise UnsupportedFileError(msg, details={"extension": ext})
 
@@ -116,13 +116,13 @@ class BaseFileValidator(IFileValidator):
                 with Image.open(io.BytesIO(content)) as img:
                     img.load()
             except Exception as exc:
-                msg = f"Corrupted or unreadable image file: {exc}"
+                msg = f"Invalid or unreadable image file: {exc}"
                 logger.warning("Validation rejected: %s", msg)
                 raise InvalidInvoiceError(msg, details={"filename": filename, "error": str(exc)})
 
         elif doc_type == "pdf":
             if not content.startswith(b"%PDF"):
-                raise InvalidInvoiceError("Corrupted or invalid PDF header.", details={"filename": filename})
+                raise InvalidInvoiceError("Invalid or corrupted PDF file: Missing standard %PDF signature.", details={"filename": filename})
             if len(content) < 30:
                 raise InvalidInvoiceError("PDF document is truncated or empty.", details={"filename": filename})
 

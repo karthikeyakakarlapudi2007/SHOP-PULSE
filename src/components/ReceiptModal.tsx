@@ -124,7 +124,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </div>
 
           <div className="text-center pt-2 text-[10px] text-[#69736C] border-t border-dashed border-[#E3E5DE]">
-            Thank you for shopping! Powered by ShopPulse
+            Thank you for shopping! Powered by Shelfora
           </div>
         </div>
 

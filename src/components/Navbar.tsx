@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { 
-  Activity, 
   Bell, 
   User, 
   LogOut, 
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { PageRoute } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { ShelforaLogo } from './branding/ShelforaLogo';
 import { LanguageSelectorModal } from './LanguageSelectorModal';
 import { NotificationsPanel } from './NotificationsPanel';
 import { useAlerts } from '../hooks/useAlerts';
@@ -38,8 +38,8 @@ const pageLabelMap: Record<PageRoute, string> = {
   dashboard: 'nav.dashboard',
   sales: 'nav.quickSales',
   inventory: 'nav.stockCatalog',
-  scanner: 'nav.scanner',
   insights: 'nav.shopInsights',
+  scanner: 'nav.scanner',
   settings: 'nav.settingsMore',
   landing: 'Home',
   login: 'auth.loginBtn',
@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const userProfile = authContext?.userProfile;
   const currentShopName = userProfile?.shopName || shopName;
   const userDisplayName = userProfile?.displayName || userProfile?.ownerName || 'Store Owner';
-  const userEmail = userProfile?.email || 'owner@shoppulse.app';
+  const userEmail = userProfile?.email || 'owner@shelfora.com';
 
   // Compute initials for avatar (e.g. "Kiran Admin" -> "KA")
   const userInitials = (userDisplayName || 'SO')
@@ -83,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     .map((word) => word[0])
     .slice(0, 2)
     .join('')
-    .toUpperCase() || 'SP';
+    .toUpperCase() || 'SF';
 
   // Handle clicking outside the profile dropdown and Escape key navigation
   useEffect(() => {
@@ -120,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [isProfileOpen]);
 
   return (
-    <header className="no-print sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E3E5DE] shadow-2xs">
+    <header className="no-print sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#DDE9DF] shadow-2xs">
       <div className="w-full px-2.5 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-1.5 sm:gap-4">
         
         {/* ================================================================= */}
@@ -135,48 +135,40 @@ export const Navbar: React.FC<NavbarProps> = ({
               aria-label={isSidebarCollapsed ? 'Expand sidebar navigation' : 'Collapse sidebar navigation'}
               aria-expanded={!isSidebarCollapsed}
               title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="hidden md:flex w-9 h-9 rounded-lg bg-[#F7F5EF] hover:bg-[#F2EFE9] border border-[#E3E5DE] text-[#202923] items-center justify-center transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none"
+              className="hidden md:flex w-9 h-9 rounded-lg bg-[#FAF8F2] hover:bg-[#F3EFE3] border border-[#DDE9DF] text-[#252D29] items-center justify-center transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none"
             >
               {isSidebarCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4 text-[#234B3A]" />
+                <PanelLeftOpen className="w-4 h-4 text-[#153D32]" />
               ) : (
-                <PanelLeftClose className="w-4 h-4 text-[#69736C]" />
+                <PanelLeftClose className="w-4 h-4 text-[#5E6C64]" />
               )}
             </button>
           )}
 
-          {/* ShopPulse Logo & Brand Name */}
+          {/* Shelfora Logo & Brand Name */}
           <button 
             type="button"
             onClick={() => setActivePage(isLoggedIn ? 'dashboard' : 'landing')}
-            aria-label={`ShopPulse – ${currentShopName}. Go to ${isLoggedIn ? 'dashboard' : 'home'}`}
-            className="flex items-center gap-2 cursor-pointer group select-none min-w-0 text-left rounded-lg focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none"
+            aria-label={`Shelfora – ${currentShopName}. Go to ${isLoggedIn ? 'dashboard' : 'home'}`}
+            className="flex items-center gap-2 cursor-pointer group select-none min-w-0 text-left rounded-xl focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#234B3A] flex items-center justify-center text-white shadow-xs group-hover:bg-[#18382B] transition-colors shrink-0">
-              <Activity className="w-4 h-4 text-white" />
-            </div>
-            <div className="min-w-0 flex items-baseline gap-1.5">
-              <div className="flex items-baseline tracking-tight">
-                <span className="text-base font-bold text-[#202923]">Shop</span>
-                <span className="text-base font-extrabold text-[#234B3A]">Pulse</span>
-              </div>
-              {/* Subtle non-interactive store identity text */}
-              {isLoggedIn && (
-                <span className="hidden xl:inline text-[11px] font-normal text-[#69736C] max-w-[130px] truncate" title={currentShopName}>
-                  • {currentShopName}
-                </span>
-              )}
-            </div>
+            <ShelforaLogo variant="horizontal" size="sm" />
+            {/* Subtle non-interactive store identity text */}
+            {isLoggedIn && (
+              <span className="hidden xl:inline text-[11px] font-medium text-[#5E6C64] max-w-[130px] truncate pl-2 border-l border-[#DDE9DF]" title={currentShopName}>
+                {currentShopName}
+              </span>
+            )}
           </button>
 
           {/* Compact Breadcrumb Context (Desktop) */}
           {isLoggedIn && (
             <div 
-              className="hidden lg:flex items-center gap-1.5 pl-3 border-l border-[#E3E5DE] text-xs font-semibold text-[#69736C]"
+              className="hidden lg:flex items-center gap-1.5 pl-3 border-l border-[#DDE9DF] text-xs font-semibold text-[#5E6C64]"
               aria-label="Current section"
             >
-              <ChevronRight className="w-3.5 h-3.5 text-[#A0A8A2]" aria-hidden="true" />
-              <span className="truncate max-w-[160px] text-[#202923]">
+              <ChevronRight className="w-3.5 h-3.5 text-[#5E6C64]/60" aria-hidden="true" />
+              <span className="truncate max-w-[160px] text-[#252D29]">
                 {t(pageLabelMap[activePage] || 'nav.dashboard')}
               </span>
             </div>
@@ -194,15 +186,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onOpenSearch}
               aria-label="Search products, bills, invoices"
               aria-keyshortcuts="Control+K Meta+K /"
-              className="w-full hidden sm:flex items-center justify-between gap-2.5 px-3.5 py-1.5 rounded-lg border border-[#E3E5DE] bg-[#F7F5EF] hover:bg-white hover:border-[#52745D]/40 focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none text-[#69736C] text-xs font-medium cursor-pointer transition-all shadow-2xs group"
+              className="w-full hidden sm:flex items-center justify-between gap-2.5 px-3.5 py-1.5 rounded-lg border border-[#DDE9DF] bg-[#FAF8F2] hover:bg-white hover:border-[#23866A]/40 focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none text-[#5E6C64] text-xs font-medium cursor-pointer transition-all shadow-2xs group"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <Search className="w-3.5 h-3.5 shrink-0 text-[#69736C] group-hover:text-[#234B3A] transition-colors" aria-hidden="true" />
-                <span className="truncate text-left text-[#69736C] font-normal">
+                <Search className="w-3.5 h-3.5 shrink-0 text-[#5E6C64] group-hover:text-[#153D32] transition-colors" aria-hidden="true" />
+                <span className="truncate text-left text-[#5E6C64] font-normal">
                   Search products, bills, invoices...
                 </span>
               </div>
-              <kbd className="hidden md:inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border border-[#E3E5DE] bg-white text-[#69736C] shadow-3xs shrink-0 select-none">
+              <kbd className="hidden md:inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border border-[#DDE9DF] bg-white text-[#5E6C64] shadow-3xs shrink-0 select-none">
                 Ctrl K
               </kbd>
             </button>
@@ -221,9 +213,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   type="button"
                   onClick={onOpenSearch}
                   aria-label="Search products, bills, invoices"
-                  className="sm:hidden w-9 h-9 rounded-lg bg-[#F7F5EF] hover:bg-[#F2EFE9] border border-[#E3E5DE] text-[#202923] flex items-center justify-center transition-colors cursor-pointer active:scale-95 focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none"
+                  className="sm:hidden w-9 h-9 rounded-lg bg-[#FAF8F2] hover:bg-[#F3EFE3] border border-[#DDE9DF] text-[#252D29] flex items-center justify-center transition-colors cursor-pointer active:scale-95 focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none"
                 >
-                  <Search className="w-4 h-4 text-[#202923]" />
+                  <Search className="w-4 h-4 text-[#252D29]" />
                 </button>
               )}
 
@@ -241,13 +233,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
                   aria-expanded={showNotifications}
                   aria-controls="notifications-panel"
-                  className="w-9 h-9 rounded-lg bg-[#F7F5EF] hover:bg-[#F2EFE9] border border-[#E3E5DE] text-[#202923] flex items-center justify-center transition-colors cursor-pointer relative focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none active:scale-95"
+                  className="w-9 h-9 rounded-lg bg-[#FAF8F2] hover:bg-[#F3EFE3] border border-[#DDE9DF] text-[#252D29] flex items-center justify-center transition-colors cursor-pointer relative focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none active:scale-95"
                 >
-                  <Bell className="w-4 h-4 text-[#202923]" />
+                  <Bell className="w-4 h-4 text-[#252D29]" />
                   {unreadCount > 0 && (
                     <span 
                       id="notification-badge"
-                      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#B93838] text-white text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white shadow-xs"
+                      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#EF806D] text-white text-[10px] font-extrabold flex items-center justify-center ring-2 ring-white shadow-xs"
                     >
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
@@ -276,7 +268,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-label="User account menu"
                   aria-expanded={isProfileOpen}
                   aria-controls="user-profile-dropdown"
-                  className="w-9 h-9 rounded-lg bg-[#E5EEE6] text-[#234B3A] hover:bg-[#D7E6D9] border border-[#52745D]/25 flex items-center justify-center font-bold text-xs tracking-wider transition-all cursor-pointer relative focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none active:scale-95"
+                  className="w-9 h-9 rounded-lg bg-[#E7F3EE] text-[#153D32] hover:bg-[#B9E5D0] border border-[#23866A]/25 flex items-center justify-center font-bold text-xs tracking-wider transition-all cursor-pointer relative focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none active:scale-95"
                 >
                   <span>{userInitials}</span>
 
@@ -300,32 +292,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                     ref={dropdownRef}
                     id="user-profile-dropdown"
                     aria-labelledby="user-profile-menu-button"
-                    className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-1.25rem)] rounded-xl bg-white border border-[#E3E5DE] shadow-lg shadow-[#18382B]/8 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                    className="absolute right-0 top-full mt-2 w-72 max-w-[calc(100vw-1.25rem)] rounded-xl bg-white border border-[#DDE9DF] shadow-lg shadow-[#0F2D25]/8 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
                   >
                     {/* Header: User & Store Identity Information */}
-                    <div className="px-4 py-3 bg-[#F7F5EF]/70 border-b border-[#E3E5DE] rounded-t-lg">
+                    <div className="px-4 py-3 bg-[#FAF8F2]/70 border-b border-[#DDE9DF] rounded-t-lg">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-[#234B3A] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                        <div className="w-10 h-10 rounded-lg bg-[#153D32] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                           {userInitials}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-[#202923] truncate leading-tight">
+                          <p className="text-sm font-semibold text-[#252D29] truncate leading-tight">
                             {userDisplayName}
                           </p>
-                          <p className="text-xs text-[#69736C] truncate mt-0.5">
+                          <p className="text-xs text-[#5E6C64] truncate mt-0.5">
                             {userEmail}
                           </p>
                         </div>
                       </div>
 
                       {/* Store Identity Badge */}
-                      <div className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-[#E3E5DE] text-xs text-[#202923] shadow-3xs">
-                        <Store className="w-3.5 h-3.5 text-[#234B3A] shrink-0" aria-hidden="true" />
+                      <div className="mt-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-[#DDE9DF] text-xs text-[#252D29] shadow-3xs">
+                        <Store className="w-3.5 h-3.5 text-[#153D32] shrink-0" aria-hidden="true" />
                         <span className="truncate font-medium">{currentShopName}</span>
                       </div>
 
                       {/* Online / Offline Sync Status Row */}
-                      <div className="mt-2 flex items-center justify-between text-[11px] text-[#69736C]">
+                      <div className="mt-2 flex items-center justify-between text-[11px] text-[#5E6C64]">
                         <div className="flex items-center gap-1.5">
                           <span className={`w-2 h-2 rounded-full ${
                             !isOnline
@@ -346,7 +338,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <button
                             type="button"
                             onClick={() => syncNow()}
-                            className="text-[#234B3A] font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                            className="text-[#153D32] font-semibold hover:underline cursor-pointer flex items-center gap-1"
                           >
                             <RefreshCw className="w-3 h-3" />
                             <span>Sync</span>
@@ -364,9 +356,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setActivePage('settings');
                           setIsProfileOpen(false);
                         }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-[#202923] hover:bg-[#F7F5EF] transition-colors cursor-pointer text-left focus-visible:bg-[#F7F5EF] focus-visible:outline-none"
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-[#252D29] hover:bg-[#FAF8F2] transition-colors cursor-pointer text-left focus-visible:bg-[#FAF8F2] focus-visible:outline-none"
                       >
-                        <User className="w-4 h-4 text-[#69736C]" aria-hidden="true" />
+                        <User className="w-4 h-4 text-[#5E6C64]" aria-hidden="true" />
                         <span>Profile & Account</span>
                       </button>
 
@@ -377,9 +369,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setActivePage('settings');
                           setIsProfileOpen(false);
                         }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-[#202923] hover:bg-[#F7F5EF] transition-colors cursor-pointer text-left focus-visible:bg-[#F7F5EF] focus-visible:outline-none"
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-[#252D29] hover:bg-[#FAF8F2] transition-colors cursor-pointer text-left focus-visible:bg-[#FAF8F2] focus-visible:outline-none"
                       >
-                        <Store className="w-4 h-4 text-[#69736C]" aria-hidden="true" />
+                        <Store className="w-4 h-4 text-[#5E6C64]" aria-hidden="true" />
                         <span>Store Settings</span>
                       </button>
 
@@ -390,13 +382,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setIsLangModalOpen(true);
                           setIsProfileOpen(false);
                         }}
-                        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-[#202923] hover:bg-[#F7F5EF] transition-colors cursor-pointer text-left focus-visible:bg-[#F7F5EF] focus-visible:outline-none"
+                        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-[#252D29] hover:bg-[#FAF8F2] transition-colors cursor-pointer text-left focus-visible:bg-[#FAF8F2] focus-visible:outline-none"
                       >
                         <div className="flex items-center gap-2.5">
-                          <Globe className="w-4 h-4 text-[#69736C]" aria-hidden="true" />
+                          <Globe className="w-4 h-4 text-[#5E6C64]" aria-hidden="true" />
                           <span>Language Preferences</span>
                         </div>
-                        <span className="text-[10px] font-semibold text-[#234B3A] bg-[#E5EEE6] px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-semibold text-[#153D32] bg-[#E7F3EE] px-2 py-0.5 rounded-md">
                           {currentLanguageMeta.nativeName}
                         </span>
                       </button>
@@ -408,15 +400,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setActivePage('settings');
                           setIsProfileOpen(false);
                         }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-[#202923] hover:bg-[#F7F5EF] transition-colors cursor-pointer text-left focus-visible:bg-[#F7F5EF] focus-visible:outline-none"
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-[#252D29] hover:bg-[#FAF8F2] transition-colors cursor-pointer text-left focus-visible:bg-[#FAF8F2] focus-visible:outline-none"
                       >
-                        <Settings className="w-4 h-4 text-[#69736C]" aria-hidden="true" />
+                        <Settings className="w-4 h-4 text-[#5E6C64]" aria-hidden="true" />
                         <span>General Settings</span>
                       </button>
                     </div>
 
                     {/* Divider before Logout */}
-                    <div className="border-t border-[#E3E5DE] my-1" />
+                    <div className="border-t border-[#DDE9DF] my-1" />
 
                     {/* Logout Action (Visually Distinguishable) */}
                     {onLogout && (
@@ -427,9 +419,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                             setIsProfileOpen(false);
                             onLogout();
                           }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#B93838] hover:bg-[#FDF2F2] hover:text-[#962626] rounded-lg transition-colors cursor-pointer text-left focus-visible:bg-[#FDF2F2] focus-visible:outline-none"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#EF806D] hover:bg-[#FDF1EF] hover:text-[#962626] rounded-lg transition-colors cursor-pointer text-left focus-visible:bg-[#FDF1EF] focus-visible:outline-none"
                         >
-                          <LogOut className="w-4 h-4 text-[#B93838]" aria-hidden="true" />
+                          <LogOut className="w-4 h-4 text-[#EF806D]" aria-hidden="true" />
                           <span>{t('nav.logout')}</span>
                         </button>
                       </div>
@@ -447,9 +439,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   aria-label="Open navigation menu"
                   aria-controls="mobile-nav-drawer"
                   aria-haspopup="dialog"
-                  className="md:hidden w-9 h-9 rounded-lg bg-[#F7F5EF] hover:bg-[#F2EFE9] border border-[#E3E5DE] text-[#202923] flex items-center justify-center transition-colors cursor-pointer active:scale-95 focus-visible:ring-2 focus-visible:ring-[#234B3A] focus-visible:outline-none"
+                  className="md:hidden w-9 h-9 rounded-lg bg-[#FAF8F2] hover:bg-[#F3EFE3] border border-[#DDE9DF] text-[#252D29] flex items-center justify-center transition-colors cursor-pointer active:scale-95 focus-visible:ring-2 focus-visible:ring-[#153D32] focus-visible:outline-none"
                 >
-                  <Menu className="w-5 h-5 text-[#202923]" />
+                  <Menu className="w-5 h-5 text-[#252D29]" />
                 </button>
               )}
             </>
@@ -459,14 +451,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={() => setActivePage('login')}
-                className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#202923] hover:text-[#18382B] rounded-lg transition-colors cursor-pointer"
+                className="px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#252D29] hover:text-[#0F2D25] rounded-lg transition-colors cursor-pointer"
               >
                 {t('auth.loginBtn')}
               </button>
               <button
                 type="button"
                 onClick={() => setActivePage('signup')}
-                className="px-3.5 py-1.5 text-xs sm:text-sm font-bold text-white bg-[#234B3A] hover:bg-[#18382B] rounded-lg transition-colors shadow-xs cursor-pointer"
+                className="px-3.5 py-1.5 text-xs sm:text-sm font-bold text-white bg-[#153D32] hover:bg-[#0F2D25] rounded-lg transition-colors shadow-xs cursor-pointer"
               >
                 {t('auth.createAccount')}
               </button>

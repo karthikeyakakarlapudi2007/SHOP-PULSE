@@ -18,7 +18,7 @@ export const ThemeContext = createContext<ThemeContextType | undefined>(undefine
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    const saved = localStorage.getItem('shoppulse_theme');
+    const saved = localStorage.getItem('shelfora_theme') || localStorage.getItem('shoppulse_theme');
     if (saved === 'dark' || saved === 'light') return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
@@ -30,6 +30,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       root.classList.remove('dark');
     }
+    localStorage.setItem('shelfora_theme', theme);
     localStorage.setItem('shoppulse_theme', theme);
   }, [theme]);
 

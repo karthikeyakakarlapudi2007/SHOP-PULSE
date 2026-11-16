@@ -1,6 +1,6 @@
 /**
  * @file errorHandler.ts
- * @description Centralized error classification and recovery service for ShopPulse.
+ * @description Centralized error classification and recovery service for Shelfora.
  * Normalizes Firestore, Network, Auth, and Storage errors into actionable messages
  * with recommended recovery strategies (e.g. offline queueing, session renewal).
  */

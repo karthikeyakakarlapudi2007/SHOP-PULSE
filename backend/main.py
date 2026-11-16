@@ -105,8 +105,8 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():
-    # ShopPulse API root health entry
-    return {"message": "Welcome to ShopPulse API"}
+    # Shelfora API root health entry
+    return {"message": "Welcome to Shelfora API"}
 
 if __name__ == "__main__":
     import uvicorn

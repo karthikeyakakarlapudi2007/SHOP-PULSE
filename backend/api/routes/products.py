@@ -117,7 +117,7 @@ def get_product(
     """
     user_shop = get_user_shop_or_raise(db, current_user)
     product = product_service.get_product_by_id(db, product_id=id)
-    if not product:
+    if not product or not product.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found.",
@@ -142,7 +142,7 @@ def update_product(
     """
     user_shop = get_user_shop_or_raise(db, current_user)
     product = product_service.get_product_by_id(db, product_id=id)
-    if not product:
+    if not product or not product.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found.",
@@ -166,7 +166,7 @@ def delete_product(
     """
     user_shop = get_user_shop_or_raise(db, current_user)
     product = product_service.get_product_by_id(db, product_id=id)
-    if not product:
+    if not product or not product.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found.",

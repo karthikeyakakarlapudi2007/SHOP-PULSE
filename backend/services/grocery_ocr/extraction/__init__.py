@@ -29,6 +29,21 @@ from services.grocery_ocr.extraction.unit_normalizer import (
     UnitNormalizationResult,
     UnitNormalizer,
 )
+from services.grocery_ocr.extraction.header_intelligence import (
+    CANONICAL_HEADER_LABELS,
+    HEADER_SEMANTIC_ALIASES,
+    HeaderIntelligenceEngine,
+)
+from services.grocery_ocr.extraction.dynamic_schema_generator import (
+    DocumentTableSchema,
+    DynamicColumnDefinition,
+    DynamicSchemaGenerator,
+    ExpectedDataType,
+)
+from services.grocery_ocr.extraction.column_wise_extractor import (
+    ColumnWiseExtractor,
+    ExtractedRowRecord,
+)
 from services.grocery_ocr.extraction.header_recognizer import (
     HeaderCandidate,
     HeaderRecognizer,
@@ -45,6 +60,15 @@ from services.grocery_ocr.extraction.table_reconstructor import (
 __all__ = [
     "HeaderRecognizer",
     "HeaderCandidate",
+    "HeaderIntelligenceEngine",
+    "HEADER_SEMANTIC_ALIASES",
+    "CANONICAL_HEADER_LABELS",
+    "DynamicSchemaGenerator",
+    "DocumentTableSchema",
+    "DynamicColumnDefinition",
+    "ExpectedDataType",
+    "ColumnWiseExtractor",
+    "ExtractedRowRecord",
     "TableDetector",
     "TableRegion",
     "ITableReconstructor",

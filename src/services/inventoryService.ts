@@ -52,6 +52,7 @@ export function mapBackendProductToFrontend(bp: ProductBackend): Product {
     barcode: bp.sku || undefined,
     sku: bp.sku || undefined,
     supplierId: bp.supplier_id || undefined,
+    isActive: bp.is_active ?? true,
     createdAt: bp.created_at || new Date().toISOString(),
     updatedAt: bp.updated_at || new Date().toISOString(),
   };
@@ -133,6 +134,13 @@ export async function getProductById(id: string): Promise<Product | null> {
   }
 }
 
+function notifyInventoryChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('shoppulse_inventory_changed'));
+    window.dispatchEvent(new CustomEvent('shelfora_inventory_changed'));
+  }
+}
+
 /**
  * Add a new product to inventory.
  */
@@ -157,7 +165,7 @@ export async function addProduct(input: ProductInput): Promise<Product> {
   });
 
   const product = mapBackendProductToFrontend(bp);
-  window.dispatchEvent(new CustomEvent('shoppulse_inventory_changed'));
+  notifyInventoryChanged();
   return product;
 }
 
@@ -177,7 +185,7 @@ export async function updateProduct(id: string, updates: Partial<ProductInput>):
     sku: updates.barcode || updates.sku,
   });
 
-  window.dispatchEvent(new CustomEvent('shoppulse_inventory_changed'));
+  notifyInventoryChanged();
 }
 
 /**
@@ -185,7 +193,7 @@ export async function updateProduct(id: string, updates: Partial<ProductInput>):
  */
 export async function deleteProduct(id: string): Promise<void> {
   await productsApi.deleteProduct(id);
-  window.dispatchEvent(new CustomEvent('shoppulse_inventory_changed'));
+  notifyInventoryChanged();
 }
 
 /**
@@ -225,7 +233,7 @@ export async function decreaseStock(id: string, quantity: number = 1): Promise<v
   await productsApi.updateProduct(id, {
     current_stock: Math.max(0, current.stock - quantity),
   });
-  window.dispatchEvent(new CustomEvent('shoppulse_inventory_changed'));
+  notifyInventoryChanged();
 }
 
 /**
@@ -235,7 +243,7 @@ export async function setStock(id: string, newStock: number): Promise<void> {
   await productsApi.updateProduct(id, {
     current_stock: Math.max(0, newStock),
   });
-  window.dispatchEvent(new CustomEvent('shoppulse_inventory_changed'));
+  notifyInventoryChanged();
 }
 
 /**
@@ -278,11 +286,13 @@ export function subscribeToProducts(
   };
 
   window.addEventListener('shoppulse_inventory_changed', handleInventoryChange);
+  window.addEventListener('shelfora_inventory_changed', handleInventoryChange);
   window.addEventListener('shoppulse_auth_changed', handleInventoryChange);
 
   return () => {
     active = false;
     window.removeEventListener('shoppulse_inventory_changed', handleInventoryChange);
+    window.removeEventListener('shelfora_inventory_changed', handleInventoryChange);
     window.removeEventListener('shoppulse_auth_changed', handleInventoryChange);
   };
 }

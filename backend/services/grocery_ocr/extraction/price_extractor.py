@@ -177,6 +177,53 @@ class BasePriceExtractor(IPriceExtractor):
                     result.raw_financial_cells["printed_amount"] = raw_cell
                     result.financial_role_confidence["printed_amount"] = conf
 
+            # Fallback: if total column was empty or shifted, check rightmost cells
+            if result.printed_amount is None and row.cells:
+                for c in reversed(row.cells):
+                    parsed_trailing = self.numeric_parser.parse_currency(c.cleaned_text.strip())
+                    if parsed_trailing.is_valid and parsed_trailing.value is not None and parsed_trailing.value > 0:
+                        result.printed_amount = parsed_trailing.value
+                        result.raw_financial_cells["printed_amount"] = c.cleaned_text.strip()
+                        result.financial_role_confidence["printed_amount"] = 80.0
+                        break
+
+            # Multi-price column reconciliation:
+            # If selling_price, purchase_price, or mrp is missing, inspect multiple right-aligned numeric cells
+            if result.purchase_price is None or result.selling_price is None or result.mrp is None:
+                min_price_x = 0.0
+                if columns:
+                    for col in columns:
+                        if getattr(col, "role", None) in ("unit", "qty", "hsn", "description"):
+                            bx1 = getattr(col, "x_end", None)
+                            if bx1 is None and getattr(col, "bbox", None):
+                                bx1 = getattr(col.bbox, "x1", 0.0)
+                            if bx1 and float(bx1) > min_price_x:
+                                min_price_x = float(bx1)
+
+                p_cells = []
+                for c in row.cells:
+                    if c.cleaned_text.strip() and c.bbox:
+                        if min_price_x > 0 and c.bbox.x0 < min_price_x - 10.0:
+                            continue
+                        parsed_p = self.numeric_parser.parse_currency(c.cleaned_text.strip())
+                        if parsed_p.is_valid and parsed_p.value is not None and parsed_p.value > 0:
+                            p_cells.append((c.bbox.x0, parsed_p.value, c.cleaned_text.strip()))
+                p_cells.sort(key=lambda x: x[0])
+                if len(p_cells) >= 3:
+                    for i in range(len(p_cells) - 2):
+                        p1, p2, p3 = p_cells[i][1], p_cells[i + 1][1], p_cells[i + 2][1]
+                        if p1 <= p2 <= p3 and (result.printed_amount is None or p3 != result.printed_amount):
+                            if result.purchase_price is None:
+                                result.purchase_price = p1
+                                result.raw_financial_cells["purchase_price"] = p_cells[i][2]
+                            if result.selling_price is None:
+                                result.selling_price = p2
+                                result.raw_financial_cells["selling_price"] = p_cells[i + 1][2]
+                            if result.mrp is None:
+                                result.mrp = p3
+                                result.raw_financial_cells["mrp"] = p_cells[i + 2][2]
+                            break
+
             # Reconcile faint/dropped decimal points on selling price or MRP
             if result.selling_price is not None:
                 if result.mrp is not None and result.selling_price > result.mrp * 5:
