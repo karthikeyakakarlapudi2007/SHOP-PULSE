@@ -6,13 +6,13 @@
 
 import type { Product } from './product';
 
-export type PaymentMethod = 
-  | 'Cash' 
-  | 'UPI' 
-  | 'Card' 
-  | 'cash' 
-  | 'upi' 
-  | 'card' 
+export type PaymentMethod =
+  | 'Cash'
+  | 'UPI'
+  | 'Card'
+  | 'cash'
+  | 'upi'
+  | 'card'
   | 'credit'
   | 'Credit';
 
