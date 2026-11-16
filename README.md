@@ -1,13 +1,14 @@
-# 🛒 ShopPulse — Retail Operating System & Smart POS
+# 🌿 SHELFORA — Grocery Management & Invoice Intelligence Platform
 
-[![React](https://img.shields.io/badge/React-19.2.8-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8.3-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind-4.3-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Firebase](https://img.shields.io/badge/Firebase-12.19-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+**Tagline:** *"Smarter Shelves. Better Decisions."*
 
-> **ShopPulse** is a production-grade, offline-first Point of Sale (POS) and inventory intelligence platform engineered specifically for retail stores and Indian Kirana merchants. It blends instant barcode billing, real-time multi-counter synchronization, AI demand forecasting, smart weighing scale / ESP32 IoT counter integration, and military-grade offline resilience.
+[![React](https://img.shields.io/badge/React-19.2.8-153D32?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-23866A?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8.3-D6AE62?style=for-the-badge&logo=vite&logoColor=black)](https://vitejs.dev/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind-4.3-153D32?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-B9E5D0.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+> **SHELFORA** is a premium, offline-first grocery management and invoice intelligence platform engineered specifically for retail stores and Indian Kirana merchants. It blends header-guided dynamic invoice extraction, rapid multi-item POS billing, real-time multi-counter synchronization, AI demand forecasting, smart weighing scale / ESP32 IoT counter integration, and 12-language Voice-to-Bill.
 
 ---
 
@@ -15,14 +16,13 @@
 
 | Pillar | Features & Technical Highlights |
 | :--- | :--- |
+| **🧾 Invoice Intelligence Scanner** | Header-guided dynamic invoice extraction layer that isolates Rate, Purchase Price, Selling Price, and MRP with spatial boundary verification and banker's Decimal rounding. Generates audit workbooks (.xlsx) and performs idempotent stock updates. |
 | **⚡ Lightning POS & Billing** | Rapid multi-item checkout, instant bill calculation, cash & UPI split payments, thermal receipt generator, keyboard shortcuts, and barcode scanner integration. |
-| **📦 Dynamic Inventory** | Real-time stock decrement transactions, low-stock threshold triggers, multi-category organization, supplier management, and instant stock adjustments. |
-| **🚨 Smart Inventory Alerts** | Multi-tiered automated notifications (Critical, Low Stock, Stagnant Inventory), auto-reorder recommendations, and real-time banner updates. |
-| **📊 AI Business Analytics** | Rolling daily/weekly/monthly revenue trends, gross margin analytics `(sellingPrice - costPrice)`, top seller rankings, slow-moving dead-capital detection, and velocity-based stockout forecasts. |
-| **📶 Offline-First Engine** | Zero-latency local caching, persistent queueing of offline sales and product mutations, atomic Firestore `increment()` conflict resolution, and automatic background sync upon reconnection. |
-| **⏱️ Sub-Millisecond Dashboard** | Stale-While-Revalidate (SWR) snapshot architecture delivering synchronous dashboard metric loads in **`0.005 ms`** (< 5 ms SLA). |
+| **🎙️ Voice-to-Bill (12 Languages)** | Fast natural language billing powered by multilingual voice parsing supporting Hindi, Telugu, Tamil, Kannada, Marathi, Bengali, Gujarati, Punjabi, Malayalam, Odia, Assamese, and Urdu. |
+| **📦 Dynamic Inventory & Restocking** | Real-time stock decrement transactions, low-stock threshold triggers, multi-category taxonomy, supplier management, and instant stock adjustments. |
+| **📊 Shelf Analytics & Demand Intelligence** | Rolling daily/weekly/monthly revenue trends, gross margin analytics `(sellingPrice - costPrice)`, top seller rankings, slow-moving dead-capital detection, and velocity-based stockout forecasts. |
+| **📶 Offline-First Resilience** | Zero-latency local caching, persistent queueing of offline sales and product mutations, atomic conflict resolution, and automatic background sync upon reconnection. |
 | **📡 ESP32 IoT Counter & Scale** | Ready-to-pair hardware communication bridge for ESP32 digital scales and smart optical counters with simulator fallback mode. |
-| **🧾 Modular Grocery OCR Engine** | 10-stage hybrid deterministic & AI-assisted pipeline for Kirana wholesale invoices with genuine 4-sheet .xlsx generation, Decimal arithmetic, and idempotent stock updates. |
 
 ---
 
@@ -30,8 +30,8 @@
 
 ```
                                   +-----------------------------+
-                                  |   ShopPulse Web Client      |
-                                  |  (React 19 + TypeScript)    |
+                                  |     Shelfora Web Client     |
+                                  |   (React 19 + TypeScript)   |
                                   +--------------+--------------+
                                                  |
                        +-------------------------+-------------------------+
@@ -40,8 +40,8 @@
                        |                                                   |
                        v                                                   v
          +----------------------------+                     +----------------------------+
-         |      Cloud Firestore       |                     |     Local Storage Cache    |
-         |  Multi-tab Persistent SDK  |                     |  Sales & Inventory Queues  |
+         |     FastAPI Cloud Hub      |                     |    Local Storage Cache     |
+         |  OCR Engine & SQLite DB    |                     |  Sales & Inventory Queues  |
          +-------------+--------------+                     +--------------+-------------+
                        |                                                   |
                        |                  Automatic Reconnect              |
@@ -55,42 +55,33 @@
 ## 📂 Project Structure
 
 ```bash
-SHOP-PULSE/
-├── firestore.rules          # Production multi-tenant security rules
-├── storage.rules            # Image and invoice file upload rules
-├── vite.config.ts           # Code-splitting with vendor manualChunks
+SHELFORA/
+├── backend/                 # FastAPI REST API & Grocery OCR Engine
+│   ├── api/routes/          # Invoices, Sales, Products, Auth, Voice endpoints
+│   ├── services/grocery_ocr/# Modular OCR preprocessing, table extraction & audit
+│   └── shoppulse.db         # Persistent SQLite database
 ├── src/
 │   ├── components/          # Reusable UI components & modals
-│   │   ├── Navbar.tsx       # Live online/offline/syncing status pill
-│   │   ├── SalesChart.tsx   # Weekly revenue bar chart
-│   │   ├── SmartCounterWidget.tsx # IoT ESP32 counter UI
-│   │   └── ...
-│   ├── hooks/               # Custom React hooks (reactive state)
-│   │   ├── useAuth.ts       # Authentication session & user profile
-│   │   ├── useInventory.ts  # Real-time inventory stream
-│   │   ├── useSales.ts      # Fast POS checkout & SWR dashboard metrics
-│   │   ├── useAlerts.ts     # Threshold monitoring & notification badge
-│   │   ├── useAnalytics.ts  # Business intelligence & demand insights
-│   │   ├── useSync.ts       # Queue status & manual sync trigger
-│   │   └── useNetworkStatus.ts # Real-time online/offline reachability
-│   ├── services/            # Pure TypeScript backend services
-│   │   ├── firebase.ts      # Firestore multi-tab cache & network helpers
-│   │   ├── networkService.ts# Browser reachability & simulation probes
-│   │   ├── offlineQueue.ts  # Persistent sales & delta inventory queues
-│   │   ├── syncService.ts   # Sync manager with auto-retry & deduplication
-│   │   ├── dashboardCacheService.ts # Sub-millisecond SWR snapshot cache
-│   │   ├── inventoryService.ts # Product CRUD & conflict-free adjustments
-│   │   ├── salesService.ts  # Atomic checkout transactions & receipts
-│   │   ├── analyticsService.ts # Revenue trends & profit metrics
-│   │   └── deviceService.ts # ESP32 Bluetooth/Wi-Fi IoT bridge
-│   ├── scripts/
-│   │   └── seedDemoData.ts  # Realistic Kirana catalog & sales history seeder
-│   ├── utils/
-│   │   ├── errorHandler.ts  # Centralized error classification & recovery
-│   │   ├── firebaseErrorMapper.ts # User-friendly localized error texts
-│   │   └── receiptGenerator.ts # Thermal receipt formatting & printing
-│   └── types/               # Strict TypeScript interfaces & models
-└── dist/                    # Optimized production bundle (< 500 kB per chunk)
+│   │   ├── branding/        # ShelforaLogo vector emblem and wordmarks
+│   │   ├── dashboard/       # SalesOverview, TodaySummary, AttentionCard
+│   │   ├── Navbar.tsx       # Minimal Shelfora top navigation
+│   │   ├── Sidebar.tsx      # Grouped collapsible navigation
+│   │   └── VoiceBillModal.tsx # 12-language voice billing interface
+│   ├── pages/               # Top-level page views
+│   │   ├── Dashboard.tsx    # Analytics-first business overview
+│   │   ├── InvoiceScanner.tsx # Intelligent document processing scanner
+│   │   ├── Inventory.tsx    # Shelf stock catalog & restock checklist
+│   │   ├── Sales.tsx        # Fast POS billing terminal
+│   │   ├── Insights.tsx     # Demand forecasting & business telemetry
+│   │   └── Settings.tsx     # Shop profile & multi-language switcher
+│   ├── i18n/                # 12 Indian regional language dictionaries
+│   ├── hooks/               # Custom reactive state hooks
+│   └── types/               # Strict TypeScript models
+├── public/
+│   ├── favicon.svg          # Shelfora vector favicon
+│   ├── logo.svg             # Shelfora horizontal logo
+│   └── manifest.json        # PWA application metadata
+└── dist/                    # Optimized production bundle
 ```
 
 ---
@@ -100,6 +91,7 @@ SHOP-PULSE/
 ### 1. Prerequisites
 * **Node.js** v20+ or v22+
 * **npm** v10+
+* **Python** 3.12+
 
 ### 2. Installation
 ```bash
@@ -107,114 +99,43 @@ SHOP-PULSE/
 git clone https://github.com/sasikiranambati/SHOP-PULSE.git
 cd SHOP-PULSE
 
-# Install dependencies
+# Install frontend dependencies
 npm install
+
+# Setup Python backend virtual environment
+python -m venv backend/.venv
+backend\.venv\Scripts\pip install -r backend/requirements.txt
 ```
 
-### 3. Environment Setup
-Copy `.env.example` to `.env`:
+### 3. Running Locally
 ```bash
-cp .env.example .env
-```
-*(Note: If Firebase environment variables are omitted or contain default demo keys, ShopPulse automatically runs in zero-configuration Local Demo Mode).*
-
-### 4. Running Locally
-```bash
-# Start Vite development server
+# Start Vite development server (auto-proxies to backend)
 npm run dev
 ```
 Open [http://localhost:5173/](http://localhost:5173/) in your browser.
 
-### 5. Backend & Invoice Scanner Setup
+### 4. Running Verification Test Suites
 ```bash
-# Python backend (FastAPI + SQLite); npm run dev starts it automatically if it is not running
-python3 -m venv backend/.venv
-backend/.venv/bin/pip install -r backend/requirements.txt
-cp backend/.env.example backend/.env
-```
-* **OCR** runs on the backend with tesseract.js (Node). English language data is installed by
-  `npm install` (`@tesseract.js-data/eng`), so no download is needed at scan time. Air-gapped servers can
-  point `OCR_LANG_PATH` at a folder containing `eng.traineddata`.
-* **PDFs** are read with pdfplumber (word positions); scanned PDF pages are rendered and OCR'd.
-* **MRP lookup** is configured only in `backend/.env` (`MRP_PROVIDER`, see `backend/.env.example`).
-  The default provider, OpenMRP, is a manufacturing (Material Requirements Planning) platform and does not
-  publish Maximum Retail Price, so lookups report `MRP_UNAVAILABLE`/`API_CONFIGURATION_ERROR` and MRP
-  comes from the invoice's MRP column or manual entry. Never put API keys in `VITE_*` variables.
-* Backend tests: `cd backend && .venv/bin/python -m pytest -q`
+# Run Frontend Vitest Suite (43 tests)
+npm test
 
-### 6. Seeding Realistic Demo Data
-To instantly populate realistic Kirana staples (Milk, Bread, Rice, Sugar, Oil, Biscuits) and 7 days of sales:
-```bash
-npx tsx src/scripts/seedDemoData.ts
+# Run Backend Pytest Suite (396 tests)
+& "backend\.venv\Scripts\python.exe" -m pytest -c backend/pytest.ini backend/tests
 ```
 
 ---
 
-## 🛡️ Security Rules
+## 🎨 Shelfora Design Tokens & Palette
 
-### Firestore Security Rules (`firestore.rules`)
-* **Multi-Tenant Shop Isolation**: Ensures users can only access records belonging to their registered `shopId`.
-* **Data Integrity**: Enforces positive numerical values for `price`, `totalAmount`, and `stock`.
-* **Immutability of Sales**: Financial ledger records cannot be tampered with or modified post-creation.
-
-Deploying to Firebase:
-```bash
-firebase deploy --only firestore:rules
-```
-
-### Firebase Storage Rules (`storage.rules`)
-* **MIME Validation**: Restricts product image uploads to valid image types (`image/png`, `image/jpeg`, `image/webp`).
-* **Size Limits**: Enforces a strict 5 MB cap on product images and 10 MB on scanned invoices.
-
-Deploying to Firebase:
-```bash
-firebase deploy --only storage
-```
-
----
-
-## ⚡ Build Optimization
-
-ShopPulse utilizes modular Rollup chunk splitting in `vite.config.ts`:
-
-| Chunk File | Uncompressed | Gzip Size | Description |
-| :--- | :--- | :--- | :--- |
-| `vendor-icons.js` | 26.27 kB | 9.54 kB | Lucide Icon Registry |
-| `vendor-firebase.js` | 72.54 kB | 25.90 kB | Firebase Core SDK |
-| `vendor-auth.js` | 107.61 kB | 32.32 kB | Firebase Authentication Module |
-| `vendor-react.js` | 211.00 kB | 65.85 kB | React 19 Core & DOM Runtime |
-| `index.js` | 378.94 kB | 85.25 kB | Application Logic & Page Shell |
-| `vendor-firestore.js` | 475.25 kB | 135.38 kB | Modular Cloud Firestore Engine |
-
-**Result:** Fast initial load, zero warnings, and **every single chunk < 500 kB**.
-
-```bash
-npm run build
-```
-
----
-
-## 🎓 University Capstone Evaluation Criteria
-
-1. **System Reliability & Offline Support**: Application operates continuously without internet connection; sales are queued and synced automatically on reconnect with zero data loss.
-2. **Conflict Resolution Strategy**: Implemented atomic Firestore `increment()` deltas to prevent concurrent sale collisions across multiple billing terminals.
-3. **Performance SLA**: Dashboard metrics load in **0.005 ms** via synchronous Stale-While-Revalidate caching.
-4. **Hardware-Readiness**: Native driver interfaces for ESP32 Bluetooth / Wi-Fi smart weighing scales and optical counters.
-5. **Architectural Discipline**: Strict separation between presentation (React 19), business telemetry (Hooks), and data persistence (Services).
-
----
-
-## 🛣️ Roadmap
-
-- [x] Multi-tenant Authentication & Role-Based Access
-- [x] Barcode POS & Dynamic Stock Ledger
-- [x] Smart Low-Stock Reorder Triggers
-- [x] AI Demand & Profitability Forecasting
-- [x] Offline Queueing & Automatic Sync Engine
-- [x] Production Build & Vendor Chunk Splitting
-- [ ] Direct WhatsApp Bill Dispatch via Meta Cloud API
-- [ ] Multi-Language Voice Search in regional Indian languages
-- [ ] ESP32 Firmware OTA (Over-The-Air) binary updates
+The Shelfora interface utilizes a sophisticated natural grocery palette:
+- **Primary Deep Forest Green (`#153D32`):** Brand anchors, primary actions, and prominent typography.
+- **Emerald Green (`#23866A`):** Success states, positive margins, and growth indicators.
+- **Fresh Mint (`#B9E5D0`):** Soft highlights, active pills, and freshness leaf accents.
+- **Warm Ivory (`#FAF8F2`):** Primary canvas backgrounds and soft surfaces.
+- **Premium Gold (`#D6AE62`):** VIP highlights, AI engine badges, and intelligence sparks.
+- **Soft Cream (`#F3EFE3`) & Sage Green (`#DDE9DF`):** Subtle borders and card separators.
+- **Coral (`#EF806D`):** Warning thresholds, low stock alerts, and destructive confirmations.
+- **Charcoal (`#252D29`):** High-contrast body text adhering to WCAG 2.1 AAA accessibility.
 
 ---
 

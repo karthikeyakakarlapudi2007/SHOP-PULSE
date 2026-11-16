@@ -6,6 +6,9 @@
 
 import type { Alert } from '../types/alert';
 import type { Product } from '../types/product';
+import { notificationsApi } from '../api/notifications';
+import { authApi } from '../api/auth';
+
 
 export interface PushNotificationPayload {
   title: string;
@@ -66,14 +69,29 @@ export async function sendCriticalAlert(alert: Alert): Promise<void> {
 /**
  * Register a device FCM registration token for push notifications.
  */
-export async function registerDeviceToken(userId: string, token: string): Promise<void> {
+export async function registerDeviceToken(userId: string, token: string, platform: string = 'android'): Promise<void> {
   console.info(`[PushNotification] Registered device token for user ${userId}:`, token.substring(0, 10) + '...');
   try {
     localStorage.setItem('shoppulse_fcm_token', token);
-  } catch {
-    // Ignore localStorage write error
+    if (authApi.isAuthenticated()) {
+      await notificationsApi.registerDeviceToken(token, platform);
+    }
+  } catch (err) {
+    console.warn('[PushNotification] Registration error:', err);
   }
 }
+
+export async function unregisterDeviceToken(token: string): Promise<void> {
+  try {
+    localStorage.removeItem('shoppulse_fcm_token');
+    if (authApi.isAuthenticated()) {
+      await notificationsApi.unregisterDeviceToken(token);
+    }
+  } catch (err) {
+    console.warn('[PushNotification] Unregistration error:', err);
+  }
+}
+
 
 /**
  * Check if the current browser environment supports Push Notifications.

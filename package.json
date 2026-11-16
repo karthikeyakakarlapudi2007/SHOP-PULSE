@@ -1,5 +1,6 @@
 {
-  "name": "shop-pulse",
+  "name": "shelfora",
+  "description": "Shelfora — Smarter Shelves. Better Decisions.",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -20,7 +21,6 @@
     "@tesseract.js-data/eng": "^1.0.0",
     "firebase": "^9.14.0",
     "lucide-react": "^1.45.0",
-    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",

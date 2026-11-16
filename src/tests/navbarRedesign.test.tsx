@@ -45,14 +45,13 @@ const renderNavbarHtml = (props: Partial<React.ComponentProps<typeof Navbar>> = 
   );
 };
 
-describe('ShopPulse Minimal Header Redesign', () => {
+describe('Shelfora Minimal Header Redesign', () => {
   it('renders minimal left, center, and right sections without visual clutter', () => {
     const html = renderNavbarHtml();
 
     // 1. Left Section: Sidebar toggle, Brand, Breadcrumb
     expect(html).toContain('aria-label="Collapse sidebar navigation"');
-    expect(html).toContain('Shop');
-    expect(html).toContain('Pulse');
+    expect(html).toContain('SHELFORA');
     expect(html).toContain('aria-label="Current section"');
     expect(html).toContain('Dashboard');
 
@@ -89,8 +88,7 @@ describe('ShopPulse Minimal Header Redesign', () => {
   it('supports logged-out minimal state with login/signup buttons', () => {
     const html = renderNavbarHtml({ isLoggedIn: false });
 
-    expect(html).toContain('Shop');
-    expect(html).toContain('Pulse');
+    expect(html).toContain('SHELFORA');
     expect(html).toContain('Log In to Store');
     expect(html).toContain('Create account');
 

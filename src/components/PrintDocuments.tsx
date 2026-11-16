@@ -29,7 +29,7 @@ const DocHeader: React.FC<{ shopName: string; title: string; meta?: React.ReactN
 );
 
 const Footer: React.FC = () => (
-  <footer className="print-footer">Printed {dateTime(new Date().toISOString())} · ShopPulse</footer>
+  <footer className="print-footer">Printed {dateTime(new Date().toISOString())} · Shelfora</footer>
 );
 
 export const SaleReceiptDocument: React.FC<{ sale: Sale; shopName: string }> = ({ sale, shopName }) => (

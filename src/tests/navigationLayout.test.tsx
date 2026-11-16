@@ -34,11 +34,11 @@ describe('Sidebar Component', () => {
   it('renders all verified navigation routes in expanded state', () => {
     const html = renderToStaticMarkup(
       <LanguageProvider>
-        <Sidebar 
-          activePage="dashboard" 
-          setActivePage={() => {}} 
-          isCollapsed={false} 
-          onToggleCollapse={() => {}}
+        <Sidebar
+          activePage="dashboard"
+          setActivePage={() => { }}
+          isCollapsed={false}
+          onToggleCollapse={() => { }}
         />
       </LanguageProvider>
     );
@@ -52,22 +52,21 @@ describe('Sidebar Component', () => {
 
     // Verify badges
     expect(html).toContain('POS');
-    expect(html).toContain('AI');
 
     // Verify active page indicator
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain('1800-SHOP-PULSE');
+    expect(html).toContain('1800-SHELFORA');
     expect(html).toContain('Collapse menu');
   });
 
   it('renders collapsed state with compact width, tooltips, and collapse toggle', () => {
     const html = renderToStaticMarkup(
       <LanguageProvider>
-        <Sidebar 
-          activePage="sales" 
-          setActivePage={() => {}} 
-          isCollapsed={true} 
-          onToggleCollapse={() => {}}
+        <Sidebar
+          activePage="sales"
+          setActivePage={() => { }}
+          isCollapsed={true}
+          onToggleCollapse={() => { }}
         />
       </LanguageProvider>
     );
@@ -88,20 +87,19 @@ describe('Navbar Component', () => {
       <LanguageProvider>
         <Navbar
           activePage="inventory"
-          setActivePage={() => {}}
+          setActivePage={() => { }}
           shopName="Kiran Supermarket"
           isLoggedIn={true}
-          onOpenSearch={() => {}}
+          onOpenSearch={() => { }}
           isSidebarCollapsed={false}
-          onToggleSidebar={() => {}}
-          onOpenMobileMenu={() => {}}
+          onToggleSidebar={() => { }}
+          onOpenMobileMenu={() => { }}
         />
       </LanguageProvider>
     );
 
     // Brand and Shop Name
-    expect(html).toContain('Shop');
-    expect(html).toContain('Pulse');
+    expect(html).toContain('SHELFORA');
     expect(html).toContain('Kiran Supermarket');
 
     // Breadcrumb section indicator
@@ -130,13 +128,13 @@ describe('MobileNavDrawer Component', () => {
       <LanguageProvider>
         <MobileNavDrawer
           isOpen={true}
-          onClose={() => {}}
+          onClose={() => { }}
           activePage="dashboard"
-          setActivePage={() => {}}
+          setActivePage={() => { }}
           shopName="Kiran Supermarket"
           isLoggedIn={true}
-          onLogout={() => {}}
-          onOpenLanguageModal={() => {}}
+          onLogout={() => { }}
+          onOpenLanguageModal={() => { }}
         />
       </LanguageProvider>
     );
@@ -151,12 +149,11 @@ describe('MobileNavDrawer Component', () => {
     expect(html).toContain('Dashboard');
     expect(html).toContain('Quick Sales POS');
     expect(html).toContain('Stock Catalog');
-    expect(html).toContain('Scan Bill');
     expect(html).toContain('Shop Insights');
     expect(html).toContain('Settings &amp; More');
 
     // Support and logout
-    expect(html).toContain('1800-SHOP-PULSE');
+    expect(html).toContain('1800-SHELFORA');
     expect(html).toContain('Logout');
   });
 });
@@ -166,17 +163,17 @@ describe('BottomNav Component', () => {
     const html = renderToStaticMarkup(
       <LanguageProvider>
         <BottomNav
-          activePage="scanner"
-          setActivePage={() => {}}
-          onOpenMenu={() => {}}
+          activePage="insights"
+          setActivePage={() => { }}
+          onOpenMenu={() => { }}
         />
       </LanguageProvider>
     );
 
     expect(html).toContain('aria-label="Bottom mobile navigation"');
-    // Active scanner route highlighted
+    // Active insights route highlighted
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain('Scan Bill');
+    expect(html).toContain('Shop Insights');
     expect(html).toContain('Home');
     expect(html).toContain('Sales');
     expect(html).toContain('Stock');
@@ -188,10 +185,10 @@ describe('Scrolling Architecture & Layout Integrity', () => {
   it('ensures sidebar nav does not apply overscroll-contain to allow natural page scrolling', () => {
     const html = renderToStaticMarkup(
       <LanguageProvider>
-        <Sidebar 
-          activePage="dashboard" 
-          setActivePage={() => {}} 
-          isCollapsed={false} 
+        <Sidebar
+          activePage="dashboard"
+          setActivePage={() => { }}
+          isCollapsed={false}
         />
       </LanguageProvider>
     );

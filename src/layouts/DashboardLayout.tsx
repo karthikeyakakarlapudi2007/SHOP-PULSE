@@ -47,7 +47,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Persist desktop sidebar collapse preference
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('shoppulse_sidebar_collapsed') === 'true';
+      return (localStorage.getItem('shelfora_sidebar_collapsed') || localStorage.getItem('shoppulse_sidebar_collapsed')) === 'true';
     } catch {
       return false;
     }
@@ -57,6 +57,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     setIsSidebarCollapsed((prev) => {
       const next = !prev;
       try {
+        localStorage.setItem('shelfora_sidebar_collapsed', String(next));
         localStorage.setItem('shoppulse_sidebar_collapsed', String(next));
       } catch {
         // Ignore localStorage write errors
@@ -88,10 +89,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F5EF] flex flex-col font-sans relative">
+    <div className="min-h-screen bg-[#FAF8F2] flex flex-col font-sans relative">
       <a
         href="#main-content"
-        className="no-print sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[80] focus:px-3.5 focus:py-2 focus:rounded-lg focus:bg-white focus:text-[#234B3A] focus:font-bold focus:shadow-md focus:outline-2 focus:outline-[#234B3A]"
+        className="no-print sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[80] focus:px-3.5 focus:py-2 focus:rounded-lg focus:bg-white focus:text-[#153D32] focus:font-bold focus:shadow-md focus:outline-2 focus:outline-[#153D32]"
       >
         Skip to main content
       </a>
@@ -110,9 +111,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* Main Application Workspace: Edge-to-edge layout with docked sidebar and centered content container */}
       <div className="flex-1 flex w-full min-w-0">
-        <Sidebar 
-          activePage={activePage} 
-          setActivePage={setActivePage} 
+        <Sidebar
+          activePage={activePage}
+          setActivePage={setActivePage}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
         />
@@ -129,7 +130,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </div>
 
 
-      {/* ShopPulse AI Floating Assistant */}
+      {/* Shelfora AI Floating Assistant */}
       <div className="no-print">
         <Suspense fallback={null}>
           <AiChatBox />
@@ -137,9 +138,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </div>
 
       {/* App-like Mobile Bottom Navigation */}
-      <BottomNav 
-        activePage={activePage} 
-        setActivePage={setActivePage} 
+      <BottomNav
+        activePage={activePage}
+        setActivePage={setActivePage}
         onOpenMenu={() => setIsMobileMenuOpen(true)}
       />
 

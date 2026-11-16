@@ -19,7 +19,7 @@ from schemas.invoice import (
 from services import shop as shop_service
 from services import invoice as invoice_service
 from services.ocr import OcrUnavailableError
-from services.excel_invoice import get_invoice_workbook_path
+from services.grocery_ocr.exceptions import GroceryOCRError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ async def extract_invoice(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"OCR engine unavailable: {oe}",
         )
-    except ValueError as ve:
+    except (ValueError, GroceryOCRError) as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
         logger.exception("Invoice extraction failed")
@@ -90,7 +90,7 @@ def confirm_invoice(
         )
     except invoice_service.InvoiceConflictError as ce:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ce))
-    except ValueError as ve:
+    except (ValueError, GroceryOCRError) as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
         logger.exception("Invoice confirmation failed")
@@ -109,15 +109,25 @@ def download_invoice_excel(
     Download the genuine .xlsx workbook generated during invoice extraction.
     Contains: Raw Invoice, Grocery Items, Review Required, and OCR Audit worksheets.
     """
-    path = get_invoice_workbook_path(invoice_id)
-    if not path or not path.exists():
-        safe_inv = re.sub(r"[^\w\-]", "_", invoice_id)
-        candidates = list(Path("backend/uploads/invoices").glob(f"invoice_audit_{safe_inv}_*.xlsx"))
-        if not candidates:
-            candidates = list((Path(tempfile.gettempdir()) / "shoppulse_invoices").glob(f"invoice_audit_{safe_inv}_*.xlsx"))
-        if candidates:
-            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-            path = candidates[0]
+    safe_inv = re.sub(r"[^\w\-]", "_", invoice_id)
+    search_dirs = [
+        Path("backend/uploads/invoices"),
+        Path("uploads/invoices"),
+        Path(tempfile.gettempdir()) / "shoppulse_invoices",
+        Path("storage/invoices"),
+    ]
+    candidates: list[Path] = []
+    for s_dir in search_dirs:
+        if s_dir.exists():
+            candidates.extend(s_dir.glob(f"invoice_audit_{safe_inv}_*.xlsx"))
+            exact = s_dir / f"{safe_inv}.xlsx"
+            if exact.exists():
+                candidates.append(exact)
+
+    path: Optional[Path] = None
+    if candidates:
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        path = candidates[0]
 
     if not path or not path.exists():
         raise HTTPException(

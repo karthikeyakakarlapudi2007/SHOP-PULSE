@@ -4,4 +4,4 @@ router = APIRouter()
 
 @router.get("/health")
 def health_check():
-    return {"status": "ok", "message": "ShopPulse API is healthy"}
+    return {"status": "ok", "message": "Shelfora API is healthy"}

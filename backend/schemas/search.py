@@ -17,7 +17,7 @@ class ProductSearchHit(BaseModel):
 
 
 class PurchaseSearchHit(BaseModel):
-    """A purchase (supplier invoice) recorded in ShopPulse."""
+    """A purchase (supplier invoice) recorded in Shelfora."""
     id: UUID
     invoice_number: Optional[str] = None
     invoice_date: Optional[str] = None

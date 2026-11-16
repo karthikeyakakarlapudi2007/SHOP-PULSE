@@ -231,3 +231,4 @@ class OCRQualityAssessor:
                 "total_pages": len(reports),
             },
         )
+

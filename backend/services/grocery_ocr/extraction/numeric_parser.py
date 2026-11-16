@@ -91,7 +91,9 @@ class NumericParser:
             cleaned = cleaned.replace("%", "").strip()
 
         # Strip standard currency symbols and Indian formatting artifacts
-        cleaned = re.sub(r"(?i)₹|\brs\b\.?|\binr\b|\$|€|£|/-", "", cleaned).strip()
+        cleaned = re.sub(r"(?i)₹|\brs\b\.?|\binr\b|\$|€|£|¥|[xX]¥|/-", "", cleaned).strip()
+        # Strip leading non-digit symbols / OCR noise artifacts before the number, preserving OCR letters like I/O
+        cleaned = re.sub(r"^[^\d\-IOlo]+", "", cleaned).strip()
 
         # Check for Indian comma formatting (e.g. '1,378.62' or '1,00,000.00')
         cleaned = cleaned.replace(",", "").strip()

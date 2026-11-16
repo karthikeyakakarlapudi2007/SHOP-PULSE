@@ -1,6 +1,6 @@
 /**
  * @file billNumberGenerator.ts
- * @description Date-based, sequential, and unique Bill Number generator for ShopPulse POS receipts.
+ * @description Date-based, sequential, and unique Bill Number generator for Shelfora POS receipts.
  * Format: `SP-YYYYMMDD-001`, `SP-YYYYMMDD-002`, etc.
  */
 

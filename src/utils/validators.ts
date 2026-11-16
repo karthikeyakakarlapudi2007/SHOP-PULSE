@@ -1,6 +1,6 @@
 /**
  * @file validators.ts
- * @description Input validation and sanitization utility methods for ShopPulse.
+ * @description Input validation and sanitization utility methods for Shelfora.
  * Belongs in `src/utils/validators.ts`.
  */
 

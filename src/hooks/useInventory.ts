@@ -138,6 +138,7 @@ export function useInventory(initialFilters?: ProductQueryFilters): UseInventory
     setError(null);
     try {
       await inventoryService.deleteProduct(id);
+      setProducts(prev => prev.filter(p => p.id !== id));
     } catch (err: any) {
       setError(err.message || 'Failed to delete product.');
       throw err;

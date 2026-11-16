@@ -37,6 +37,7 @@ from services.grocery_ocr.logger import get_logger, stage_timer
 from services.grocery_ocr.processors.file_validator import BaseFileValidator, IFileValidator
 from services.grocery_ocr.processors.image_processor import BaseImageProcessor, IImageProcessor
 from services.grocery_ocr.processors.pdf_processor import BasePDFProcessor, IPDFProcessor
+from services.grocery_ocr.processors.text_line_reconstructor import build_ocr_document_from_raw_text
 from services.grocery_ocr.quality.ocr_quality_assessor import OCRQualityAssessor
 from services.grocery_ocr.ai.service import AIInterpretationService
 from services.grocery_ocr.schemas.invoice import ExtractedInvoice, InvoiceProcessingMetadata
@@ -177,60 +178,7 @@ class InvoicePipeline:
                         raw_str = content.decode("utf-8")
                     except UnicodeDecodeError:
                         raw_str = content.decode("latin-1", errors="ignore")
-                    text_lines = raw_str.splitlines()
-                    ocr_words: List[OCRWord] = []
-                    ocr_lines: List[OCRLine] = []
-                    w_idx = 0
-                    import re as _re
-                    for line_idx, line in enumerate(text_lines):
-                        stripped = line.strip()
-                        if not stripped:
-                            continue
-                        line_y0 = float(50 + line_idx * 35)
-                        line_y1 = line_y0 + 25.0
-                        line_words: List[OCRWord] = []
-                        for match in _re.finditer(r"\S+", line):
-                            tok = match.group()
-                            x0 = float(50 + match.start() * 12)
-                            x1 = float(50 + match.end() * 12)
-                            word_obj = OCRWord(
-                                text=tok,
-                                bbox=BoundingBox(x0=x0, y0=line_y0, x1=x1, y1=line_y1),
-                                confidence=100.0,
-                                word_index=w_idx,
-                                reading_order=w_idx,
-                                page_number=1,
-                            )
-                            ocr_words.append(word_obj)
-                            line_words.append(word_obj)
-                            w_idx += 1
-                        if line_words:
-                            ocr_lines.append(OCRLine(
-                                line_number=line_idx,
-                                text=stripped,
-                                words=line_words,
-                                bbox=BoundingBox(x0=min(w.bbox.x0 for w in line_words), y0=line_y0, x1=max(w.bbox.x1 for w in line_words), y1=line_y1),
-                                confidence=100.0
-                            ))
-                    digital_page = OCRPageResult(
-                        page_number=1,
-                        width=1400,
-                        height=max(800, 100 + len(text_lines) * 35),
-                        raw_text=raw_str,
-                        words=ocr_words,
-                        lines=ocr_lines,
-                        confidence=100.0,
-                        processing_status="SUCCESS",
-                        metadata={"format": "plain_text"}
-                    )
-                    digital_doc = OCRDocumentResult(
-                        filename=filename,
-                        pages=[digital_page],
-                        total_pages=1,
-                        full_text=raw_str,
-                        average_confidence=100.0,
-                        engine_name="plain_text_direct",
-                    )
+                    digital_doc = build_ocr_document_from_raw_text(raw_str, filename=filename)
                     metadata.page_count = 1
                 else:
                     page_images = [content]

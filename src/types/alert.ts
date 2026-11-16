@@ -9,6 +9,7 @@ export type CanonicalAlertType =
   | 'OUT_OF_STOCK'
   | 'REORDER_RECOMMENDED'
   | 'DEVICE_OFFLINE'
+  | 'DEVICE_BATTERY_LOW'
   | 'SALE_COMPLETED';
 
 export type LegacyAlertType = 
@@ -36,6 +37,11 @@ export interface Alert {
   createdAt: string;
   resolvedAt?: string;
   shopId?: string;
+  category?: 'inventory' | 'sales' | 'system';
+  deepLink?: string;
+  eventKey?: string;
+  deviceId?: string;
+
 
   // Backward compatibility fields
   title?: string;
@@ -56,6 +62,8 @@ export interface CreateAlertInput {
   isRead?: boolean;
   title?: string;
   recommendedOrderQuantity?: number;
+  deviceId?: string;
+  category?: 'inventory' | 'sales' | 'system';
 }
 
 /**

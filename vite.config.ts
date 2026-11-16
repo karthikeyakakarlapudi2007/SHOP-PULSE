@@ -2,7 +2,6 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import http from 'node:http'
-// @ts-expect-error untyped helper script
 import { startBackend } from './scripts/start-backend.js'
 
 function autoBackendPlugin(): Plugin {
@@ -16,11 +15,11 @@ function autoBackendPlugin(): Plugin {
       const triggerStart = () => {
         if (resolved) return;
         resolved = true;
-        console.log('\x1b[36m[ShopPulse] FastAPI backend not detected on port 8000. Auto-starting backend...\x1b[0m');
+        console.log('\x1b[36m[Shelfora] FastAPI backend not detected on port 8000. Auto-starting backend...\x1b[0m');
         try {
           backendProc = startBackend();
         } catch (err: any) {
-          console.error('[ShopPulse] Failed to auto-start backend:', err?.message);
+          console.error('[Shelfora] Failed to auto-start backend:', err?.message);
         }
       };
 
@@ -35,7 +34,7 @@ function autoBackendPlugin(): Plugin {
         (res) => {
           if (res.statusCode === 200) {
             resolved = true;
-            console.log('\x1b[32m[ShopPulse] FastAPI backend is already running on http://127.0.0.1:8000\x1b[0m');
+            console.log('\x1b[32m[Shelfora] FastAPI backend is already running on http://127.0.0.1:8000\x1b[0m');
           } else {
             triggerStart();
           }
@@ -93,7 +92,7 @@ export default defineConfig({
         secure: false,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.error('[ShopPulse Vite Proxy] Error proxying to backend (http://127.0.0.1:8000):', err.message);
+            console.error('[Shelfora Vite Proxy] Error proxying to backend (http://127.0.0.1:8000):', err.message);
           });
         },
       },

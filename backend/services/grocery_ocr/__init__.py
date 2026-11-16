@@ -1,5 +1,5 @@
 """
-ShopPulse Grocery OCR Engine — Phase 2 Architecture Foundation.
+Shelfora Grocery OCR Engine — Phase 2 Architecture Foundation.
 A modular, testable, and scalable invoice extraction engine.
 """
 

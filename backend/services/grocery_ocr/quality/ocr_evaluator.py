@@ -170,3 +170,4 @@ class OCREvaluator:
             "found_prices": found_prices,
             "price_recall": round(found_prices / total_items, 4),
         }
+

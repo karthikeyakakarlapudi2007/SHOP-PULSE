@@ -3,8 +3,8 @@ import {
   Home, 
   Receipt, 
   Package, 
-  ScanLine, 
   Sparkles,
+  ScanLine,
   Settings as SettingsIcon,
   PhoneCall,
   ChevronLeft,
@@ -41,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { t } = useLanguage();
 
-  // Navigation groups derived strictly from verified existing application routes
+  // Navigation groups aligned with Shelfora intelligence architecture
   const navGroups: NavGroup[] = [
     {
       id: 'overview',
@@ -68,8 +68,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'tools',
       label: 'Tools & Automation',
       items: [
-        { id: 'scanner', labelKey: 'nav.scanner', icon: ScanLine, badge: 'AI' },
         { id: 'insights', labelKey: 'nav.shopInsights', icon: Sparkles },
+        { id: 'scanner', labelKey: 'nav.scanner', icon: ScanLine, badge: 'AI' },
       ],
     },
     {
@@ -84,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside 
       aria-label="Sidebar Navigation"
-      className={`no-print shrink-0 hidden md:flex flex-col justify-between bg-white border-r border-[#E3E5DE] transition-[width] duration-200 ease-in-out select-none sticky top-14 h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)] z-30 ${
+      className={`no-print shrink-0 hidden md:flex flex-col justify-between bg-white border-r border-[#DDE9DF] transition-[width] duration-200 ease-in-out select-none sticky top-14 h-[calc(100vh-3.5rem)] h-[calc(100dvh-3.5rem)] z-30 ${
         isCollapsed ? 'w-[72px] p-2.5' : 'w-64 p-3.5'
       }`}
     >
@@ -95,13 +95,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Group Header / Separator */}
             {!isCollapsed ? (
               <p 
-                className="px-3 text-[10px] font-bold text-[#69736C] uppercase tracking-wider mb-1 pt-1"
+                className="px-3 text-[10px] font-bold text-[#5E6C64] uppercase tracking-wider mb-1 pt-1"
                 aria-hidden="true"
               >
                 {group.label}
               </p>
             ) : groupIdx > 0 ? (
-              <div className="border-t border-[#E3E5DE] my-2 mx-1" aria-hidden="true" />
+              <div className="border-t border-[#DDE9DF] my-2 mx-1" aria-hidden="true" />
             ) : null}
 
             {/* Nav Items */}
@@ -118,20 +118,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onClick={() => setActivePage(item.id)}
                       aria-current={isActive ? 'page' : undefined}
                       aria-label={labelText}
-                      className={`w-full flex items-center rounded-lg font-medium text-xs transition-all duration-150 cursor-pointer ${
+                      className={`w-full flex items-center rounded-xl font-medium text-xs transition-all duration-150 cursor-pointer ${
                         isCollapsed 
                           ? 'justify-center p-2.5 min-h-[42px]' 
                           : 'justify-between px-3 py-2.5 min-h-[42px]'
                       } ${
                         isActive
-                          ? 'bg-[#234B3A] text-white font-semibold shadow-xs'
-                          : 'text-[#202923] hover:bg-[#F2EFE9] hover:text-[#18382B]'
+                          ? 'bg-[#153D32] text-[#FAF8F2] font-semibold shadow-xs'
+                          : 'text-[#252D29] hover:bg-[#F3EFE3] hover:text-[#153D32]'
                       }`}
                     >
                       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5'}`}>
                         <Icon 
                           className={`w-4.5 h-4.5 shrink-0 transition-colors ${
-                            isActive ? 'text-white' : 'text-[#69736C] group-hover:text-[#234B3A]'
+                            isActive ? 'text-[#FAF8F2]' : 'text-[#5E6C64] group-hover:text-[#153D32]'
                           }`} 
                         />
                         {!isCollapsed && (
@@ -143,8 +143,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span 
                           className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
                             isActive 
-                              ? 'bg-white/20 text-white' 
-                              : 'bg-[#E5EEE6] text-[#18382B] border border-[#52745D]/20'
+                              ? 'bg-white/20 text-[#FAF8F2]' 
+                              : item.badge === 'AI'
+                                ? 'bg-[#D6AE62]/20 text-[#A07828] border border-[#D6AE62]/40'
+                                : 'bg-[#E7F3EE] text-[#153D32] border border-[#23866A]/20'
                           }`}
                         >
                           {item.badge}
@@ -156,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {isCollapsed && (
                       <div 
                         role="tooltip"
-                        className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1.5 rounded-md bg-[#202923] text-white text-xs font-medium whitespace-nowrap shadow-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-50 flex items-center gap-1.5"
+                        className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1.5 rounded-lg bg-[#153D32] text-[#FAF8F2] text-xs font-medium whitespace-nowrap shadow-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-50 flex items-center gap-1.5"
                       >
                         <span>{labelText}</span>
                         {item.badge && (
@@ -175,30 +177,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Sidebar Footer: Support & Collapse Controls */}
-      <div className="pt-3 border-t border-[#E3E5DE] space-y-2 shrink-0">
+      <div className="pt-3 border-t border-[#DDE9DF] space-y-2 shrink-0">
         {/* Support Help Banner */}
         {!isCollapsed ? (
-          <div className="bg-[#F7F5EF] rounded-xl p-3 border border-[#E3E5DE] text-xs">
-            <div className="flex items-center gap-2 text-[#234B3A] font-bold mb-0.5">
-              <PhoneCall className="w-3.5 h-3.5 text-[#234B3A]" />
+          <div className="bg-[#FAF8F2] rounded-xl p-3 border border-[#DDE9DF] text-xs">
+            <div className="flex items-center gap-2 text-[#153D32] font-bold mb-0.5">
+              <PhoneCall className="w-3.5 h-3.5 text-[#23866A]" />
               <span>{t('settings.supportLine')}</span>
             </div>
-            <p className="text-[#69736C] text-[11px]">Help available 24/7</p>
-            <p className="font-extrabold text-[#18382B] mt-1 text-xs tracking-tight">1800-SHOP-PULSE</p>
+            <p className="text-[#5E6C64] text-[11px]">Help available 24/7</p>
+            <p className="font-extrabold text-[#153D32] mt-1 text-xs tracking-tight">1800-SHELFORA</p>
           </div>
         ) : (
           <div className="flex justify-center relative group">
             <div 
-              aria-label="Help available 24/7: 1800-SHOP-PULSE"
-              className="w-10 h-10 rounded-lg bg-[#F7F5EF] border border-[#E3E5DE] flex items-center justify-center text-[#234B3A] cursor-pointer hover:bg-[#E5EEE6] transition-colors"
+              aria-label="Help available 24/7: 1800-SHELFORA"
+              className="w-10 h-10 rounded-xl bg-[#FAF8F2] border border-[#DDE9DF] flex items-center justify-center text-[#153D32] cursor-pointer hover:bg-[#E7F3EE] transition-colors"
             >
-              <PhoneCall className="w-4 h-4 text-[#234B3A]" />
+              <PhoneCall className="w-4 h-4 text-[#23866A]" />
             </div>
             <div 
               role="tooltip"
-              className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1.5 rounded-md bg-[#202923] text-white text-xs font-medium whitespace-nowrap shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50"
+              className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2.5 px-2.5 py-1.5 rounded-lg bg-[#153D32] text-[#FAF8F2] text-xs font-medium whitespace-nowrap shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-50"
             >
-              Support: 1800-SHOP-PULSE (24/7)
+              Support: 1800-SHELFORA (24/7)
             </div>
           </div>
         )}
@@ -211,17 +213,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             aria-label={isCollapsed ? 'Expand sidebar navigation' : 'Collapse sidebar navigation'}
             aria-expanded={!isCollapsed}
             title={isCollapsed ? 'Expand sidebar navigation' : 'Collapse sidebar navigation'}
-            className={`w-full flex items-center rounded-lg text-xs font-medium text-[#69736C] hover:text-[#202923] hover:bg-[#F2EFE9] transition-colors cursor-pointer border border-transparent hover:border-[#E3E5DE] ${
+            className={`w-full flex items-center rounded-xl text-xs font-medium text-[#5E6C64] hover:text-[#153D32] hover:bg-[#F3EFE3] transition-colors cursor-pointer border border-transparent hover:border-[#DDE9DF] ${
               isCollapsed ? 'justify-center p-2' : 'justify-between px-3 py-2'
             }`}
           >
             {!isCollapsed ? (
               <>
                 <span className="text-[11px] font-semibold">Collapse menu</span>
-                <ChevronLeft className="w-4 h-4 text-[#69736C]" />
+                <ChevronLeft className="w-4 h-4 text-[#5E6C64]" />
               </>
             ) : (
-              <ChevronRight className="w-4 h-4 text-[#69736C]" />
+              <ChevronRight className="w-4 h-4 text-[#5E6C64]" />
             )}
           </button>
         )}

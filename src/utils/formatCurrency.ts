@@ -1,6 +1,6 @@
 /**
  * @file formatCurrency.ts
- * @description Currency and number formatting helper functions for ShopPulse.
+ * @description Currency and number formatting helper functions for Shelfora.
  * Belongs in `src/utils/formatCurrency.ts`.
  */
 
@@ -13,8 +13,8 @@
  * @returns Formatted currency string.
  */
 export function formatCurrency(
-  amount: number, 
-  currency: string = 'INR', 
+  amount: number,
+  currency: string = 'INR',
   locale: string = 'en-IN'
 ): string {
   if (isNaN(amount) || amount === null || amount === undefined) {
@@ -28,7 +28,7 @@ export function formatCurrency(
       maximumFractionDigits: 2,
       minimumFractionDigits: 2
     }).format(amount);
-  } catch (_err) {
+  } catch {
     return `₹${amount.toFixed(2)}`;
   }
 

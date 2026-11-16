@@ -321,7 +321,7 @@ class AdaptiveImageProcessor(IImageProcessor):
             return gray, False
 
         _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-        min_line_len = max(35, int(min(h, w) * 0.03))
+        min_line_len = max(120, int(min(h, w) * 0.15))
 
         h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (min_line_len, 1))
         h_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, h_kernel)

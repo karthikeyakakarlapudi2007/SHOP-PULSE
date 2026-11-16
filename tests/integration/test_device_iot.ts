@@ -29,7 +29,7 @@ if (typeof window === 'undefined') {
   };
 }
 
-async function runTests() {
+async function runDeviceIotTests() {
   console.log('================================================================');
   console.log('🚀 Starting ShopPulse Phase 7 IoT System Validation Tests');
   console.log('================================================================\n');
@@ -86,7 +86,7 @@ async function runTests() {
   assert(pairedDevice.isConnected === true, 'pairedDevice is marked connected');
 
   const allDevices = await getDevices();
-  assert(allDevices.some(d => d.id === pairedDevice.id), 'getDevices includes newly paired device');
+  assert(allDevices.some((d: any) => d.id === pairedDevice.id), 'getDevices includes newly paired device');
 
   await disconnectDevice(pairedDevice.id);
   let status = await getDeviceStatus(pairedDevice.id);
@@ -287,7 +287,9 @@ async function runTests() {
   console.log('================================================================\n');
 }
 
-runTests().catch(err => {
+runDeviceIotTests().catch(err => {
   console.error('Validation test failed with error:', err);
   process.exit(1);
 });
+
+export {};

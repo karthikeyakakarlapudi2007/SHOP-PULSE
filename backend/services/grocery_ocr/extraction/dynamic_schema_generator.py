@@ -317,15 +317,23 @@ class DynamicSchemaGenerator:
 
         # If duplicate 'rate' roles, inspect header text
         if roles_count.get("rate", 0) > 1:
-            for c in cands:
-                if c.role == "rate":
-                    txt = c.raw_text.lower()
-                    if any(k in txt for k in ["pur", "buy", "cost", "dp"]):
-                        c.role = "purchase_price"
-                        c.normalized_label = CANONICAL_HEADER_LABELS["purchase_price"]
-                    elif any(k in txt for k in ["sell", "sale", "sp", "retail"]):
-                        c.role = "selling_price"
-                        c.normalized_label = CANONICAL_HEADER_LABELS["selling_price"]
+            rate_cands = [c for c in cands if c.role == "rate"]
+            assigned = False
+            for c in rate_cands:
+                txt = c.raw_text.lower()
+                if any(k in txt for k in ["pur", "buy", "cost", "dp"]):
+                    c.role = "purchase_price"
+                    c.normalized_label = CANONICAL_HEADER_LABELS["purchase_price"]
+                    assigned = True
+                elif any(k in txt for k in ["sell", "sale", "sp", "retail"]):
+                    c.role = "selling_price"
+                    c.normalized_label = CANONICAL_HEADER_LABELS["selling_price"]
+                    assigned = True
+            if not assigned and len(rate_cands) == 2:
+                rate_cands.sort(key=lambda x: x.bbox.x0)
+                rate_cands[0].role = "rate"
+                rate_cands[1].role = "selling_price"
+                rate_cands[1].normalized_label = CANONICAL_HEADER_LABELS["selling_price"]
 
         return cands
 

@@ -203,7 +203,7 @@ export async function signInWithEmail(
   let shop;
   try {
     shop = await shopsApi.getMyShop();
-  } catch (shopErr) {
+  } catch {
     try {
       shop = await shopsApi.createShop({
         shop_name: 'My Shop',
@@ -301,7 +301,7 @@ export async function getCurrentUserProfile(_uid?: string): Promise<UserProfile 
 
     saveLocalSession(profile, isRememberMeActive(), false);
     return profile;
-  } catch (err) {
+  } catch {
     return getLocalSession();
   }
 }

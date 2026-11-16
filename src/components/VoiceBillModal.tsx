@@ -801,7 +801,7 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
     >
       <div 
         ref={panelRef}
-        className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-[#E3E5DE] w-full max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
+        className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl border border-[#DDE9DF] w-full max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="voice-to-bill-title"
@@ -816,14 +816,14 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
         </div>
 
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-[#E3E5DE] flex items-center justify-between bg-[#F7F5EF]">
+        <div className="px-5 py-4 border-b border-[#DDE9DF] flex items-center justify-between bg-[#FAF8F2]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#E5EEE6] text-[#234B3A] border border-[#234B3A]/25 flex items-center justify-center shadow-xs shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-[#E7F3EE] text-[#153D32] border border-[#153D32]/25 flex items-center justify-center shadow-xs shrink-0">
               <Mic className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 id="voice-to-bill-title" className="text-base font-bold text-[#202923]">
+                <h2 id="voice-to-bill-title" className="text-base font-bold text-[#252D29]">
                   {getLocalizedBillLabel('billTitle', displayLanguage)}
                 </h2>
                 {isMockProvider ? (
@@ -831,12 +831,12 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
                     Offline / Dev Mode
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E5EEE6] text-[#234B3A] border border-[#234B3A]/25">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E7F3EE] text-[#153D32] border border-[#153D32]/25">
                     Live STT
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#69736C] font-medium">
+              <p className="text-xs text-[#5E6C64] font-medium">
                 Speak in Telugu, Hindi, English, Tamil & 12 Indian languages
               </p>
             </div>
@@ -845,7 +845,7 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white hover:bg-[#F7F5EF] text-[#69736C] hover:text-[#202923] flex items-center justify-center transition-colors cursor-pointer border border-[#E3E5DE]"
+            className="w-8 h-8 rounded-lg bg-white hover:bg-[#FAF8F2] text-[#5E6C64] hover:text-[#252D29] flex items-center justify-center transition-colors cursor-pointer border border-[#DDE9DF]"
             aria-label="Close Voice-to-Bill"
           >
             <X className="w-4 h-4" />
@@ -1479,9 +1479,9 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
         </div>
 
         {/* Modal Footer with Actions */}
-        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-t border-[#E3E5DE] bg-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
-          <div className="flex items-center gap-2 text-xs text-[#69736C]">
-            <Info className="w-4 h-4 text-[#234B3A] shrink-0" />
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-t border-[#DDE9DF] bg-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
+          <div className="flex items-center gap-2 text-xs text-[#5E6C64]">
+            <Info className="w-4 h-4 text-[#153D32] shrink-0" />
             <span>
               {matchedItems.length} {getLocalizedBillLabel('itemsReady', displayLanguage)}
             </span>
@@ -1492,7 +1492,7 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
               variant="outline"
               size="md"
               onClick={onClose}
-              className="col-span-2 sm:col-span-1 sm:flex-initial rounded-lg text-xs font-bold cursor-pointer border-[#E3E5DE] text-[#202923] hover:bg-[#F7F5EF] min-h-[44px]"
+              className="col-span-2 sm:col-span-1 sm:flex-initial rounded-lg text-xs font-bold cursor-pointer border-[#DDE9DF] text-[#252D29] hover:bg-[#FAF8F2] min-h-[44px]"
             >
               {getLocalizedBillLabel('cancel', displayLanguage)}
             </Button>

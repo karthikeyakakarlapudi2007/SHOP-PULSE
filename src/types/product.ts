@@ -40,6 +40,7 @@ export interface Product {
   status: StockStatus;
   sku?: string;
   supplierId?: string;
+  isActive?: boolean;
   lastRestocked?: string;
   createdAt: string;
   updatedAt: string;

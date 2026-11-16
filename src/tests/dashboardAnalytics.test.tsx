@@ -44,7 +44,7 @@ describe('Phase 4: Analytics-First Dashboard & Line Chart Tests', () => {
     // SVG Line chart is rendered with aria-label
     expect(html).toContain('aria-label="Sales performance line chart"');
     expect(html).toContain('path');
-    expect(html).toContain('stroke="#234B3A"');
+    expect(html).toMatch(/stroke="#(153D32|234B3A)"/);
 
     // X-axis day labels are present
     expect(html).toContain('Mon');

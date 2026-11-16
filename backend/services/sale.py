@@ -53,6 +53,56 @@ def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
 
         db.commit()
         db.refresh(db_sale)
+
+        # Trigger inventory alerts for products dropping below thresholds
+        try:
+            from datetime import datetime, timezone
+            from db.models.shop import Shop
+            from services.notification import create_notification
+            from schemas.notification import NotificationCreate
+
+            shop = db.query(Shop).filter(Shop.id == shop_id).first()
+            if shop and shop.owner_id:
+                today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                for product, _, _ in validated_items:
+                    reorder = product.reorder_level or 0
+                    if product.current_stock <= 0:
+                        create_notification(
+                            db,
+                            NotificationCreate(
+                                user_id=shop.owner_id,
+                                shop_id=shop_id,
+                                title=f"Out of Stock: {product.name}",
+                                message=f"{product.name} is out of stock (0 {product.unit or 'units'} remaining).",
+                                category="inventory",
+                                priority="critical",
+                                product_id=product.id,
+                                transaction_id=db_sale.id,
+                                deep_link=f"/inventory?id={product.id}",
+                                event_key=f"out_of_stock:{product.id}:{today_str}"
+                            ),
+                            cooldown_hours=12
+                        )
+                    elif product.reorder_level and product.current_stock <= reorder:
+                        create_notification(
+                            db,
+                            NotificationCreate(
+                                user_id=shop.owner_id,
+                                shop_id=shop_id,
+                                title=f"Low Stock Alert: {product.name}",
+                                message=f"{product.name} dropped to {product.current_stock} {product.unit or 'units'} (threshold: {reorder} {product.unit or 'units'}).",
+                                category="inventory",
+                                priority="high",
+                                product_id=product.id,
+                                transaction_id=db_sale.id,
+                                deep_link=f"/inventory?id={product.id}",
+                                event_key=f"low_stock:{product.id}:{today_str}"
+                            ),
+                            cooldown_hours=12
+                        )
+        except Exception:
+            pass
+
         return db_sale
 
     except Exception as e:

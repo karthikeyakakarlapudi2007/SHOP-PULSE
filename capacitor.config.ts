@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.shoppulse.app',
-  appName: 'ShopPulse',
+  appName: 'Shelfora',
   webDir: 'dist'
 };
 

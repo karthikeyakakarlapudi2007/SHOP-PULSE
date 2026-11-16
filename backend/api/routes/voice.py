@@ -103,7 +103,7 @@ async def process_voice_bill(
     End-to-End Voice-to-Bill Pipeline:
     1. Speech-to-Text via configured provider (MockSpeechService or SarvamSpeechService).
     2. Natural Language Extraction of items and quantities.
-    3. Inventory Matching against ShopPulse product database.
+    3. Inventory Matching against Shelfora product database.
     4. Categorization into matched, ambiguous, and unmatched items with pricing & stock checks.
     """
     speech_service = get_speech_service()

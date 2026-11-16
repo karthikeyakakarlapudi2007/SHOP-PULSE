@@ -197,3 +197,5 @@ runAcceptanceTests().catch(err => {
   console.error('Acceptance test failed:', err);
   process.exit(1);
 });
+
+export {};

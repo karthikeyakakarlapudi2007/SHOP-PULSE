@@ -21,3 +21,4 @@ __all__ = [
     "OCREvaluationResult",
     "levenshtein_distance",
 ]
+

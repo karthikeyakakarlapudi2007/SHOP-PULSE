@@ -74,7 +74,7 @@ class OpenMRPClient:
         headers = {
             "Authorization": f"Bearer {self._api_key.strip()}",
             "Accept": "application/json",
-            "User-Agent": "ShopPulse-Backend/1.0",
+            "User-Agent": "Shelfora-Backend/1.0",
         }
         if self._account_id:
             headers["OpenMRP-Account"] = self._account_id.strip()

@@ -3,7 +3,7 @@ import {
   Home, 
   Receipt, 
   Package, 
-  ScanLine, 
+  Sparkles, 
   Menu
 } from 'lucide-react';
 import type { PageRoute } from '../types';
@@ -26,15 +26,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'dashboard' as PageRoute, labelKey: 'nav.home', icon: Home },
     { id: 'sales' as PageRoute, labelKey: 'nav.sales', icon: Receipt },
     { id: 'inventory' as PageRoute, labelKey: 'nav.stock', icon: Package },
-    { id: 'scanner' as PageRoute, labelKey: 'nav.scanner', icon: ScanLine },
+    { id: 'insights' as PageRoute, labelKey: 'nav.shopInsights', icon: Sparkles },
   ];
 
-  const isMenuSectionActive = activePage === 'settings' || activePage === 'insights';
+  const isMenuSectionActive = activePage === 'settings';
 
   return (
     <nav 
       aria-label="Bottom mobile navigation" 
-      className="no-print md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E3E5DE] px-1 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-sm select-none"
+      className="no-print md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#DDE9DF] px-1 pt-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-sm select-none"
     >
       <div className="flex items-center justify-around max-w-md mx-auto">
         {navItems.map((item) => {
@@ -47,15 +47,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               onClick={() => setActivePage(item.id)}
               aria-label={t(item.labelKey)}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex-1 min-w-0 max-w-[74px] flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all cursor-pointer min-h-[48px] active:scale-95 ${
+              className={`flex-1 min-w-0 max-w-[74px] flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all cursor-pointer min-h-[48px] active:scale-95 ${
                 isActive
-                  ? 'text-[#234B3A] font-bold bg-[#E5EEE6] border border-[#52745D]/30 shadow-2xs'
-                  : 'text-[#69736C] hover:text-[#202923] font-medium'
+                  ? 'text-[#153D32] font-bold bg-[#E7F3EE] border border-[#23866A]/30 shadow-2xs'
+                  : 'text-[#5E6C64] hover:text-[#252D29] font-medium'
               }`}
             >
-              <Icon className={`w-5 h-5 transition-transform ${isActive ? 'text-[#234B3A] scale-105' : ''}`} />
+              <Icon className={`w-5 h-5 transition-transform ${isActive ? 'text-[#153D32] scale-105' : ''}`} />
               <span className={`text-[10px] xs:text-[11px] mt-0.5 leading-tight truncate max-w-full text-center ${
-                isActive ? 'font-bold text-[#18382B]' : 'font-medium'
+                isActive ? 'font-bold text-[#0F2D25]' : 'font-medium'
               }`}>
                 {t(item.labelKey)}
               </span>
@@ -75,15 +75,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           }}
           aria-label={t('nav.settings')}
           aria-current={isMenuSectionActive ? 'page' : undefined}
-          className={`flex-1 min-w-0 max-w-[74px] flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg transition-all cursor-pointer min-h-[48px] active:scale-95 ${
+          className={`flex-1 min-w-0 max-w-[74px] flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all cursor-pointer min-h-[48px] active:scale-95 ${
             isMenuSectionActive
-              ? 'text-[#234B3A] font-bold bg-[#E5EEE6] border border-[#52745D]/30 shadow-2xs'
-              : 'text-[#69736C] hover:text-[#202923] font-medium'
+              ? 'text-[#153D32] font-bold bg-[#E7F3EE] border border-[#23866A]/30 shadow-2xs'
+              : 'text-[#5E6C64] hover:text-[#252D29] font-medium'
           }`}
         >
-          <Menu className={`w-5 h-5 transition-transform ${isMenuSectionActive ? 'text-[#234B3A] scale-105' : ''}`} />
+          <Menu className={`w-5 h-5 transition-transform ${isMenuSectionActive ? 'text-[#153D32] scale-105' : ''}`} />
           <span className={`text-[10px] xs:text-[11px] mt-0.5 leading-tight truncate max-w-full text-center ${
-            isMenuSectionActive ? 'font-bold text-[#18382B]' : 'font-medium'
+            isMenuSectionActive ? 'font-bold text-[#0F2D25]' : 'font-medium'
           }`}>
             {t('nav.settings')}
           </span>

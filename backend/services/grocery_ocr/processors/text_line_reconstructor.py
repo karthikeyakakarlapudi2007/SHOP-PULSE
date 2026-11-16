@@ -9,8 +9,10 @@ and sequential reading order assignment.
 from typing import List, Optional, Tuple, Dict, Any
 import numpy as np
 import logging
+import re
+import uuid
 
-from services.grocery_ocr.schemas.ocr import BoundingBox, OCRLine, OCRWord
+from services.grocery_ocr.schemas.ocr import BoundingBox, OCRDocumentResult, OCRLine, OCRPageResult, OCRWord
 
 logger = logging.getLogger("grocery_ocr.text_line_reconstructor")
 
@@ -84,6 +86,11 @@ class TextLineReconstructor:
                 c_y1 = max(cw.bbox.y1 for cw in cluster)
                 c_h = max(1.0, c_y1 - c_y0)
                 c_center_y = cluster_baselines[idx]
+
+                # Prevent vertical cluster snowballing across distinct text rows
+                potential_new_h = max(c_y1, w_box.y1) - min(c_y0, w_box.y0)
+                if potential_new_h > max(median_h * 1.6, 25.0):
+                    continue
 
                 # 1. Vertical interval overlap
                 overlap = max(0.0, min(w_box.y1, c_y1) - max(w_box.y0, c_y0))
@@ -237,3 +244,151 @@ class TextLineReconstructor:
                     pairs.append((curr_line.line_number, next_line.line_number))
 
         return pairs
+
+
+HEADER_WORDS = {
+    "product", "item", "description", "particulars", "qty", "quantity", "qnty",
+    "rate", "price", "unit", "total", "amount", "tax", "discount", "mrp", "hsn",
+    "s.no", "sno", "no", "unit price", "unit rate", "basic rate", "item description",
+}
+SERIAL_HEADERS = {"s.no.", "s.no", "sl.no", "sr.no", "sno", "no", "#", "slno"}
+
+
+def build_ocr_document_from_raw_text(
+    text: str,
+    filename: str = "document.txt",
+    base_y: float = 50.0,
+    line_height: float = 35.0,
+) -> OCRDocumentResult:
+    """
+    Constructs an OCRDocumentResult from plain text lines.
+    Aligns tabular columns spatially using cell delimiters (| or multiple spaces/tabs)
+    or recognized header roles, ensuring table reconstructor and column detector
+    can accurately isolate columns.
+    """
+    text_lines = text.splitlines()
+    ocr_words: List[OCRWord] = []
+    ocr_lines: List[OCRLine] = []
+    w_idx = 0
+    header_col_count = 0
+    desc_col_idx = 0
+
+    for line_idx, line in enumerate(text_lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        line_y0 = float(base_y + line_idx * line_height)
+        line_y1 = line_y0 + 25.0
+        line_words: List[OCRWord] = []
+
+        cells: List[str] = []
+        if "|" in stripped:
+            raw_cells = [c.strip() for c in stripped.split("|")]
+            if raw_cells and raw_cells[0] == "":
+                raw_cells.pop(0)
+            if raw_cells and raw_cells[-1] == "":
+                raw_cells.pop()
+            cells = raw_cells
+        elif re.search(r"\t+|\s{2,}", stripped):
+            cells = re.split(r"\t+|\s{2,}", stripped)
+        else:
+            tokens = stripped.split()
+            tok_lower = {t.lower() for t in tokens}
+            if len(tokens) >= 3 and len(tok_lower & HEADER_WORDS) >= 2:
+                cells = tokens
+            elif header_col_count > 1 and len(tokens) >= header_col_count:
+                num_trailing = header_col_count - 1
+                cells = [" ".join(tokens[:-num_trailing])] + tokens[-num_trailing:]
+            else:
+                cells = [stripped]
+
+        cell_words_flat = [w.lower() for c in cells for w in c.split()]
+        if len(cells) >= 3 and len(set(cell_words_flat) & HEADER_WORDS) >= 2:
+            header_col_count = len(cells)
+            first_c = cells[0].lower().strip()
+            if first_c in SERIAL_HEADERS or first_c.startswith("s.") or first_c.startswith("sl"):
+                desc_col_idx = 1
+            else:
+                desc_col_idx = 0
+
+        if len(cells) > 1:
+            col_x = 50.0
+            for c_i, cell in enumerate(cells):
+                cell_words = cell.split()
+                curr_x = col_x
+                for tok in cell_words:
+                    wx0 = curr_x
+                    wx1 = wx0 + float(len(tok) * 8)
+                    word_obj = OCRWord(
+                        text=tok,
+                        bbox=BoundingBox(x0=wx0, y0=line_y0, x1=wx1, y1=line_y1),
+                        confidence=100.0,
+                        word_index=w_idx,
+                        reading_order=w_idx,
+                        page_number=1,
+                    )
+                    ocr_words.append(word_obj)
+                    line_words.append(word_obj)
+                    w_idx += 1
+                    curr_x = wx1 + 8.0
+                if c_i == desc_col_idx:
+                    step = 280.0
+                elif desc_col_idx == 1 and c_i == 0:
+                    step = 80.0
+                else:
+                    step = 130.0
+                col_x += step
+        else:
+            for match in re.finditer(r"\S+", stripped):
+                tok = match.group()
+                x0 = float(50 + match.start() * 10)
+                x1 = float(50 + match.end() * 10)
+                word_obj = OCRWord(
+                    text=tok,
+                    bbox=BoundingBox(x0=x0, y0=line_y0, x1=x1, y1=line_y1),
+                    confidence=100.0,
+                    word_index=w_idx,
+                    reading_order=w_idx,
+                    page_number=1,
+                )
+                ocr_words.append(word_obj)
+                line_words.append(word_obj)
+                w_idx += 1
+
+        if line_words:
+            ocr_lines.append(
+                OCRLine(
+                    line_number=line_idx,
+                    text=stripped,
+                    words=line_words,
+                    bbox=BoundingBox(
+                        x0=min(w.bbox.x0 for w in line_words),
+                        y0=line_y0,
+                        x1=max(w.bbox.x1 for w in line_words),
+                        y1=line_y1,
+                    ),
+                    confidence=100.0,
+                )
+            )
+
+    page = OCRPageResult(
+        page_number=1,
+        width=1800,
+        height=max(800, 100 + len(text_lines) * 35),
+        raw_text=text,
+        words=ocr_words,
+        lines=ocr_lines,
+        confidence=100.0,
+        processing_status="SUCCESS",
+        metadata={"format": "plain_text", "is_digital": True, "source": "raw_stream"},
+    )
+    return OCRDocumentResult(
+        document_id=f"doc_{uuid.uuid4().hex[:12]}",
+        filename=filename,
+        total_pages=1,
+        pages=[page],
+        full_text=text,
+        processing_time_ms=0.0,
+        engine_name="plain_text_spatial_generator",
+    )
+

@@ -156,7 +156,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           onNewSale={() => setActivePage('sales')}
           onAddProduct={() => setIsAddProductModalOpen(true)}
           onAddStock={() => setActivePage('inventory')}
-          onScanBill={() => setActivePage('scanner')}
+          onViewInsights={() => setActivePage('insights')}
+          onScanInvoice={() => setActivePage('scanner')}
         />
       </div>
 
@@ -187,25 +188,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* 5. Recent Activity Log */}
       <Card>
-        <div className="flex items-center justify-between pb-3 border-b border-[#E3E5DE]">
-          <h3 className="font-extrabold text-[#202923] text-sm sm:text-base flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-[#E5EEE6] text-[#234B3A] flex items-center justify-center shrink-0 border border-[#52745D]/20">
-              <Receipt className="w-4 h-4 text-[#234B3A]" />
+        <div className="flex items-center justify-between pb-3 border-b border-[#DDE9DF]">
+          <h3 className="font-extrabold text-[#252D29] text-sm sm:text-base flex items-center gap-2">
+            <span className="w-7 h-7 rounded-xl bg-[#E7F3EE] text-[#153D32] flex items-center justify-center shrink-0 border border-[#23866A]/20">
+              <Receipt className="w-4 h-4 text-[#23866A]" />
             </span>
             <span>{t('dashboard.recentActivity')}</span>
           </h3>
           <button
             onClick={() => setActivePage('sales')}
-            className="text-xs font-bold text-[#234B3A] hover:underline flex items-center gap-0.5 cursor-pointer"
+            className="text-xs font-bold text-[#23866A] hover:underline flex items-center gap-0.5 cursor-pointer"
           >
             <span>{t('dashboard.createSale')}</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="divide-y divide-[#E3E5DE] mt-1">
+        <div className="divide-y divide-[#DDE9DF] mt-1">
           {recentSalesList.length === 0 ? (
-            <div className="py-7 text-center text-[#69736C] text-xs font-medium">
+            <div className="py-7 text-center text-[#5E6C64] text-xs font-medium">
               No sales recorded yet today. Completed customer checkouts will appear here in real time.
             </div>
           ) : (
@@ -218,12 +219,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
               return (
                 <div key={sale.id} className="py-2.5 sm:py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-[#202923] text-xs sm:text-sm leading-tight truncate">
+                    <p className="font-bold text-[#252D29] text-xs sm:text-sm leading-tight truncate">
                       {itemSummary}
                     </p>
-                    <p className="text-[11px] text-[#69736C] font-medium mt-0.5">{timeFormatted}</p>
+                    <p className="text-[11px] text-[#5E6C64] font-medium mt-0.5">{timeFormatted}</p>
                   </div>
-                  <div className="text-right font-extrabold text-[#234B3A] text-sm sm:text-base shrink-0">
+                  <div className="text-right font-extrabold text-[#23866A] text-sm sm:text-base shrink-0">
                     ₹{(sale.total ?? sale.totalAmount ?? 0).toLocaleString('en-IN')}
                   </div>
                 </div>

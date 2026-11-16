@@ -1,13 +1,12 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  Activity, 
   X, 
   Home, 
   Receipt, 
   Package, 
-  ScanLine, 
   Sparkles, 
+  ScanLine,
   Settings as SettingsIcon, 
   PhoneCall, 
   Wifi, 
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { PageRoute } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { ShelforaLogo } from './branding/ShelforaLogo';
 import { useSync } from '../hooks/useSync';
 import { useDialog } from '../hooks/useDialog';
 
@@ -57,7 +57,6 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
   const { t, currentLanguageMeta } = useLanguage();
   const { isOnline, isSyncing, totalPendingCount, syncNow } = useSync();
 
-  // Escape key closes it, focus moves in and is trapped, background scroll is locked
   const drawerRef = useDialog<HTMLDivElement>({
     isOpen,
     onClose,
@@ -65,7 +64,6 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  // Grouped navigation matching desktop sidebar structure
   const mobileNavGroups: NavGroup[] = [
     {
       id: 'overview',
@@ -92,8 +90,8 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
       id: 'tools',
       label: 'Tools & Automation',
       items: [
-        { id: 'scanner', labelKey: 'nav.scanner', icon: ScanLine, badge: 'AI' },
         { id: 'insights', labelKey: 'nav.shopInsights', icon: Sparkles, badge: null },
+        { id: 'scanner', labelKey: 'nav.scanner', icon: ScanLine, badge: 'AI' },
       ],
     },
     {
@@ -110,11 +108,27 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
     onClose();
   };
 
+  const syncStatusClasses = !isOnline
+    ? 'bg-[#FBF4E7] text-[#D6AE62] border-[#D6AE62]/40 cursor-pointer'
+    : isSyncing
+      ? 'bg-[#F0F6FB] text-[#83B8DD] border-[#83B8DD]/30'
+      : 'bg-[#E7F3EE] text-[#153D32] border-[#23866A]/20';
+
+  const syncBannerClasses =
+    'flex items-center justify-between p-3 rounded-xl border text-xs font-semibold transition-all ' +
+    syncStatusClasses;
+
+  const syncStatusText = !isOnline
+    ? `Offline (${totalPendingCount} queued)`
+    : isSyncing
+      ? 'Syncing with cloud...'
+      : 'Cloud Connected';
+
   const drawerContent = (
     <div className="no-print md:hidden fixed inset-0 z-50 flex">
       {/* Semi-transparent Backdrop */}
       <div 
-        className="fixed inset-0 bg-[#202923]/50 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-[#0B231D]/50 backdrop-blur-xs transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -126,21 +140,18 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
-        className="relative w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between p-4 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] z-50 animate-in slide-in-from-left duration-200 overflow-y-auto overscroll-contain border-r border-[#E3E5DE]"
+        className="relative w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between p-4 pt-[calc(1.25rem+env(safe-area-inset-top,0px))] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] z-50 animate-in slide-in-from-left duration-200 overflow-y-auto overscroll-contain border-r border-[#DDE9DF]"
       >
         <div className="space-y-4">
           {/* Drawer Brand Header */}
-          <div className="flex items-center justify-between pb-3.5 border-b border-[#E3E5DE]">
+          <div className="flex items-center justify-between pb-3.5 border-b border-[#DDE9DF]">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-[#234B3A] flex items-center justify-center text-white shadow-xs shrink-0">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
+              <ShelforaLogo variant="compact" size="md" />
               <div className="min-w-0">
                 <div className="flex items-baseline gap-0.5">
-                  <span className="text-base font-bold text-[#202923]">Shop</span>
-                  <span className="text-base font-extrabold text-[#234B3A]">Pulse</span>
+                  <span className="text-base font-black text-[#153D32] tracking-wider">SHELFORA</span>
                 </div>
-                <p className="text-[11px] font-normal text-[#69736C] truncate max-w-[150px]">
+                <p className="text-[11px] font-medium text-[#5E6C64] truncate max-w-[150px]">
                   {shopName}
                 </p>
               </div>
@@ -148,10 +159,10 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="w-10 h-10 rounded-lg bg-[#F7F5EF] hover:bg-[#F2EFE9] border border-[#E3E5DE] text-[#202923] flex items-center justify-center cursor-pointer min-h-[44px]"
+              className="w-10 h-10 rounded-xl bg-[#FAF8F2] hover:bg-[#F3EFE3] border border-[#DDE9DF] text-[#252D29] flex items-center justify-center cursor-pointer min-h-[44px]"
               aria-label="Close menu"
             >
-              <X className="w-4 h-4 text-[#202923]" />
+              <X className="w-4 h-4 text-[#252D29]" />
             </button>
           </div>
 
@@ -165,28 +176,20 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
                 syncNow();
               }
             }}
-            onClick={() => !isOnline && syncNow()}
-            className={`flex items-center justify-between p-3 rounded-lg border text-xs font-semibold transition-all ${
-              !isOnline
-                ? 'bg-[#FEF9EB] text-[#A66A16] border-[#A66A16]/30 cursor-pointer'
-                : isSyncing
-                  ? 'bg-[#EEF4FC] text-[#3567A8] border-[#3567A8]/20'
-                  : 'bg-[#E5EEE6] text-[#18382B] border-[#52745D]/20'
-            }`}
+            onClick={() => {
+              if (!isOnline) {
+                syncNow();
+              }
+            }}
+            className={syncBannerClasses}
           >
             <div className="flex items-center gap-2">
               {isOnline ? (
-                <Wifi className="w-4 h-4 text-[#234B3A]" />
+                <Wifi className="w-4 h-4 text-[#23866A]" />
               ) : (
-                <WifiOff className="w-4 h-4 text-[#A66A16]" />
+                <WifiOff className="w-4 h-4 text-[#D6AE62]" />
               )}
-              <span>
-                {!isOnline
-                  ? `Offline (${totalPendingCount} queued)`
-                  : isSyncing
-                    ? 'Syncing with cloud...'
-                    : 'Cloud Connected'}
-              </span>
+              <span>{syncStatusText}</span>
             </div>
             {!isOnline && (
               <span className="text-[10px] font-bold underline">Sync Now</span>
@@ -197,34 +200,44 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
           <nav aria-label="Main navigation" className="space-y-3">
             {mobileNavGroups.map((group) => (
               <div key={group.id} className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#69736C] px-3 pb-0.5" aria-hidden="true">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#5E6C64] px-3 pb-0.5" aria-hidden="true">
                   {group.label}
                 </p>
+
                 {group.items.map((item) => {
                   const Icon = item.icon;
                   const isActive = activePage === item.id;
+                  const buttonClasses = isActive
+                    ? 'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer min-h-[44px] bg-[#153D32] text-[#FAF8F2] shadow-xs'
+                    : 'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer min-h-[44px] text-[#252D29] hover:bg-[#FAF8F2] active:bg-[#F3EFE3]';
+
+                  const iconClasses = isActive
+                    ? 'w-4.5 h-4.5 shrink-0 text-[#FAF8F2]'
+                    : 'w-4.5 h-4.5 shrink-0 text-[#5E6C64]';
+
+                  let badgeClasses = 'text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ';
+                  if (isActive) {
+                    badgeClasses += 'bg-white/20 text-[#FAF8F2]';
+                  } else if (item.badge === 'AI') {
+                    badgeClasses += 'bg-[#D6AE62]/20 text-[#A07828] border border-[#D6AE62]/40';
+                  } else {
+                    badgeClasses += 'bg-[#E7F3EE] text-[#153D32] border border-[#23866A]/20';
+                  }
+
                   return (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => handleNavClick(item.id)}
                       aria-current={isActive ? 'page' : undefined}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer min-h-[44px] ${
-                        isActive
-                          ? 'bg-[#234B3A] text-white shadow-xs'
-                          : 'text-[#202923] hover:bg-[#F7F5EF] active:bg-[#F2EFE9]'
-                      }`}
+                      className={buttonClasses}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-white' : 'text-[#69736C]'}`} />
+                        <Icon className={iconClasses} />
                         <span>{t(item.labelKey)}</span>
                       </div>
                       {item.badge && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          isActive 
-                            ? 'bg-white/20 text-white' 
-                            : 'bg-[#E5EEE6] text-[#18382B] border border-[#52745D]/20'
-                        }`}>
+                        <span className={badgeClasses}>
                           {item.badge}
                         </span>
                       )}
@@ -243,13 +256,13 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
                 onClose();
                 onOpenLanguageModal();
               }}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#F7F5EF] hover:bg-[#F2EFE9] text-[#202923] text-xs font-semibold border border-[#E3E5DE] cursor-pointer min-h-[44px]"
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FAF8F2] hover:bg-[#F3EFE3] text-[#252D29] text-xs font-semibold border border-[#DDE9DF] cursor-pointer min-h-[44px]"
             >
               <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-[#234B3A]" />
+                <Globe className="w-4 h-4 text-[#23866A]" />
                 <span>{t('settings.language')}</span>
               </div>
-              <span className="text-[#18382B] bg-white px-2 py-0.5 rounded border border-[#E3E5DE] text-[11px] font-bold">
+              <span className="text-[#153D32] bg-white px-2 py-0.5 rounded-md border border-[#DDE9DF] text-[11px] font-bold">
                 {currentLanguageMeta.nativeName}
               </span>
             </button>
@@ -257,13 +270,13 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
         </div>
 
         {/* Drawer Footer */}
-        <div className="pt-3.5 border-t border-[#E3E5DE] space-y-2.5 shrink-0">
-          <div className="bg-[#F7F5EF] rounded-xl p-3 border border-[#E3E5DE] text-xs">
-            <div className="flex items-center gap-2 text-[#234B3A] font-bold mb-0.5">
-              <PhoneCall className="w-3.5 h-3.5 text-[#234B3A]" />
+        <div className="pt-3.5 border-t border-[#DDE9DF] space-y-2.5 shrink-0">
+          <div className="bg-[#FAF8F2] rounded-xl p-3 border border-[#DDE9DF] text-xs">
+            <div className="flex items-center gap-2 text-[#153D32] font-bold mb-0.5">
+              <PhoneCall className="w-3.5 h-3.5 text-[#23866A]" />
               <span>{t('settings.supportLine')}</span>
             </div>
-            <p className="font-extrabold text-[#18382B] text-xs">1800-SHOP-PULSE</p>
+            <p className="font-extrabold text-[#153D32] text-xs">1800-SHELFORA</p>
           </div>
 
           {isLoggedIn && onLogout && (
@@ -273,9 +286,9 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
                 onClose();
                 onLogout();
               }}
-              className="w-full py-2.5 px-4 rounded-lg bg-[#FDF2F2] hover:bg-[#FCE8E8] text-[#B93838] font-semibold text-xs flex items-center justify-center gap-2 border border-[#B93838]/30 transition-colors cursor-pointer min-h-[44px]"
+              className="w-full py-2.5 px-4 rounded-xl bg-[#FDF1EF] hover:bg-[#F9E2DD] text-[#EF806D] font-semibold text-xs flex items-center justify-center gap-2 border border-[#EF806D]/30 transition-colors cursor-pointer min-h-[44px]"
             >
-              <LogOut className="w-4 h-4 text-[#B93838]" />
+              <LogOut className="w-4 h-4 text-[#EF806D]" />
               <span>{t('nav.logout')}</span>
             </button>
           )}
