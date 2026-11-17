@@ -161,12 +161,69 @@ class InvoiceConfirmItem(BaseModel):
         return float(round(v))
 
 
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+
+
+def parse_invoice_date(value: str) -> Optional[datetime]:
+    """Parse the date formats printed on Indian invoices (day first) and ISO dates.
+
+    Accepts DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (2- or 4-digit year), YYYY-MM-DD (or / .) and
+    '12 Oct 2026' / '12-Oct-2026'. Returns None when the text is not a real calendar date.
+    """
+    import re as _re
+
+    text = (value or "").strip()
+    m = _re.fullmatch(r"(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", text)
+    if m:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        m = _re.fullmatch(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2}|\d{4})", text)
+        if m:
+            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        else:
+            m = _re.fullmatch(r"(\d{1,2})[\s\-]+([A-Za-z]{3})[A-Za-z]*[\s\-,]+(\d{2}|\d{4})", text)
+            if not m or m.group(2).lower() not in _MONTHS:
+                return None
+            d, mo, y = int(m.group(1)), _MONTHS[m.group(2).lower()], int(m.group(3))
+        if y < 100:
+            y += 2000
+    try:
+        return datetime(y, mo, d)
+    except ValueError:
+        return None
+
+
 class InvoiceConfirmRequest(BaseModel):
     supplier_name: Optional[str] = None
     supplier_id: Optional[UUID] = None
     invoice_number: Optional[str] = None
     invoice_date: Optional[str] = None
     items: List[InvoiceConfirmItem] = Field(..., min_length=1)
+
+    @field_validator("supplier_name", "invoice_number", mode="before")
+    @classmethod
+    def blank_is_missing(cls, v: Any) -> Any:
+        """Missing invoice details stay missing: blank text is stored as NULL, never invented."""
+        if isinstance(v, str):
+            v = v.strip()
+            return v or None
+        return v
+
+    @field_validator("invoice_date", mode="before")
+    @classmethod
+    def valid_invoice_date(cls, v: Any) -> Any:
+        """The date is kept exactly as entered, but it must be a real calendar date."""
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("Invoice date must be text such as 08/10/2026.")
+        v = v.strip()
+        if not v:
+            return None
+        if parse_invoice_date(v) is None:
+            raise ValueError(f"'{v}' is not a valid invoice date. Use DD/MM/YYYY, for example 08/10/2026.")
+        return v
 
 
 class InvoiceConfirmResponse(BaseModel):
