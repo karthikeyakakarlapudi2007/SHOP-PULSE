@@ -70,9 +70,15 @@ Low light improved on 7 layouts (+27 lines). One case got worse: TC26 small text
 | 4 | Low-light photos unreadable even after preparation | Brightening multiplied sensor grain ×3.5; the grain was then enlarged by the geometric warp into blobs that denoising cannot remove; the existing preprocessor's CLAHE amplified it and its Hough deskew rotated straight pages by 44° | Denoise dark, grainy photos at native resolution before any warp; noise re-measured on the paper after brightening | `document_prep/enhancement.py`, `pipeline.py` |
 | 5 | Retake not advised for unrecoverable small/blurry captures | Advice used post-enhancement metrics, which enlargement can make look good | Retake advice from the capture grade (POOR/UNREADABLE), cut-off, or an unreadable OCR test reading | `document_prep/pipeline.py` |
 
-Not changed (reported only): the existing review screen invents an invoice number
-(`'INV-' + random`), "Generic Supplier" and today's date when they are missing. This would defeat
-the duplicate-invoice check on confirm. Changing it alters the existing workflow, so it needs approval.
+**Resolved since (invoice review data integrity):** the review screen no longer invents an invoice
+number (`'INV-' + random`), "Generic Supplier" or today's date. Missing details stay empty, are
+marked "Not detected – enter manually" and are editable; confirmation asks the user to enter them or
+to add to stock without them; dates are validated (frontend and API); the supplier fallback no longer
+takes the item-table heading row as the supplier; duplicate detection uses only real invoice numbers
+(case-insensitive). No schema change was needed (the columns were already nullable). Records saved
+earlier are left unchanged, including any that hold the old placeholder values. Tests:
+`tests/test_invoice_metadata_integrity.py`, `src/tests/invoiceMetadata.test.ts`,
+`scripts/e2e/invoice_metadata_check.cjs` (11/11).
 
 ## 4. HEIC/HEIF
 `pi-heif` (decode-only; 1.5 MB wheel; BSD-3 binding over LGPL libheif/libde265; no GPL x265
@@ -127,7 +133,7 @@ but the accuracy claims rest on simulated captures. Before release:
 1. run `real_world_validation.py --photos` on a set of real shop invoice photos (several phones,
    lighting conditions and layouts) and review the numbers;
 2. test on at least one physical Android device (camera permission, capture, upload over mobile data);
-3. decide on the review screen's invented invoice number/supplier/date (section 3).
+3. (done) the review screen no longer invents invoice number, supplier or date (section 3).
 
 Other limitations: blurry and small-text captures are rarely recoverable (retake advised);
 preparation took about 5–15 s per page in these runs; a measured 3-page PDF of colour pages was

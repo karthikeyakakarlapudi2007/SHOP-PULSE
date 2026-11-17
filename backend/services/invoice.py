@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from services import ocr as ocr_service
@@ -254,6 +255,9 @@ _BUSINESS_RE = re.compile(r"\b(?:traders?|enterprises?|distributors?|agenc(?:y|i
 _GSTIN_RE = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b")
 # "(?:in|n)?voice" also accepts OCR output that clipped the first letters of "Invoice"
 _INVNO_RE = re.compile(r"\b(?:(?:in|n)?voice|inv|bill|voucher)\s*(?:no|number|num|#)\.?\s*[:#\-.]?\s*([A-Za-z0-9][A-Za-z0-9/\-_.]{0,30})", re.I)
+# Column headings of an item table; a line with two or more of them is the table header row
+_COLUMN_WORD_RE = re.compile(r"\b(?:qty|quantity|rate|amount|total|mrp|hsn|description|particulars|item|items|unit|"
+                             r"uom|price|s\.?\s?no|sl|disc|gst|tax)\b", re.I)
 # A labelled field such as "Invoice No:", "Ph No.", "Order #" is never a business name
 _FIELD_LABEL_RE = re.compile(r"\b(?:no|nos|number|num)\s*[.:#]|#\s*\S", re.I)
 _DATE_RE = re.compile(r"\b(\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})|\d{1,2}[\s\-](?:jan|feb|mar|apr|may|jun|jul|aug|sep|"
@@ -303,6 +307,8 @@ def extract_metadata(lines: List[str], header_text: Optional[str]) -> Dict[str, 
         clean = line.strip()
         if _PARTY_RE.search(clean):
             break
+        if len(_COLUMN_WORD_RE.findall(clean)) >= 2:
+            break  # reached the item table: the supplier is printed above it, never in it
         if (not clean or _TITLE_RE.match(clean) or _GSTIN_RE.search(clean.upper()) or _INVNO_RE.search(clean)
                 or _FIELD_LABEL_RE.search(clean)
                 or re.search(r"\b(?:date|dated|phone|ph|mob|mobile|email|gstin|fssai|state)\b", clean, re.I)):
@@ -764,10 +770,13 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
             supplier_id = supplier.id
 
         invoice_number = (confirm_in.invoice_number or "").strip() or None
+        # Duplicate protection needs a real printed invoice number: when it is missing the
+        # invoice is saved without a duplicate check rather than matched on an invented value.
+        # The match ignores letter case so the same invoice read as "INV-1" and "inv-1" is caught.
         if invoice_number:
             dup = db.query(Purchase).filter(
                 Purchase.shop_id == shop_id,
-                Purchase.invoice_number == invoice_number,
+                func.lower(Purchase.invoice_number) == invoice_number.lower(),
                 Purchase.supplier_id == supplier_id,
             ).first()
             if dup:

@@ -18,6 +18,15 @@ import {
 import { getAccessToken } from '../api/client';
 import { documentPrepApi, type PrepExtractResult } from '../api/documentPrep';
 import { DocumentPrepWorkflow } from '../components/invoice-capture/DocumentPrepWorkflow';
+import {
+  META_LABELS,
+  confirmHeaderPayload,
+  invoiceDateError,
+  missingInvoiceDetails,
+  normalizeInvoiceMetadata,
+  type InvoiceMetaField,
+  type InvoiceMetadata,
+} from '../utils/invoiceMetadata';
 
 export interface ExtractedItem {
   id: string;
@@ -42,9 +51,11 @@ export interface ExtractedItem {
 
 export interface ExtractedInvoice {
   id: string;
-  supplier_name?: string;
-  invoice_number?: string;
-  invoice_date?: string;
+  /** Empty when not detected on the invoice; never filled with invented values. */
+  supplier_name: string;
+  invoice_number: string;
+  invoice_date: string;
+  detected: InvoiceMetadata['detected'];
   total_amount: number;
   total_items: number;
   confidence_score: number;
@@ -68,6 +79,8 @@ export const InvoiceScanner: React.FC = () => {
   const [inputMode, setInputMode] = useState<'camera' | 'file'>('camera');
   const [preparation, setPreparation] = useState<PrepExtractResult['preparation'] | null>(null);
   const [workflowKey, setWorkflowKey] = useState(0);
+  // Header details still empty when the user pressed Confirm (they must acknowledge them once)
+  const [missingAtConfirm, setMissingAtConfirm] = useState<InvoiceMetaField[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -136,11 +149,11 @@ export const InvoiceScanner: React.FC = () => {
       matched_product_name: item.matched_product_name || null,
     }));
 
+    setMissingAtConfirm([]);
     setExtractedData({
       id: data.id,
-      supplier_name: data.supplier_name || 'Generic Supplier',
-      invoice_number: data.invoice_number || 'INV-' + Math.floor(1000 + Math.random() * 9000),
-      invoice_date: data.invoice_date || new Date().toISOString().split('T')[0],
+      // Only what OCR found; missing details stay empty for the user to fill in
+      ...normalizeInvoiceMetadata(data),
       total_amount: data.total_amount || 0,
       total_items: normalizedItems.length,
       confidence_score: data.confidence_score || 90,
@@ -292,7 +305,12 @@ export const InvoiceScanner: React.FC = () => {
     }
   };
 
-  const handleConfirmToInventory = async () => {
+  const handleMetaChange = (field: InvoiceMetaField, value: string) => {
+    setMissingAtConfirm([]);
+    setExtractedData((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const handleConfirmToInventory = async (acceptMissingDetails = false) => {
     if (!extractedData || extractedData.items.length === 0) return;
     const selectedItems = extractedData.items.filter((i) => selectedItemIds.has(i.id));
     if (selectedItems.length === 0) {
@@ -315,6 +333,19 @@ export const InvoiceScanner: React.FC = () => {
       return;
     }
 
+    const dateProblem = invoiceDateError(extractedData.invoice_date);
+    if (dateProblem) {
+      setError(`Invoice date: ${dateProblem}`);
+      return;
+    }
+    const missing = missingInvoiceDetails(extractedData);
+    if (missing.length > 0 && !acceptMissingDetails) {
+      // Not blocking: the user can fill them in, or confirm that the invoice does not show them
+      setMissingAtConfirm(missing);
+      return;
+    }
+    setMissingAtConfirm([]);
+
     setIsConfirming(true);
     setError(null);
     setConfirmSuccess(null);
@@ -329,9 +360,8 @@ export const InvoiceScanner: React.FC = () => {
       }
 
       const payload = {
-        supplier_name: extractedData.supplier_name,
-        invoice_number: extractedData.invoice_number,
-        invoice_date: extractedData.invoice_date,
+        // Empty header details are left out (stored as unknown), never replaced
+        ...confirmHeaderPayload(extractedData),
         items: selectedItems.map((i) => {
           const purchasePrice = Number(i.purchase_price);
           // Preserve selling price, fall back to MRP or a standard margin if brand new
@@ -434,6 +464,37 @@ export const InvoiceScanner: React.FC = () => {
     setConfirmedProducts([]);
     setError(null);
     setConfirmSuccess(null);
+    setMissingAtConfirm([]);
+  };
+
+  const metaField = (field: InvoiceMetaField, placeholder: string, extraError?: string | null) => {
+    const value = extractedData ? extractedData[field] : '';
+    const notDetected = extractedData ? !extractedData.detected[field] : false;
+    const flagged = missingAtConfirm.includes(field) && !value.trim();
+    return (
+      <div className="min-w-0">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => handleMetaChange(field, e.target.value)}
+          placeholder={placeholder}
+          aria-label={META_LABELS[field]}
+          aria-invalid={Boolean(extraError) || undefined}
+          className={`w-full px-2 py-1 rounded-md border text-sm font-bold focus:outline-none focus:border-[#153D32] focus:bg-white ${
+            extraError || flagged
+              ? 'border-[#EF806D] bg-[#FDF1EF] text-[#B4483A]'
+              : notDetected && !value
+              ? 'border-dashed border-[#D6AE62] bg-[#FBF4E7]/60 text-[#153D32]'
+              : 'border-transparent hover:border-[#DDE9DF] text-[#153D32]'
+          }`}
+        />
+        {extraError ? (
+          <span className="text-[10px] text-[#B4483A] font-semibold block px-2 mt-0.5">{extraError}</span>
+        ) : notDetected && !value ? (
+          <span className="text-[10px] text-[#8A6420] font-medium block px-2 mt-0.5">Not detected – enter manually</span>
+        ) : null}
+      </div>
+    );
   };
 
   return (
@@ -716,15 +777,16 @@ export const InvoiceScanner: React.FC = () => {
           )}
           {/* Invoice Summary Ribbon */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-[#DDE9DF] shadow-card">
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold text-[#5E6C64] uppercase tracking-wider">Supplier</p>
-              <p className="text-sm font-bold text-[#153D32] truncate">{extractedData.supplier_name}</p>
+              {metaField('supplier_name', 'Supplier name')}
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold text-[#5E6C64] uppercase tracking-wider">Invoice # / Date</p>
-              <p className="text-sm font-bold text-[#153D32]">
-                {extractedData.invoice_number} • {extractedData.invoice_date}
-              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                {metaField('invoice_number', 'Invoice no.')}
+                {metaField('invoice_date', 'DD/MM/YYYY', invoiceDateError(extractedData.invoice_date))}
+              </div>
             </div>
             <div>
               <p className="text-[11px] font-semibold text-[#5E6C64] uppercase tracking-wider">Line Items</p>
@@ -737,6 +799,27 @@ export const InvoiceScanner: React.FC = () => {
               </p>
             </div>
           </div>
+
+          {missingAtConfirm.length > 0 && (
+            <div role="alert" className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-[#FBF4E7] border border-[#D6AE62]/50 text-[#8A6420] text-xs sm:text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1">
+                {missingAtConfirm.map((f) => META_LABELS[f]).join(', ')} not entered.
+                {missingAtConfirm.includes('invoice_number')
+                  ? ' Without an invoice number this invoice cannot be checked for duplicates.'
+                  : ''}{' '}
+                Enter {missingAtConfirm.length > 1 ? 'them' : 'it'} above, or add to stock if the invoice does not show {missingAtConfirm.length > 1 ? 'them' : 'it'}.
+              </span>
+              <button
+                type="button"
+                onClick={() => handleConfirmToInventory(true)}
+                disabled={isConfirming}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-[#D6AE62]/60 bg-white hover:bg-[#FAF8F2] text-xs font-bold text-[#153D32] cursor-pointer disabled:opacity-50"
+              >
+                Add to stock without {missingAtConfirm.length > 1 ? 'them' : 'it'}
+              </button>
+            </div>
+          )}
 
           {/* Interactive Itemized Table */}
           <div className="bg-white rounded-2xl border border-[#DDE9DF] shadow-card overflow-hidden">
@@ -763,7 +846,7 @@ export const InvoiceScanner: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirmToInventory}
+                  onClick={() => handleConfirmToInventory()}
                   disabled={isConfirming || selectedItemIds.size === 0}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#153D32] hover:bg-[#0F2D25] text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50"
                 >
