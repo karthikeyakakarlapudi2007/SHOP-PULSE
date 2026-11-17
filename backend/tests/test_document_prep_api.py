@@ -215,3 +215,39 @@ def test_extract_multi_page_through_existing_ocr(data, setup):
     fallback = client.post(f"{API}/sessions/{sid}/extract", json={"source": "original"}, headers=h)
     assert fallback.status_code == 200
     assert fallback.json()["preparation"]["source"] == "original"
+
+
+def test_heic_upload_preview_and_original_fallback(no_ocr, monkeypatch):
+    from pathlib import Path
+
+    from services.document_prep.loader import heif_supported
+
+    if not heif_supported():
+        pytest.skip("HEIF decoder not installed")
+    heic = (Path(__file__).resolve().parent / "fixtures" / "heic" / "invoice_exif6.heic").read_bytes()
+    h = auth()
+    sid = client.post(f"{API}/sessions", headers=h).json()["session_id"]
+    r = client.post(f"{API}/sessions/{sid}/pages", files={"file": ("IMG_0001.HEIC", heic, "image/heic")}, headers=h)
+    assert r.status_code == 201, r.text
+    page = r.json()
+    assert page["auto_rotation_cw"] == 0  # orientation came from the file, applied once
+    exif_step = next(s for s in page["steps"] if s["step"] == "exif_orientation")
+    assert exif_step["details"]["exif_orientation"] == 6
+    orig = client.get(f"{API}/sessions/{sid}/pages/{page['page_id']}/original", headers=h)
+    assert orig.content == heic and orig.headers["content-type"] == "image/heic"
+    assert client.get(f"{API}/sessions/{sid}/pages/{page['page_id']}/image?variant=corrected&size=thumb",
+                      headers=h).status_code == 200
+
+    # "Original photos" for a HEIC page are sent as a PDF of the decoded pixels (the existing
+    # OCR upload does not accept HEIC); the extraction call itself is replaced here.
+    captured = {}
+
+    def fake_extract(file_bytes, filename, db, shop_id):
+        captured["name"], captured["head"] = filename, file_bytes[:5]
+        from schemas.invoice import InvoiceExtractResponse
+        return InvoiceExtractResponse(id="inv_x")
+
+    monkeypatch.setattr(dp_routes.invoice_service, "extract_invoice_from_bytes", fake_extract)
+    res = client.post(f"{API}/sessions/{sid}/extract", json={"source": "original"}, headers=h)
+    assert res.status_code == 200, res.text
+    assert captured == {"name": "invoice-scan.pdf", "head": b"%PDF-"}

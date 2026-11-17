@@ -357,7 +357,7 @@ class SessionStore:
         for i, page in enumerate(manifest["pages"], start=1):
             src = self._page_dir(user_id, session_id, page["page_id"]) / "original.bin"
             ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/bmp": ".bmp",
-                   "image/tiff": ".tif"}.get(page.get("mime", ""), ".bin")
+                   "image/tiff": ".tif", "image/heic": ".heic", "image/heif": ".heif"}.get(page.get("mime", ""), ".bin")
             shutil.copyfile(src, adir / f"page{i:02d}_original{ext}")
         _write_atomic(adir / "submitted_to_ocr.pdf", pdf_bytes)
         summary = {

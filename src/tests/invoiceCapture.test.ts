@@ -78,11 +78,13 @@ describe('quality labels and messages', () => {
     expect(cameraErrorMessage({ name: 'NotAllowedError' })).toMatch(/permission/i);
     expect(cameraErrorMessage({ name: 'NotFoundError' })).toMatch(/No camera/);
     expect(cameraErrorMessage({ name: 'NotReadableError' })).toMatch(/busy/);
+    expect(cameraErrorMessage({ name: 'NotSupportedError' })).toMatch(/not available here/);
     expect(cameraErrorMessage(new Error('x'))).toMatch(/Choose photos/);
   });
   it('validates photos before upload', () => {
     expect(validatePhotoFile({ name: 'a.jpg', type: 'image/jpeg', size: 1000 })).toBeNull();
-    expect(validatePhotoFile({ name: 'a.heic', type: 'image/heic', size: 1000 })).toMatch(/HEIC/);
+    expect(validatePhotoFile({ name: 'a.heic', type: 'image/heic', size: 1000 })).toBeNull();
+    expect(validatePhotoFile({ name: 'IMG_0001.HEIF', type: '', size: 1000 })).toBeNull();
     expect(validatePhotoFile({ name: 'a.pdf', type: 'application/pdf', size: 1000 })).toMatch(/PDF/);
     expect(validatePhotoFile({ name: 'a.jpg', type: 'image/jpeg', size: 0 })).toMatch(/empty/);
     expect(validatePhotoFile({ name: 'a.jpg', type: 'image/jpeg', size: 30 * 1024 * 1024 })).toMatch(/25 MB/);

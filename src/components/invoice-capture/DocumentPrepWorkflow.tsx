@@ -366,7 +366,7 @@ export const DocumentPrepWorkflow: React.FC<DocumentPrepWorkflowProps> = ({ onEx
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff"
+            accept="image/jpeg,image/png,image/heic,image/heif,image/webp,image/bmp,image/tiff,.jpg,.jpeg,.png,.heic,.heif,.webp,.bmp,.tif,.tiff"
             className="hidden"
             onChange={(e) => {
               handleFiles(e.target.files);

@@ -147,7 +147,8 @@ def session_summary(manifest: Dict[str, Any]) -> Dict[str, Any]:
         "limits": {
             "max_pages": default_config.max_pages_per_session,
             "max_upload_mb": default_config.max_upload_bytes // (1024 * 1024),
-            "accepted_types": ["image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff"],
+            "accepted_types": ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp", "image/bmp",
+                               "image/tiff"],
         },
     }
 
@@ -233,7 +234,7 @@ async def add_page(
     mime = sniff_image_type(data)
     if mime is None:
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                            detail="This file is not a supported photo. Please use JPG, PNG, WEBP, BMP or TIFF.")
+                            detail="This file is not a supported photo. Please use JPG, PNG, HEIC, WEBP, BMP or TIFF.")
     opts = PrepOptions(auto_orientation=auto_orientation, perspective=perspective, enhance=enhance)
 
     def work():
@@ -356,7 +357,7 @@ def page_original(session_id: str, page_id: str, current_user: User = Depends(de
     except SessionNotFound as exc:
         raise _not_found(exc)
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/bmp": "bmp",
-           "image/tiff": "tiff"}.get(entry.get("mime"), "bin")
+           "image/tiff": "tiff", "image/heic": "heic", "image/heif": "heif"}.get(entry.get("mime"), "bin")
     return Response(data, media_type=entry.get("mime") or "application/octet-stream", headers={
         "Content-Disposition": f'attachment; filename="invoice-page-{page_id[:8]}.{ext}"',
         "Cache-Control": "private, no-store",
@@ -412,8 +413,13 @@ async def extract_from_session(
             # Exactly what the scanner sent before this layer existed: the photo itself
             data, entry = store.original_bytes(current_user.id, session_id, pages[0]["page_id"])
             ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/bmp": ".bmp",
-                   "image/tiff": ".tiff"}.get(entry.get("mime"), ".jpg")
-            return data, f"invoice-photo{ext}", None
+                   "image/tiff": ".tiff"}.get(entry.get("mime"))
+            if ext:
+                return data, f"invoice-photo{ext}", None
+            # Formats the existing OCR upload does not accept (HEIC) go as a PDF of the
+            # decoded original pixels, still without any correction.
+            _, pdf = _build_session_pdf(current_user, session_id, "original")
+            return pdf.data, "invoice-scan.pdf", pdf
         _, pdf = _build_session_pdf(current_user, session_id, request.source)
         return pdf.data, "invoice-scan.pdf", pdf
 

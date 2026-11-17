@@ -41,7 +41,32 @@ _SIGNATURES = (
     (b"MM\x00*", "TIFF", "image/tiff"),
 )
 
-PIL_FORMATS_ALLOWED = {"JPEG", "MPO", "PNG", "WEBP", "BMP", "TIFF"}
+PIL_FORMATS_ALLOWED = {"JPEG", "MPO", "PNG", "WEBP", "BMP", "TIFF", "HEIF"}
+
+# ISO-BMFF brands of HEIF still images (iPhone and many Android cameras). AVIF is a different
+# codec and is not decoded by the HEVC-only decoder.
+_HEIC_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs"}
+_HEIF_BRANDS = {b"mif1", b"msf1"}
+_heif_registered: Optional[bool] = None
+
+
+def heif_supported() -> bool:
+    """Register the HEIF decoder with Pillow once. Prefers the decode-only pi-heif package."""
+    global _heif_registered
+    if _heif_registered is None:
+        try:
+            from pi_heif import register_heif_opener
+        except ImportError:
+            try:
+                from pillow_heif import register_heif_opener  # full build, if already installed
+            except ImportError:
+                register_heif_opener = None
+        if register_heif_opener is not None:
+            register_heif_opener()
+            _heif_registered = True
+        else:
+            _heif_registered = False
+    return bool(_heif_registered)
 
 
 class ImageInputError(ValueError):
@@ -70,6 +95,12 @@ def sniff_image_type(data: bytes) -> Optional[str]:
             return mime
     if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        brand = data[8:12]
+        if brand in _HEIC_BRANDS:
+            return "image/heic"
+        if brand in _HEIF_BRANDS:
+            return "image/heif"
     return None
 
 
@@ -80,7 +111,7 @@ def validate_filename(filename: Optional[str], config: DocumentPrepConfig = defa
     ext = PurePath(name).suffix.lower()
     if ext and ext not in config.allowed_extensions:
         raise ImageInputError(
-            f"'{ext}' files are not supported here. Please use a photo (JPG, PNG, WEBP, BMP or TIFF)."
+            f"'{ext}' files are not supported here. Please use a photo (JPG, PNG, HEIC, WEBP, BMP or TIFF)."
         )
     return name or "invoice-photo"
 
@@ -94,7 +125,10 @@ def load_image(data: bytes, filename: Optional[str] = None, config: DocumentPrep
     validate_filename(filename, config)
     mime = sniff_image_type(data)
     if mime is None:
-        raise ImageInputError("This file is not a supported image. Please use a JPG, PNG, WEBP, BMP or TIFF photo.")
+        raise ImageInputError(
+            "This file is not a supported image. Please use a JPG, PNG, HEIC, WEBP, BMP or TIFF photo.")
+    if mime in ("image/heic", "image/heif") and not heif_supported():
+        raise ImageInputError("HEIC photos cannot be read on this server. Please set the camera to JPG and retake.")
 
     try:
         with warnings.catch_warnings():
@@ -132,7 +166,18 @@ def load_image(data: bytes, filename: Optional[str] = None, config: DocumentPrep
         exif_orientation = None
 
     exif_applied = False
-    if exif_orientation and exif_orientation != 1:
+    # HEIF: the decoder applies the stored rotation (irot/imir) itself and resets EXIF
+    # orientation to 1, keeping the camera's value in info["original_orientation"]. Record it,
+    # and do not rotate again.
+    if img.format == "HEIF":
+        original = img.info.get("original_orientation")
+        if original and int(original) != 1:
+            exif_orientation = int(original)
+            exif_applied = True
+            notes.append("orientation applied by the HEIF decoder")
+        elif exif_orientation == 1:
+            exif_orientation = None
+    if exif_orientation and exif_orientation != 1 and not exif_applied:
         try:
             transposed = ImageOps.exif_transpose(img)
             if transposed is not None and transposed is not img:

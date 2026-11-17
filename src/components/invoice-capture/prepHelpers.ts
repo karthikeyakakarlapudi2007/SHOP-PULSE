@@ -140,6 +140,7 @@ export function cameraErrorMessage(err: unknown): string {
       return 'The camera is busy or could not start. Close other apps using the camera and try again.';
     case 'InsecureContext':
     case 'Unsupported':
+    case 'NotSupportedError':
       return 'The live camera is not available here. Use "Take photo" or "Choose photos" instead.';
     default:
       return 'The camera could not be opened. Use "Choose photos" to upload pictures instead.';
@@ -179,19 +180,16 @@ export function outlinePoints(
   };
 }
 
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/tiff'];
-const ACCEPTED_EXT = /\.(jpe?g|png|webp|bmp|tiff?)$/i;
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp', 'image/bmp', 'image/tiff'];
+const ACCEPTED_EXT = /\.(jpe?g|png|heic|heif|webp|bmp|tiff?)$/i;
 
 /** Client-side pre-check; the server re-validates the actual file content. */
 export function validatePhotoFile(file: { name: string; type: string; size: number }, maxMb = 25): string | null {
   if (!ACCEPTED_TYPES.includes(file.type) && !ACCEPTED_EXT.test(file.name)) {
-    if (/\.(heic|heif)$/i.test(file.name) || /heic|heif/i.test(file.type)) {
-      return `"${file.name}" is a HEIC photo. Please set the camera to JPG ("Most compatible") or take the photo here.`;
-    }
     if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
       return `"${file.name}" is a PDF. Use "Upload PDF or file" for PDFs; this scanner is for photos.`;
     }
-    return `"${file.name}" is not a photo. Please choose JPG, PNG, WEBP, BMP or TIFF images.`;
+    return `"${file.name}" is not a photo. Please choose JPG, PNG, HEIC, WEBP, BMP or TIFF images.`;
   }
   if (file.size === 0) return `"${file.name}" is empty.`;
   if (file.size > maxMb * 1024 * 1024) return `"${file.name}" is larger than ${maxMb} MB.`;

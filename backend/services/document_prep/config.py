@@ -45,7 +45,7 @@ class DocumentPrepConfig:
     max_input_pixels: int = _env_int("DOC_PREP_MAX_INPUT_PIXELS", 60_000_000)
     min_input_side: int = 200
     allowed_extensions: FrozenSet[str] = field(
-        default_factory=lambda: frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"})
+        default_factory=lambda: frozenset({".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".heic", ".heif"})
     )
     # Longest side used for all processing; larger photos are decoded at reduced scale.
     # The existing OCR pipeline downsizes anything above 3600 px, so there is no gain above this.
