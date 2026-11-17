@@ -106,3 +106,49 @@ Configuration: `backend/services/document_prep/config.py` (all values overridabl
 | `src/tests/invoiceCapture.test.ts` | frontend helpers and API client |
 
 Run: `cd backend && .venv/bin/python -m pytest tests/test_document_prep_*.py` and `npm test`.
+
+## Measured results
+
+Both comparisons read the page with the **existing** engine, exactly as `/invoices/extract` would.
+
+**Real fixtures, full extraction** (`fixture_extraction_results.md`): a line counts only if name, quantity,
+rate and amount are all right. **90 → 121 of 136 lines correct**, no fixture worse than today. Biggest gains:
+phone photo TC03 0/5 → 5/5 (also when sideways or upside down), upside-down TC13 0/13 → 8/13 and TC15 0/3 → 3/3,
+TC30 0/4 → 4/4, tilted TC21 2/3 → 3/3.
+
+**Synthetic dataset, text accuracy** (`ocr_comparison.md`, exact ground truth, 17 cases):
+
+| Case | CER today → prepared | Critical tokens today → prepared |
+|---|---|---|
+| Upside down (180°) | 0.833 → 0.209 | 0.000 → 0.968 |
+| Rotated 270° | 0.831 → 0.129 | 0.000 → 1.000 |
+| Sideways + 7° tilt | 0.811 → 0.128 | 0.000 → 1.000 |
+| Low light | 1.000 → 0.128 | 0.000 → 1.000 |
+| Perspective photo | 0.221 → 0.131 | 0.677 → 1.000 |
+| Shadow | 0.207 → 0.129 | 0.806 → 0.968 |
+| Blurry | 0.249 → 0.128 | 0.452 → 0.839 |
+| Similar background | 0.647 → 0.138 | 0.968 → 0.968 |
+| Low resolution | 0.136 → 0.138 | 0.968 → 0.968 (no gain; within noise) |
+| Unrecoverable blur | 1.000 → 0.959 | 0 → 0 (graded UNREADABLE, retake requested) |
+
+CER includes reading-order differences in table OCR, so ~0.13 is the floor even for clean pages with this
+engine. Clear pages are only enlarged to the engine's preferred text size (measured to help: 0.224 → 0.131).
+
+## Known limitations
+
+* The synthetic dataset is rendered, not photographed. Real phone photos (glare, crumpled paper, motion
+  blur, mixed light) have only been tested through the repository fixtures; measured accuracy on a real
+  photo set is still needed.
+* Up/down detection relies on OCR readability (Latin script). Without the OCR engine, typography alone
+  decides and was wrong on one blurry case; such pages are flagged for confirmation.
+* The page outline is found on the server after capture; the live camera shows a framing guide but no
+  real-time edge detection. Android camera access uses the WebView (permission handled by Capacitor) and
+  the native camera intent as fallback; not tested on a device in this work.
+* Preparation takes about 4-8 s per page (most of it OCR evidence); `DOC_PREP_OCR_ORIENTATION=false`
+  and `DOC_PREP_COMPARE_VARIANTS=false` make it ~1 s at the cost of the measured selection.
+* PDF pages are pixel-exact after rasterisation only for sizes reachable with ≤ 48 px padding;
+  otherwise pdfium resamples by under a pixel.
+* Existing-engine issues seen during testing, left untouched as required: the PDF reader's raw-stream
+  fallback can read image data as text (worked around here), the header parser can take
+  "Invoice No: …" as the supplier name, and one rate was parsed as 58575 instead of 58.75.
+* HEIC photos are not accepted (Pillow cannot decode them); users are asked to use JPG.
