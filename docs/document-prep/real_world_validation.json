@@ -1,0 +1,3432 @@
+{
+ "summary": {
+  "cases": 81,
+  "lines": 416,
+  "baseline_all_fields": 15,
+  "prepared_all_fields": 248,
+  "fields": {
+   "name": [
+    38,
+    277
+   ],
+   "quantity": [
+    21,
+    255
+   ],
+   "rate": [
+    22,
+    259
+   ],
+   "amount": [
+    27,
+    267
+   ]
+  },
+  "by_condition": {
+   "sideways": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 0,
+    "prepared_correct": 44,
+    "baseline_critical_recall": 0.0,
+    "prepared_critical_recall": 0.943
+   },
+   "upside_down": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 0,
+    "prepared_correct": 46,
+    "baseline_critical_recall": 0.0,
+    "prepared_critical_recall": 0.956
+   },
+   "low_light": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 0,
+    "prepared_correct": 32,
+    "baseline_critical_recall": 0.0,
+    "prepared_critical_recall": 0.841
+   },
+   "shadow": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 2,
+    "prepared_correct": 43,
+    "baseline_critical_recall": 0.424,
+    "prepared_critical_recall": 0.939
+   },
+   "perspective": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 3,
+    "prepared_correct": 32,
+    "baseline_critical_recall": 0.276,
+    "prepared_critical_recall": 0.836
+   },
+   "tilted": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 10,
+    "prepared_correct": 37,
+    "baseline_critical_recall": 0.1,
+    "prepared_critical_recall": 0.948
+   },
+   "blurry": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 0,
+    "prepared_correct": 6,
+    "baseline_critical_recall": 0.0,
+    "prepared_critical_recall": 0.307
+   },
+   "small_text": {
+    "cases": 10,
+    "lines": 51,
+    "baseline_correct": 0,
+    "prepared_correct": 0,
+    "baseline_critical_recall": 0.0,
+    "prepared_critical_recall": 0.256
+   },
+   "multi_page (page 2 sideways)": {
+    "cases": 1,
+    "lines": 8,
+    "baseline_correct": 0,
+    "prepared_correct": 8,
+    "baseline_critical_recall": 0.0,
+    "prepared_critical_recall": 1.0
+   }
+  },
+  "cases_worse_after_preparation": []
+ },
+ "rows": [
+  {
+   "case": "TC02_bordered_image__sideways",
+   "layout": "TC02_bordered_image",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 7.0,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.9375,
+    "items": {
+     "lines": 5,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__upside_down",
+   "layout": "TC02_bordered_image",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.05,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 7.0,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 5,
+     "name": 5,
+     "quantity": 5,
+     "rate": 5,
+     "amount": 5
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__low_light",
+   "layout": "TC02_bordered_image",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 8.2,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.9375,
+    "items": {
+     "lines": 5,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__shadow",
+   "layout": "TC02_bordered_image",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 7.2,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.9375,
+    "items": {
+     "lines": 5,
+     "all_fields": 5,
+     "name": 5,
+     "quantity": 5,
+     "rate": 5,
+     "amount": 5
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__perspective",
+   "layout": "TC02_bordered_image",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 5,
+     "name": 5,
+     "quantity": 5,
+     "rate": 5,
+     "amount": 5
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__tilted",
+   "layout": "TC02_bordered_image",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "GOOD -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 5,
+     "name": 5,
+     "quantity": 5,
+     "rate": 5,
+     "amount": 5
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__blurry",
+   "layout": "TC02_bordered_image",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "UNREADABLE -> POOR",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC02_bordered_image__small_text",
+   "layout": "TC02_bordered_image",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "POOR -> POOR",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 3.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.5333,
+    "name_word_recall": 0.1875,
+    "items": {
+     "lines": 5,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__sideways",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 12.4,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.641,
+    "name_word_recall": 0.6596,
+    "items": {
+     "lines": 13,
+     "all_fields": 8,
+     "name": 8,
+     "quantity": 8,
+     "rate": 8,
+     "amount": 8
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__upside_down",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": 0.25,
+     "perspective": true,
+     "quality": "GOOD -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 10.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.641,
+    "name_word_recall": 0.6596,
+    "items": {
+     "lines": 13,
+     "all_fields": 8,
+     "name": 8,
+     "quantity": 8,
+     "rate": 8,
+     "amount": 8
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__low_light",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 14.3,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.6154,
+    "name_word_recall": 0.4255,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 2,
+     "quantity": 0,
+     "rate": 1,
+     "amount": 2
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__shadow",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 13.1,
+   "baseline": {
+    "critical_recall": 0.1282,
+    "name_word_recall": 0.0638,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.641,
+    "name_word_recall": 0.6596,
+    "items": {
+     "lines": 13,
+     "all_fields": 8,
+     "name": 8,
+     "quantity": 8,
+     "rate": 8,
+     "amount": 8
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__perspective",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -1.65,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 15.1,
+   "baseline": {
+    "critical_recall": 0.1795,
+    "name_word_recall": 0.5106,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 2,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.359,
+    "name_word_recall": 0.4043,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 4,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__tilted",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.8,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 12.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.5641,
+    "name_word_recall": 0.5106,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 4,
+     "quantity": 0,
+     "rate": 2,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__blurry",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> GOOD",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 14.2,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.2051,
+    "name_word_recall": 0.6596,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 3,
+     "quantity": 0,
+     "rate": 1,
+     "amount": 1
+    }
+   }
+  },
+  {
+   "case": "TC13_sri_balaji_13items__small_text",
+   "layout": "TC13_sri_balaji_13items",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "POOR -> GOOD",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 10.8,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.3846,
+    "name_word_recall": 0.4681,
+    "items": {
+     "lines": 13,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__sideways",
+   "layout": "TC15_decimal_quantities",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.1,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.9167,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__upside_down",
+   "layout": "TC15_decimal_quantities",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.9167,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__low_light",
+   "layout": "TC15_decimal_quantities",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.9167,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__shadow",
+   "layout": "TC15_decimal_quantities",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.7,
+   "baseline": {
+    "critical_recall": 0.5,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 3,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 3
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.75,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 3,
+     "quantity": 0,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__perspective",
+   "layout": "TC15_decimal_quantities",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "binarized",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.3,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.6667,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 1,
+     "name": 3,
+     "quantity": 2,
+     "rate": 3,
+     "amount": 1
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__tilted",
+   "layout": "TC15_decimal_quantities",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.9167,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__blurry",
+   "layout": "TC15_decimal_quantities",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.2,
+     "perspective": true,
+     "quality": "UNREADABLE -> POOR",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.3333,
+    "name_word_recall": 0.9167,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 2,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 1
+    }
+   }
+  },
+  {
+   "case": "TC15_decimal_quantities__small_text",
+   "layout": "TC15_decimal_quantities",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.7,
+     "perspective": false,
+     "quality": "POOR -> NEEDS_ENHANCEMENT",
+     "variant": "binarized",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 7.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0833,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 1,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__sideways",
+   "layout": "TC16_borderless_table",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.8,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__upside_down",
+   "layout": "TC16_borderless_table",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "binarized",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__low_light",
+   "layout": "TC16_borderless_table",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "binarized",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__shadow",
+   "layout": "TC16_borderless_table",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.5,
+   "baseline": {
+    "critical_recall": 0.25,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 2,
+     "quantity": 2,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__perspective",
+   "layout": "TC16_borderless_table",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 4,
+     "quantity": 4,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__tilted",
+   "layout": "TC16_borderless_table",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__blurry",
+   "layout": "TC16_borderless_table",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "UNREADABLE -> POOR",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC16_borderless_table__small_text",
+   "layout": "TC16_borderless_table",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -1.6,
+     "perspective": false,
+     "quality": "POOR -> NEEDS_ENHANCEMENT",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 4.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__sideways",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.875,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 3,
+     "name": 4,
+     "quantity": 4,
+     "rate": 3,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__upside_down",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.0,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__low_light",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.2,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.875,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__shadow",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__perspective",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.1,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 4,
+     "name": 4,
+     "quantity": 4,
+     "rate": 4,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__tilted",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 3,
+     "name": 4,
+     "quantity": 4,
+     "rate": 3,
+     "amount": 4
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__blurry",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "POOR -> NEEDS_ENHANCEMENT",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 7.3,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.25,
+    "name_word_recall": 0.7143,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 2,
+     "quantity": 2,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC17_multi_tier_gst__small_text",
+   "layout": "TC17_multi_tier_gst",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.45,
+     "perspective": false,
+     "quality": "POOR -> POOR",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 4.3,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 4,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__sideways",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__upside_down",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.0,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__low_light",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> NEEDS_ENHANCEMENT",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 5.0,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__shadow",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "corrected",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.0,
+   "baseline": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 2,
+     "name": 3,
+     "quantity": 2,
+     "rate": 3,
+     "amount": 3
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__perspective",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "POOR -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 6.7,
+   "baseline": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__tilted",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__blurry",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "UNREADABLE -> NEEDS_ENHANCEMENT",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 3.1,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC20_faded_thermal_receipt__small_text",
+   "layout": "TC20_faded_thermal_receipt",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "UNREADABLE -> POOR",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__sideways",
+   "layout": "TC25_split_column_headers",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.8,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__upside_down",
+   "layout": "TC25_split_column_headers",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "binarized",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__low_light",
+   "layout": "TC25_split_column_headers",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__shadow",
+   "layout": "TC25_split_column_headers",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.5,
+   "baseline": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 3,
+     "quantity": 0,
+     "rate": 3,
+     "amount": 3
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__perspective",
+   "layout": "TC25_split_column_headers",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "binarized",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.6,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.9167,
+    "items": {
+     "lines": 3,
+     "all_fields": 2,
+     "name": 3,
+     "quantity": 3,
+     "rate": 2,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__tilted",
+   "layout": "TC25_split_column_headers",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.4,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__blurry",
+   "layout": "TC25_split_column_headers",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "UNREADABLE -> NEEDS_ENHANCEMENT",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.4,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.3333,
+    "name_word_recall": 0.9167,
+    "items": {
+     "lines": 3,
+     "all_fields": 1,
+     "name": 2,
+     "quantity": 1,
+     "rate": 2,
+     "amount": 2
+    }
+   }
+  },
+  {
+   "case": "TC25_split_column_headers__small_text",
+   "layout": "TC25_split_column_headers",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": false,
+     "quality": "POOR -> POOR",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 3.4,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__sideways",
+   "layout": "TC26_promotional_scheme",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.4,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__upside_down",
+   "layout": "TC26_promotional_scheme",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": 0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.8,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__low_light",
+   "layout": "TC26_promotional_scheme",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.8,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__shadow",
+   "layout": "TC26_promotional_scheme",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.0,
+   "baseline": {
+    "critical_recall": 0.8333,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 3,
+     "quantity": 0,
+     "rate": 3,
+     "amount": 2
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__perspective",
+   "layout": "TC26_promotional_scheme",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.6,
+   "baseline": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.9167,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__tilted",
+   "layout": "TC26_promotional_scheme",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.1,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__blurry",
+   "layout": "TC26_promotional_scheme",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "UNREADABLE -> POOR",
+     "variant": "enhanced",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.2,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC26_promotional_scheme__small_text",
+   "layout": "TC26_promotional_scheme",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 1.7,
+     "perspective": false,
+     "quality": "POOR -> POOR",
+     "variant": "binarized",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 5.8,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.75,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__sideways",
+   "layout": "TC31_high_density_compact",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 10,
+     "name": 10,
+     "quantity": 10,
+     "rate": 10,
+     "amount": 10
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__upside_down",
+   "layout": "TC31_high_density_compact",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.0,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 10,
+     "name": 10,
+     "quantity": 10,
+     "rate": 10,
+     "amount": 10
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__low_light",
+   "layout": "TC31_high_density_compact",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 7.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 0.9697,
+    "items": {
+     "lines": 10,
+     "all_fields": 9,
+     "name": 9,
+     "quantity": 9,
+     "rate": 9,
+     "amount": 9
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__shadow",
+   "layout": "TC31_high_density_compact",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.7,
+   "baseline": {
+    "critical_recall": 0.2,
+    "name_word_recall": 0.8182,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 3,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 3
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 10,
+     "name": 10,
+     "quantity": 10,
+     "rate": 10,
+     "amount": 10
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__perspective",
+   "layout": "TC31_high_density_compact",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 8.4,
+   "baseline": {
+    "critical_recall": 0.25,
+    "name_word_recall": 0.9394,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 10,
+     "name": 10,
+     "quantity": 10,
+     "rate": 10,
+     "amount": 10
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__tilted",
+   "layout": "TC31_high_density_compact",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "original",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 6.5,
+   "baseline": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 10,
+     "name": 10,
+     "quantity": 10,
+     "rate": 10,
+     "amount": 10
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 10,
+     "name": 10,
+     "quantity": 10,
+     "rate": 10,
+     "amount": 10
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__blurry",
+   "layout": "TC31_high_density_compact",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 13.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.95,
+    "name_word_recall": 0.6364,
+    "items": {
+     "lines": 10,
+     "all_fields": 2,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 2
+    }
+   }
+  },
+  {
+   "case": "TC31_high_density_compact__small_text",
+   "layout": "TC31_high_density_compact",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.15,
+     "perspective": true,
+     "quality": "POOR -> GOOD",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 3.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 10,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__sideways",
+   "layout": "TC32_alternate_column_order",
+   "condition": "sideways",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.3,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__upside_down",
+   "layout": "TC32_alternate_column_order",
+   "condition": "upside_down",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 180,
+     "skew_deg": -0.15,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__low_light",
+   "layout": "TC32_alternate_column_order",
+   "condition": "low_light",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.15,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 5.9,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__shadow",
+   "layout": "TC32_alternate_column_order",
+   "condition": "shadow",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 4.8,
+   "baseline": {
+    "critical_recall": 0.3333,
+    "name_word_recall": 0.6667,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 2,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__perspective",
+   "layout": "TC32_alternate_column_order",
+   "condition": "perspective",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -0.0,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "original",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 3.9,
+   "baseline": {
+    "critical_recall": 0.3333,
+    "name_word_recall": 0.6667,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.3333,
+    "name_word_recall": 0.6667,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__tilted",
+   "layout": "TC32_alternate_column_order",
+   "condition": "tilted",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "corrected",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 3.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 3,
+     "name": 3,
+     "quantity": 3,
+     "rate": 3,
+     "amount": 3
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__blurry",
+   "layout": "TC32_alternate_column_order",
+   "condition": "blurry",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.1,
+     "perspective": true,
+     "quality": "UNREADABLE -> POOR",
+     "variant": "corrected",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 2.5,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "TC32_alternate_column_order__small_text",
+   "layout": "TC32_alternate_column_order",
+   "condition": "small_text",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": -2.55,
+     "perspective": true,
+     "quality": "POOR -> POOR",
+     "variant": "binarized",
+     "retake": true
+    }
+   ],
+   "prep_seconds": 7.7,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 0.5556,
+    "name_word_recall": 0.6667,
+    "items": {
+     "lines": 3,
+     "all_fields": 0,
+     "name": 1,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   }
+  },
+  {
+   "case": "multi_page__TC24+TC29",
+   "layout": "TC24 + TC29",
+   "condition": "multi_page (page 2 sideways)",
+   "simulated": true,
+   "pages": [
+    {
+     "rotation_cw": 0,
+     "skew_deg": 0.05,
+     "perspective": true,
+     "quality": "NEEDS_ENHANCEMENT -> EXCELLENT",
+     "variant": "enhanced",
+     "retake": false
+    },
+    {
+     "rotation_cw": 270,
+     "skew_deg": -0.05,
+     "perspective": true,
+     "quality": "GOOD -> POOR",
+     "variant": "enhanced",
+     "retake": false
+    }
+   ],
+   "prep_seconds": 10.1,
+   "baseline": {
+    "critical_recall": 0.0,
+    "name_word_recall": 0.0,
+    "items": {
+     "lines": 8,
+     "all_fields": 0,
+     "name": 0,
+     "quantity": 0,
+     "rate": 0,
+     "amount": 0
+    }
+   },
+   "prepared": {
+    "critical_recall": 1.0,
+    "name_word_recall": 1.0,
+    "items": {
+     "lines": 8,
+     "all_fields": 8,
+     "name": 8,
+     "quantity": 8,
+     "rate": 8,
+     "amount": 8
+    }
+   }
+  }
+ ]
+}

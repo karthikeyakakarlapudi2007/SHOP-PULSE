@@ -17,6 +17,7 @@
 | Pillar | Features & Technical Highlights |
 | :--- | :--- |
 | **🧾 Invoice Intelligence Scanner** | Header-guided dynamic invoice extraction layer that isolates Rate, Purchase Price, Selling Price, and MRP with spatial boundary verification and banker's Decimal rounding. Generates audit workbooks (.xlsx) and performs idempotent stock updates. |
+| **📷 Invoice Photo Preparation** | Camera capture of multi-page invoices with automatic quality grading, upright/sideways/upside-down detection, deskewing, perspective correction and measured, adaptive enhancement before the existing OCR engine; manual rotate/retake/reorder, lossless PDF, originals kept. See [docs/document-prep](docs/document-prep/README.md). |
 | **⚡ Lightning POS & Billing** | Rapid multi-item checkout, instant bill calculation, cash & UPI split payments, thermal receipt generator, keyboard shortcuts, and barcode scanner integration. |
 | **🎙️ Voice-to-Bill (12 Languages)** | Fast natural language billing powered by multilingual voice parsing supporting Hindi, Telugu, Tamil, Kannada, Marathi, Bengali, Gujarati, Punjabi, Malayalam, Odia, Assamese, and Urdu. |
 | **📦 Dynamic Inventory & Restocking** | Real-time stock decrement transactions, low-stock threshold triggers, multi-category taxonomy, supplier management, and instant stock adjustments. |
