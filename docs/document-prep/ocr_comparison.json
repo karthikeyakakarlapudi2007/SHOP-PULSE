@@ -1,0 +1,559 @@
+{
+  "rows": [
+    {
+      "case": "01_clear_portrait",
+      "title": "Clear portrait invoice",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "EXCELLENT",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2239,
+        "wer": 0.2182,
+        "word_recall": 0.8636,
+        "critical_recall": 0.9032
+      },
+      "prepared": {
+        "cer": 0.131,
+        "wer": 0.1,
+        "word_recall": 0.9818,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 6.02
+    },
+    {
+      "case": "02_landscape",
+      "title": "Landscape invoice (correctly oriented, wider than tall)",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "EXCELLENT",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2238,
+        "wer": 0.2135,
+        "word_recall": 0.8539,
+        "critical_recall": 0.9545
+      },
+      "prepared": {
+        "cer": 0.1564,
+        "wer": 0.1236,
+        "word_recall": 0.9888,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 5.3
+    },
+    {
+      "case": "03_rotated_90",
+      "title": "Invoice rotated 90 degrees clockwise",
+      "expected_rotation_cw": 270,
+      "pages": [
+        {
+          "rotation_cw": 270,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2156,
+        "wer": 0.2091,
+        "word_recall": 0.8727,
+        "critical_recall": 0.9355
+      },
+      "prepared": {
+        "cer": 0.2073,
+        "wer": 0.1727,
+        "word_recall": 0.9091,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 6.03
+    },
+    {
+      "case": "04_rotated_180",
+      "title": "Invoice upside down (180 degrees)",
+      "expected_rotation_cw": 180,
+      "pages": [
+        {
+          "rotation_cw": 180,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.8325,
+        "wer": 1.0,
+        "word_recall": 0.0091,
+        "critical_recall": 0.0
+      },
+      "prepared": {
+        "cer": 0.209,
+        "wer": 0.1818,
+        "word_recall": 0.9,
+        "critical_recall": 0.9677
+      },
+      "prep_seconds": 5.71
+    },
+    {
+      "case": "05_rotated_270",
+      "title": "Invoice rotated 90 degrees anticlockwise (270)",
+      "expected_rotation_cw": 90,
+      "pages": [
+        {
+          "rotation_cw": 90,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.8308,
+        "wer": 1.0,
+        "word_recall": 0.0091,
+        "critical_recall": 0.0
+      },
+      "prepared": {
+        "cer": 0.1294,
+        "wer": 0.1,
+        "word_recall": 0.9818,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 5.52
+    },
+    {
+      "case": "06_tilted_4deg",
+      "title": "Slightly tilted invoice (4 degrees)",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -4.05,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "corrected",
+          "enhancement": [],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2156,
+        "wer": 0.2,
+        "word_recall": 0.8909,
+        "critical_recall": 0.9355
+      },
+      "prepared": {
+        "cer": 0.1294,
+        "wer": 0.1,
+        "word_recall": 0.9727,
+        "critical_recall": 0.9677
+      },
+      "prep_seconds": 5.67
+    },
+    {
+      "case": "07_perspective",
+      "title": "Perspective-distorted photograph on a table",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": true,
+          "quality_before": "NEEDS_ENHANCEMENT",
+          "quality_after": "EXCELLENT",
+          "variant": "corrected",
+          "enhancement": [],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2206,
+        "wer": 0.4091,
+        "word_recall": 0.7182,
+        "critical_recall": 0.6774
+      },
+      "prepared": {
+        "cer": 0.131,
+        "wer": 0.1091,
+        "word_recall": 0.9727,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 5.84
+    },
+    {
+      "case": "08_shadow",
+      "title": "Shadow-heavy photograph",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.1,
+          "perspective": true,
+          "quality_before": "NEEDS_ENHANCEMENT",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "illumination_correction",
+            "contrast_stretch"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2073,
+        "wer": 0.2727,
+        "word_recall": 0.8091,
+        "critical_recall": 0.8065
+      },
+      "prepared": {
+        "cer": 0.1294,
+        "wer": 0.0909,
+        "word_recall": 0.9818,
+        "critical_recall": 0.9677
+      },
+      "prep_seconds": 8.38
+    },
+    {
+      "case": "09_low_light",
+      "title": "Low-light photograph",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "NEEDS_ENHANCEMENT",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "illumination_correction",
+            "upscale",
+            "contrast_stretch"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 1.0,
+        "wer": 1.0,
+        "word_recall": 0.0,
+        "critical_recall": 0.0
+      },
+      "prepared": {
+        "cer": 0.1277,
+        "wer": 0.0909,
+        "word_recall": 0.9909,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 7.34
+    },
+    {
+      "case": "10_blurry",
+      "title": "Blurry photograph (moderate defocus)",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.05,
+          "perspective": false,
+          "quality_before": "NEEDS_ENHANCEMENT",
+          "quality_after": "NEEDS_ENHANCEMENT",
+          "variant": "binarized",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2488,
+        "wer": 0.4818,
+        "word_recall": 0.5909,
+        "critical_recall": 0.4516
+      },
+      "prepared": {
+        "cer": 0.1277,
+        "wer": 0.2818,
+        "word_recall": 0.7636,
+        "critical_recall": 0.8387
+      },
+      "prep_seconds": 5.51
+    },
+    {
+      "case": "11_low_resolution",
+      "title": "Low-resolution photograph (45% scale)",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "NEEDS_ENHANCEMENT",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.136,
+        "wer": 0.1364,
+        "word_recall": 0.9455,
+        "critical_recall": 0.9677
+      },
+      "prepared": {
+        "cer": 0.1376,
+        "wer": 0.1364,
+        "word_recall": 0.9455,
+        "critical_recall": 0.9677
+      },
+      "prep_seconds": 6.99
+    },
+    {
+      "case": "12_multi_page",
+      "title": "Two-page invoice (second page sideways)",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "EXCELLENT",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        },
+        {
+          "rotation_cw": 270,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "corrected",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2386,
+        "wer": 0.2448,
+        "word_recall": 0.849,
+        "critical_recall": 0.8776
+      },
+      "prepared": {
+        "cer": 0.2006,
+        "wer": 0.1823,
+        "word_recall": 0.9167,
+        "critical_recall": 0.9388
+      },
+      "prep_seconds": 10.51
+    },
+    {
+      "case": "13_small_decimals",
+      "title": "Small decimal values at reduced print size",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.2073,
+        "wer": 0.1818,
+        "word_recall": 0.8909,
+        "critical_recall": 0.9677
+      },
+      "prepared": {
+        "cer": 0.1343,
+        "wer": 0.1182,
+        "word_recall": 0.9636,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 5.97
+    },
+    {
+      "case": "14_faint_print",
+      "title": "Faint printed text",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "NEEDS_ENHANCEMENT",
+          "quality_after": "EXCELLENT",
+          "variant": "binarized",
+          "enhancement": [
+            "upscale",
+            "contrast_stretch"
+          ],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.209,
+        "wer": 0.1818,
+        "word_recall": 0.9,
+        "critical_recall": 1.0
+      },
+      "prepared": {
+        "cer": 0.1294,
+        "wer": 0.1,
+        "word_recall": 0.9818,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 7.09
+    },
+    {
+      "case": "15_table_borders_tilted_photo",
+      "title": "Bordered table, tilted 7 degrees, sideways photo",
+      "expected_rotation_cw": 90,
+      "pages": [
+        {
+          "rotation_cw": 90,
+          "skew_deg": 7.0,
+          "perspective": false,
+          "quality_before": "GOOD",
+          "quality_after": "EXCELLENT",
+          "variant": "corrected",
+          "enhancement": [],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.8109,
+        "wer": 0.9909,
+        "word_recall": 0.0273,
+        "critical_recall": 0.0
+      },
+      "prepared": {
+        "cer": 0.1277,
+        "wer": 0.0909,
+        "word_recall": 0.9909,
+        "critical_recall": 1.0
+      },
+      "prep_seconds": 5.41
+    },
+    {
+      "case": "16_similar_background",
+      "title": "Paper on a background close to the paper colour",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.05,
+          "perspective": true,
+          "quality_before": "EXCELLENT",
+          "quality_after": "EXCELLENT",
+          "variant": "corrected",
+          "enhancement": [],
+          "retake_recommended": false
+        }
+      ],
+      "baseline": {
+        "cer": 0.6468,
+        "wer": 0.7909,
+        "word_recall": 0.7636,
+        "critical_recall": 0.9677
+      },
+      "prepared": {
+        "cer": 0.1376,
+        "wer": 0.1273,
+        "word_recall": 0.9545,
+        "critical_recall": 0.9677
+      },
+      "prep_seconds": 5.03
+    },
+    {
+      "case": "17_unrecoverable",
+      "title": "Severely blurred, low-resolution capture (should ask for retake)",
+      "expected_rotation_cw": 0,
+      "pages": [
+        {
+          "rotation_cw": 0,
+          "skew_deg": -0.0,
+          "perspective": false,
+          "quality_before": "UNREADABLE",
+          "quality_after": "POOR",
+          "variant": "enhanced",
+          "enhancement": [
+            "upscale",
+            "contrast_stretch",
+            "clahe",
+            "selective_sharpen"
+          ],
+          "retake_recommended": true
+        }
+      ],
+      "baseline": {
+        "cer": 1.0,
+        "wer": 1.0,
+        "word_recall": 0.0,
+        "critical_recall": 0.0
+      },
+      "prepared": {
+        "cer": 0.9585,
+        "wer": 0.9909,
+        "word_recall": 0.0091,
+        "critical_recall": 0.0
+      },
+      "prep_seconds": 1.42
+    }
+  ]
+}
