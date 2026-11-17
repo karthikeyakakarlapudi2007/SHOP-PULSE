@@ -259,12 +259,10 @@ def prepare_page(
     variants: Dict[str, np.ndarray] = {"original": original, "corrected": corrected}
     enhancement_meta: Dict[str, Any] = {"applied": False}
     enhanced = None
-    clear_page = quality_corrected.grade == "EXCELLENT"
     if opts.enhance:
-        # Clear pages only get resolution normalisation (measured to help the OCR engine when
-        # text is small); tonal operations are reserved for pages that measurably need them.
-        res = plan_and_enhance(corrected, quality_corrected, corrected_analysis, config,
-                               allow={"only_resolution": True} if clear_page else None)
+        # Every operation has its own measured trigger (uneven light, low paper level, faint
+        # ink, grain, blur, small text); on a clean page none of them fires and nothing changes.
+        res = plan_and_enhance(corrected, quality_corrected, corrected_analysis, config)
         ok, why = enhancement_is_safe(res.verification)
         if not ok and len(res.steps) > 1:
             # Retry without the strongest operations before giving up
