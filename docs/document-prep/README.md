@@ -109,6 +109,12 @@ Run: `cd backend && .venv/bin/python -m pytest tests/test_document_prep_*.py` an
 
 ## Measured results
 
+See **[VALIDATION_REPORT.md](VALIDATION_REPORT.md)** for the latest validation (simulated phone
+captures of all repository layouts: 15 → 248 of 416 line items fully correct), the root causes of
+the extraction fixes, HEIC support, mobile validation and production readiness.
+
+### Earlier measurements
+
 Both comparisons read the page with the **existing** engine, exactly as `/invoices/extract` would.
 
 **Real fixtures, full extraction** (`fixture_extraction_results.md`): a line counts only if name, quantity,
@@ -151,4 +157,4 @@ engine. Clear pages are only enlarged to the engine's preferred text size (measu
 * Existing-engine issues seen during testing, left untouched as required: the PDF reader's raw-stream
   fallback can read image data as text (worked around here), the header parser can take
   "Invoice No: …" as the supplier name, and one rate was parsed as 58575 instead of 58.75.
-* HEIC photos are not accepted (Pillow cannot decode them); users are asked to use JPG.
+* HEIC/HEIF photos are decoded with the decode-only `pi-heif` package (see VALIDATION_REPORT.md).
