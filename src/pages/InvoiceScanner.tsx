@@ -33,6 +33,9 @@ export interface ExtractedItem {
   confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
   needs_review: boolean;
   validation_issues?: string[];
+  /** Possible corrections from the extraction (never applied automatically). */
+  suggestions?: string[];
+  suggested_rate?: number | null;
   matched_product_id?: string | null;
   matched_product_name?: string | null;
 }
@@ -127,6 +130,8 @@ export const InvoiceScanner: React.FC = () => {
       confidence_level: item.confidence_level || (item.confidence >= 80 ? 'HIGH' : item.confidence >= 60 ? 'MEDIUM' : 'LOW'),
       needs_review: item.needs_review ?? false,
       validation_issues: item.validation_issues || [],
+      suggestions: item.suggestions || [],
+      suggested_rate: typeof item.suggested_rate === 'number' ? item.suggested_rate : null,
       matched_product_id: item.matched_product_id || null,
       matched_product_name: item.matched_product_name || null,
     }));
@@ -845,6 +850,29 @@ export const InvoiceScanner: React.FC = () => {
                               Matches: {item.matched_product_name}
                             </span>
                           )}
+                          {item.needs_review && (item.validation_issues?.length || item.suggestions?.length) ? (
+                            <div className="mt-1 px-2 space-y-1">
+                              {(item.validation_issues || []).slice(0, 2).map((issue) => (
+                                <span key={issue} className="text-[10px] text-[#8A6420] block">
+                                  {issue}
+                                </span>
+                              ))}
+                              {(item.suggestions || []).map((sugg) => (
+                                <span key={sugg} className="text-[10px] text-[#153D32] font-semibold block">
+                                  {sugg}
+                                </span>
+                              ))}
+                              {typeof item.suggested_rate === 'number' && item.suggested_rate !== item.purchase_price && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateItem(item.id, 'purchase_price', item.suggested_rate)}
+                                  className="mt-0.5 inline-flex items-center px-2 py-1 rounded-md border border-[#23866A]/40 bg-[#E7F6F1] text-[10px] font-bold text-[#16704F] cursor-pointer"
+                                >
+                                  Use ₹{item.suggested_rate.toFixed(2)} as rate
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="py-3 px-3">
                           <input

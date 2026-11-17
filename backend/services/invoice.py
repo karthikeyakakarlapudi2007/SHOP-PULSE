@@ -187,6 +187,47 @@ def resolve_item_arithmetic_py(
     }
 
 
+def suggest_misread_decimal_rate(
+    raw_rate: Any, quantity: Optional[float], printed_amount: Optional[float],
+    discount: float = 0.0, tax: float = 0.0,
+) -> Optional[float]:
+    """Rate reading that explains a quantity x rate mismatch by one lost or misread decimal point.
+
+    OCR sometimes reads a decimal point as a digit ("58.75" -> "58575") or drops it. Each
+    single-point reading of the rate's digits is tried; a candidate is returned only when it is
+    the one reading for which quantity x rate reproduces the printed amount exactly. It is a
+    suggestion for the reviewer and is never applied automatically.
+    """
+    if raw_rate is None or not quantity or quantity <= 0 or printed_amount is None:
+        return None
+    text = str(raw_rate).strip()
+    m = re.fullmatch(r"(\d+)(?:\.0+)?", text)
+    if m:
+        digits = m.group(1)
+    else:
+        try:
+            value = float(text.replace(",", ""))
+        except ValueError:
+            return None
+        if value != int(value):
+            return None
+        digits = str(int(value))
+    if len(digits) < 3:
+        return None
+    readings = set()
+    for i in range(1, len(digits)):
+        readings.add(digits[:i] + "." + digits[i:])  # decimal point dropped
+        if i < len(digits) - 1:
+            readings.add(digits[:i] + "." + digits[i + 1:])  # decimal point read as a digit
+    target = printed_amount + discount - tax
+    matches = set()
+    for r in readings:
+        cand = float(r)
+        if cand > 0 and abs(quantity * cand - target) <= 0.011:
+            matches.add(round(cand, 2))
+    return matches.pop() if len(matches) == 1 else None
+
+
 def _detect_type(file_bytes: bytes, filename: str) -> str:
     ext = Path((filename or "").lower().strip()).suffix
     if ext == ".pdf" or file_bytes.startswith(b"%PDF"):
@@ -211,7 +252,10 @@ _BUSINESS_RE = re.compile(r"\b(?:traders?|enterprises?|distributors?|agenc(?:y|i
                           r"mart|pvt|private|ltd|limited|llp|co\.?|company|suppliers?|marketing|sales|industries|"
                           r"foods?|corporation|brothers|bros|kirana|provisions|general)\b", re.I)
 _GSTIN_RE = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b")
-_INVNO_RE = re.compile(r"\b(?:invoice|inv|bill|voucher)\s*(?:no|number|num|#)\.?\s*[:#\-.]?\s*([A-Za-z0-9][A-Za-z0-9/\-_.]{0,30})", re.I)
+# "(?:in|n)?voice" also accepts OCR output that clipped the first letters of "Invoice"
+_INVNO_RE = re.compile(r"\b(?:(?:in|n)?voice|inv|bill|voucher)\s*(?:no|number|num|#)\.?\s*[:#\-.]?\s*([A-Za-z0-9][A-Za-z0-9/\-_.]{0,30})", re.I)
+# A labelled field such as "Invoice No:", "Ph No.", "Order #" is never a business name
+_FIELD_LABEL_RE = re.compile(r"\b(?:no|nos|number|num)\s*[.:#]|#\s*\S", re.I)
 _DATE_RE = re.compile(r"\b(\d{1,2}[/\-.]\d{1,2}[/\-.](?:\d{4}|\d{2})|\d{1,2}[\s\-](?:jan|feb|mar|apr|may|jun|jul|aug|sep|"
                       r"oct|nov|dec)[a-z]*[\s\-,]+\d{2,4})\b", re.I)
 _TOTAL_PRIORITY = [
@@ -222,17 +266,45 @@ _TOTAL_PRIORITY = [
 ]
 
 
+def _merge_title_fragments(lines: List[str]) -> List[str]:
+    """Rejoin a heading that OCR line reconstruction split into one-word lines.
+
+    Large title text (usually the supplier name) can come back as consecutive single-word
+    lines ("SRI", "LAKSHMI", "WHOLESALE", "TRADERS"). Runs of such lines are joined so the
+    name can be recognised; all other lines are returned unchanged and in order.
+    """
+    merged: List[str] = []
+    run: List[str] = []
+    for line in lines:
+        clean = line.strip()
+        if re.fullmatch(r"[A-Za-z][A-Za-z&.'\-]+", clean):
+            run.append(clean)
+            continue
+        if len(run) >= 2:
+            merged.append(" ".join(run))
+        else:
+            merged.extend(run)
+        run = []
+        merged.append(line)
+    if len(run) >= 2:
+        merged.append(" ".join(run))
+    else:
+        merged.extend(run)
+    return merged
+
+
 def extract_metadata(lines: List[str], header_text: Optional[str]) -> Dict[str, Any]:
     header_pos = next((i for i, l in enumerate(lines) if header_text and l.strip() == header_text.strip()), len(lines))
     top = lines[: min(header_pos, 15)] if header_pos else lines[:10]
 
     supplier, supplier_conf = None, 0.0
     fallback = None
-    for line in top:
+    for line in _merge_title_fragments(top):
         clean = line.strip()
         if _PARTY_RE.search(clean):
             break
         if (not clean or _TITLE_RE.match(clean) or _GSTIN_RE.search(clean.upper()) or _INVNO_RE.search(clean)
+                or _FIELD_LABEL_RE.search(clean)
                 or re.search(r"\b(?:date|dated|phone|ph|mob|mobile|email|gstin|fssai|state)\b", clean, re.I)):
             continue
         words = re.findall(r"[A-Za-z&]{2,}", clean)
@@ -419,6 +491,18 @@ def _extract_invoice_with_new_pipeline(
         if arith_status == "MISMATCH":
             needs_review = True
         line_validation_issues = list(it.validation_issues or []) + list(mrp_issues or []) + list(arith.get("issues", []))
+        line_suggestions = list(arith.get("suggestions") or [])
+        line_suggested_rate = arith.get("suggested_rate")
+        if arith_status == "MISMATCH" and pp is not None and prn is not None:
+            raw_rate = (it.raw_cells or {}).get("rate") or (it.raw_cells or {}).get("purchase_price") or pp
+            misread = suggest_misread_decimal_rate(raw_rate, q, prn, disc, tax)
+            if misread is not None and abs(misread - pp) > 0.005:
+                line_suggestions.append(
+                    f"Rate ₹{pp:,.2f} may be a misread decimal point: ₹{misread:,.2f} × {q:g} = ₹{prn:,.2f} "
+                    "(printed amount). Please check the invoice and confirm."
+                )
+                line_suggested_rate = line_suggested_rate if line_suggested_rate is not None else misread
+                needs_review = True
         line_total_source = "INVOICE" if prn is not None else arith.get("line_total_source", "UNKNOWN")
         mrp_lookup_schema = MrpLookupSchema(**lookup.to_dict()) if lookup else MrpLookupSchema(
             status="FOUND" if mrp_val else "NOT_FOUND",
@@ -467,8 +551,8 @@ def _extract_invoice_with_new_pipeline(
                 raw_cells=it.raw_cells,
                 extraction_method="TABLE_STRUCTURED",
                 validation_issues=line_validation_issues,
-                suggestions=[],
-                suggested_rate=None,
+                suggestions=line_suggestions,
+                suggested_rate=line_suggested_rate,
                 matched_product_id=matched_prod_id,
                 matched_product_name=matched_prod_name,
                 match_score=match_score,

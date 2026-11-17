@@ -254,13 +254,23 @@ class BasePDFProcessor(IPDFProcessor):
     def _extract_raw_pdf_stream_text(self, content: bytes) -> str:
         all_lines: List[str] = []
         candidate_streams = []
-        for s in re.findall(b"stream[\r\n]+(.*?)[\r\n]+endstream", content, re.DOTALL):
+        for match in re.finditer(b"stream[\r\n]+(.*?)[\r\n]+endstream", content, re.DOTALL):
+            # Only page content streams can carry text operators. Image XObjects (scanned or
+            # photographed pages) hold pixel data that, once inflated, can contain byte
+            # patterns such as "BT (..) Tj ET" by chance and must never be read as text.
+            obj_start = content.rfind(b" obj", 0, match.start())
+            stream_dict = content[obj_start:match.start()] if obj_start != -1 else b""
+            if re.search(rb"/Subtype\s*/Image\b", stream_dict):
+                continue
+            s = match.group(1)
             for attempt in (lambda b: zlib.decompress(b), lambda b: zlib.decompress(b, -15), lambda b: b):
                 try:
-                    candidate_streams.append(attempt(s))
-                    break
+                    decoded = attempt(s)
                 except Exception:
                     continue
+                if self._looks_like_text_stream(decoded):
+                    candidate_streams.append(decoded)
+                break
         if not candidate_streams:
             candidate_streams.append(content)
 
@@ -287,6 +297,15 @@ class BasePDFProcessor(IPDFProcessor):
                 if parts:
                     all_lines.append("    ".join(parts))
         return "\n".join(all_lines)
+
+    @staticmethod
+    def _looks_like_text_stream(data: bytes) -> bool:
+        """Content streams are ASCII operators; binary (pixel, font) data is not."""
+        if not data:
+            return False
+        sample = data[:65536]
+        printable = sum(1 for b in sample if 32 <= b < 127 or b in (9, 10, 13))
+        return printable / len(sample) >= 0.9
 
     def _build_document_from_raw_text(self, text: str) -> OCRDocumentResult:
         return build_ocr_document_from_raw_text(text, filename="stream.pdf", base_y=20.0, line_height=30.0)
