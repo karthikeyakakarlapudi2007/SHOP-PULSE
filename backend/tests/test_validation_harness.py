@@ -144,5 +144,16 @@ def test_header_states():
     assert score_header({}, truth) == {"supplier_name": "missed", "invoice_number": "missed",
                                        "invoice_date": "correct_empty"}
     assert score_header({"invoice_date": "2026-10-08"}, {"invoice_date": "08/10/2026"})["invoice_date"] == "correct"
+    assert score_header({"supplier_name": "BALAJI TRADERS TAX INVOICE"},
+                        {"supplier_name": "Balaji Traders"})["supplier_name"] == "partial"
     assert score_header({"supplier_name": "Item Description Qty"}, {"supplier_name": "Balaji Traders"})["supplier_name"] == "wrong"
     assert score_header({}, None) == {f: "not_recorded" for f in ("supplier_name", "invoice_number", "invoice_date")}
+
+
+def test_line_without_printed_rate_can_be_fully_correct():
+    truth = [{"product_name": "Tata Salt 1kg", "quantity": 20, "purchase_price": None, "printed_amount": 440.0}]
+    s = score_items([{"product_name": "Tata Salt 1kg", "quantity": 20, "printed_amount": 440.0}], truth)
+    assert s["fully_correct"] == 1
+    s = score_items([{"product_name": "Tata Salt 1kg", "quantity": 20, "purchase_price": 22.0,
+                      "printed_amount": 440.0}], truth)
+    assert s["fully_correct"] == 1 and s["fields"]["purchase_price"]["invented"] == 1

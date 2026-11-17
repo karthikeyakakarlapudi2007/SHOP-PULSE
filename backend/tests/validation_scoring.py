@@ -205,7 +205,8 @@ def _match_items(extracted: List[Dict[str, Any]], truth: List[Dict[str, Any]]) -
 def score_items(extracted: List[Dict[str, Any]], truth: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Field-level accuracy, full-line correctness, invented values and decimal corruption.
 
-    A line is FULLY correct only when product name, quantity, rate and amount are all correct.
+    A line is FULLY correct only when product name, quantity, rate and amount are all correct
+    (a rate or amount the invoice does not print is not required, and is not counted as found).
     """
     fields = ("product_name", "quantity", "unit", "purchase_price", "mrp", "printed_amount")
     out: Dict[str, Any] = {
@@ -253,7 +254,8 @@ def score_items(extracted: List[Dict[str, Any]], truth: List[Dict[str, Any]]) ->
             results[f] = ok
         core = ("product_name", "quantity", "purchase_price", "printed_amount")
         core_eval = [results[f] for f in core if f in results]
-        if core_eval and all(core_eval) and len(core_eval) == len([f for f in core if f not in amb]):
+        required = [f for f in core if f not in amb and (f == "product_name" or t.get(f) is not None)]
+        if core_eval and all(core_eval) and len(core_eval) == len(required):
             out["fully_correct"] += 1
         elif any(results.values()):
             out["partially_correct"] += 1
@@ -261,7 +263,7 @@ def score_items(extracted: List[Dict[str, Any]], truth: List[Dict[str, Any]]) ->
 
 
 def score_header(extracted: Dict[str, Any], truth: Optional[Dict[str, Any]]) -> Dict[str, str]:
-    """Per header field: correct / wrong / missed / invented / correct_empty / not_recorded."""
+    """Per header field: correct / partial / wrong / missed / invented / correct_empty / not_recorded."""
     if truth is None:
         return {f: "not_recorded" for f in HEADER_FIELDS}
     from schemas.invoice import parse_invoice_date
@@ -278,7 +280,8 @@ def score_header(extracted: Dict[str, Any], truth: Optional[Dict[str, Any]]) -> 
             out[f] = "missed"
         elif f == "supplier_name":
             a, b = norm_name(tv), norm_name(ev)
-            out[f] = "correct" if a == b or (len(b) >= 6 and (a in b or b in a)) else "wrong"
+            # exact (case/punctuation-insensitive) = correct; the name plus or minus extra words = partial
+            out[f] = "correct" if a == b else ("partial" if len(b) >= 6 and (a in b or b in a) else "wrong")
         elif f == "invoice_number":
             out[f] = "correct" if tv.strip().lower() == ev.lower() else "wrong"
         else:
