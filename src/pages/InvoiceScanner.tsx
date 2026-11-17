@@ -11,9 +11,13 @@ import {
   Plus, 
   Layers,
   Check,
-  X
+  X,
+  Camera,
+  FileText
 } from 'lucide-react';
 import { getAccessToken } from '../api/client';
+import { documentPrepApi, type PrepExtractResult } from '../api/documentPrep';
+import { DocumentPrepWorkflow } from '../components/invoice-capture/DocumentPrepWorkflow';
 
 export interface ExtractedItem {
   id: string;
@@ -57,6 +61,10 @@ export const InvoiceScanner: React.FC = () => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmSuccess, setConfirmSuccess] = useState<string | null>(null);
   const [confirmedProducts, setConfirmedProducts] = useState<any[]>([]);
+  // 'camera': capture/prepare photos first (recommended); 'file': send a file straight to OCR
+  const [inputMode, setInputMode] = useState<'camera' | 'file'>('camera');
+  const [preparation, setPreparation] = useState<PrepExtractResult['preparation'] | null>(null);
+  const [workflowKey, setWorkflowKey] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -103,6 +111,41 @@ export const InvoiceScanner: React.FC = () => {
     setIsDragging(false);
   }, []);
 
+  /** Shared by direct uploads and prepared scans: both return the /invoices/extract body. */
+  const applyExtraction = (data: any) => {
+    const normalizedItems: ExtractedItem[] = (data.items || []).map((item: any, idx: number) => ({
+      id: item.id || `item_${idx}_${Date.now()}`,
+      product_name: item.product_name || item.raw_description || 'Grocery Item',
+      category: item.category || 'Grocery',
+      quantity: typeof item.quantity === 'number' ? item.quantity : null,
+      unit: item.unit || 'unit',
+      purchase_price: typeof item.purchase_price === 'number' ? item.purchase_price : (item.rate ?? null),
+      selling_price: typeof item.selling_price === 'number' ? item.selling_price : null,
+      mrp: typeof item.mrp === 'number' ? item.mrp : null,
+      amount: typeof item.amount === 'number' ? item.amount : (item.line_total ?? null),
+      confidence: item.confidence ?? 85,
+      confidence_level: item.confidence_level || (item.confidence >= 80 ? 'HIGH' : item.confidence >= 60 ? 'MEDIUM' : 'LOW'),
+      needs_review: item.needs_review ?? false,
+      validation_issues: item.validation_issues || [],
+      matched_product_id: item.matched_product_id || null,
+      matched_product_name: item.matched_product_name || null,
+    }));
+
+    setExtractedData({
+      id: data.id,
+      supplier_name: data.supplier_name || 'Generic Supplier',
+      invoice_number: data.invoice_number || 'INV-' + Math.floor(1000 + Math.random() * 9000),
+      invoice_date: data.invoice_date || new Date().toISOString().split('T')[0],
+      total_amount: data.total_amount || 0,
+      total_items: normalizedItems.length,
+      confidence_score: data.confidence_score || 90,
+      items: normalizedItems,
+      excel_url: data.excel_url || `/api/v1/invoices/${data.id}/excel`,
+    });
+    setSelectedItemIds(new Set(normalizedItems.map((i) => i.id)));
+    setConfirmedProducts([]);
+  };
+
   const startExtraction = async () => {
     if (!file) return;
     setIsProcessing(true);
@@ -142,38 +185,8 @@ export const InvoiceScanner: React.FC = () => {
 
       setProgressStage('Validating price hierarchy & mathematical consistency...');
       const data = await response.json();
-
-      const normalizedItems: ExtractedItem[] = (data.items || []).map((item: any, idx: number) => ({
-        id: item.id || `item_${idx}_${Date.now()}`,
-        product_name: item.product_name || item.raw_description || 'Grocery Item',
-        category: item.category || 'Grocery',
-        quantity: typeof item.quantity === 'number' ? item.quantity : null,
-        unit: item.unit || 'unit',
-        purchase_price: typeof item.purchase_price === 'number' ? item.purchase_price : (item.rate ?? null),
-        selling_price: typeof item.selling_price === 'number' ? item.selling_price : null,
-        mrp: typeof item.mrp === 'number' ? item.mrp : null,
-        amount: typeof item.amount === 'number' ? item.amount : (item.line_total ?? null),
-        confidence: item.confidence ?? 85,
-        confidence_level: item.confidence_level || (item.confidence >= 80 ? 'HIGH' : item.confidence >= 60 ? 'MEDIUM' : 'LOW'),
-        needs_review: item.needs_review ?? false,
-        validation_issues: item.validation_issues || [],
-        matched_product_id: item.matched_product_id || null,
-        matched_product_name: item.matched_product_name || null,
-      }));
-
-      setExtractedData({
-        id: data.id,
-        supplier_name: data.supplier_name || 'Generic Supplier',
-        invoice_number: data.invoice_number || 'INV-' + Math.floor(1000 + Math.random() * 9000),
-        invoice_date: data.invoice_date || new Date().toISOString().split('T')[0],
-        total_amount: data.total_amount || 0,
-        total_items: normalizedItems.length,
-        confidence_score: data.confidence_score || 90,
-        items: normalizedItems,
-        excel_url: data.excel_url || `/api/v1/invoices/${data.id}/excel`,
-      });
-      setSelectedItemIds(new Set(normalizedItems.map((i) => i.id)));
-      setConfirmedProducts([]);
+      applyExtraction(data);
+      setPreparation(null);
     } catch (err: any) {
       console.error('Invoice scanning error:', err);
       setError(err.message || 'Invoice extraction failed. Please try again.');
@@ -385,7 +398,30 @@ export const InvoiceScanner: React.FC = () => {
     }
   };
 
+  const handlePreparedExtraction = (result: PrepExtractResult) => {
+    setError(null);
+    setConfirmSuccess(null);
+    applyExtraction(result.extraction);
+    setPreparation(result.preparation);
+  };
+
+  const [isRetryingOriginal, setIsRetryingOriginal] = useState(false);
+  const retryWithOriginalPhotos = async () => {
+    if (!preparation) return;
+    setIsRetryingOriginal(true);
+    setError(null);
+    try {
+      handlePreparedExtraction(await documentPrepApi.extract(preparation.session_id, 'original'));
+    } catch (err: any) {
+      setError(err?.message || 'Reading the original photos failed.');
+    } finally {
+      setIsRetryingOriginal(false);
+    }
+  };
+
   const resetAll = () => {
+    setPreparation(null);
+    setWorkflowKey((k) => k + 1);
     setFile(null);
     setFilePreview(null);
     setExtractedData(null);
@@ -463,8 +499,46 @@ export const InvoiceScanner: React.FC = () => {
         </div>
       )}
 
-      {/* Upload Zone & Document Inspector (When no extracted data) */}
+      {/* Input mode: photograph / prepare pages, or send a file directly */}
       {!extractedData && (
+        <div className="flex rounded-xl border border-[#DDE9DF] p-1 bg-white w-full sm:w-fit" role="tablist" aria-label="How to add the invoice">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={inputMode === 'camera'}
+            onClick={() => setInputMode('camera')}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg text-sm font-semibold cursor-pointer ${
+              inputMode === 'camera' ? 'bg-[#153D32] text-white' : 'text-[#5E6C64] hover:bg-[#FAF8F2]'
+            }`}
+          >
+            <Camera className="w-4 h-4" aria-hidden="true" />
+            Scan photos
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={inputMode === 'file'}
+            onClick={() => setInputMode('file')}
+            className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg text-sm font-semibold cursor-pointer ${
+              inputMode === 'file' ? 'bg-[#153D32] text-white' : 'text-[#5E6C64] hover:bg-[#FAF8F2]'
+            }`}
+          >
+            <FileText className="w-4 h-4" aria-hidden="true" />
+            Upload PDF or file
+          </button>
+        </div>
+      )}
+
+      {!extractedData && inputMode === 'camera' && (
+        <DocumentPrepWorkflow
+          key={workflowKey}
+          onExtracted={handlePreparedExtraction}
+          onUseDirectUpload={() => setInputMode('file')}
+        />
+      )}
+
+      {/* Upload Zone & Document Inspector (When no extracted data) */}
+      {!extractedData && inputMode === 'file' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Main Upload Dropzone */}
           <div className="lg:col-span-8">
@@ -614,6 +688,27 @@ export const InvoiceScanner: React.FC = () => {
       {/* Extracted Structured Results Grid */}
       {extractedData && (
         <div className="space-y-6">
+          {preparation && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl bg-white border border-[#DDE9DF] shadow-card">
+              <Camera className="w-5 h-5 text-[#23866A] shrink-0" aria-hidden="true" />
+              <p className="flex-1 text-xs sm:text-sm text-[#252D29]">
+                {preparation.source === 'processed'
+                  ? `Read from ${preparation.page_count} prepared page${preparation.page_count > 1 ? 's' : ''} (turned upright, straightened and cleaned). Original photos are kept.`
+                  : `Read from the ${preparation.page_count} original photo${preparation.page_count > 1 ? 's' : ''} without corrections.`}
+              </p>
+              {preparation.source === 'processed' && (
+                <button
+                  type="button"
+                  onClick={retryWithOriginalPhotos}
+                  disabled={isRetryingOriginal}
+                  className="inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-xl border border-[#DDE9DF] bg-[#FAF8F2] hover:bg-[#F3EFE3] text-xs font-semibold text-[#153D32] cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                  {isRetryingOriginal ? 'Reading original photos…' : 'Results look wrong? Read the original photos'}
+                </button>
+              )}
+            </div>
+          )}
           {/* Invoice Summary Ribbon */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-[#DDE9DF] shadow-card">
             <div>
