@@ -30,7 +30,8 @@ import numpy as np
 from services.document_prep import analysis as an
 from services.document_prep.config import DocumentPrepConfig, default_config
 from services.document_prep.document_detector import DocumentDetection, detect_document, warp_document
-from services.document_prep.enhancement import binarize, enhancement_is_safe, plan_and_enhance
+from services.document_prep.enhancement import (binarize, enhancement_is_safe, native_denoise_for_dark_photo,
+                                                plan_and_enhance)
 from services.document_prep.loader import EXIF_ORIENTATION_NAMES, load_image
 from services.document_prep.ocr_scoring import OcrReadout, ocr_engine_available, run_pipeline_ocr, run_raw_ocr
 from services.document_prep.orientation import OrientationResult, detect_orientation, measure_residual_skew
@@ -39,6 +40,9 @@ from services.document_prep.quality import assess_quality
 logger = logging.getLogger(__name__)
 
 VARIANT_ORDER = ("original", "corrected", "enhanced", "binarized")
+# Test-reading score below which even the best version is effectively unreadable (a clean
+# invoice page scores several hundred; see ocr_scoring.summarize_ocr).
+WEAK_READING_SCORE = 40.0
 SELECTION_PRIORITY = {"corrected": 3, "enhanced": 2, "binarized": 1, "original": 0}
 VARIANT_LABELS = {
     "original": "Original photo",
@@ -143,11 +147,24 @@ def prepare_page(
         exif_orientation=loaded.exif_orientation, original_size=list(loaded.original_size),
         working_size=list(loaded.size), decoded_scale=loaded.decoded_scale, notes=loaded.notes))
 
+    # ---- 1b. Native-resolution denoise for dark, grainy photos ------------------------------
+    s = time.perf_counter()
+    working = original
+    if opts.enhance:
+        working, denoise_info = native_denoise_for_dark_photo(original)
+        steps.append(_step(
+            "native_denoise", denoise_info is not None,
+            (f"Dark photo (paper level {denoise_info['paper_level']:.0f}): grain {denoise_info['grain_sigma']:.1f} would be "
+             f"amplified x{denoise_info['brightening_gain']:.1f} by brightening, so it was reduced before any resizing")
+            if denoise_info else "Not needed (photo is not dark and grainy)",
+            **(denoise_info or {})))
+    tick("native_denoise", s)
+
     # ---- 2. Document boundary + perspective -----------------------------------------------
     s = time.perf_counter()
     input_analysis = an.analyze_text(original, config.analysis_max_side)
     det: Optional[DocumentDetection] = None
-    page = original
+    page = working
     geo_scale_used = 1.0
     region_mask = None
     if opts.perspective:
@@ -157,7 +174,7 @@ def prepare_page(
             cv2.fillConvexPoly(region_mask, np.asarray(det.quad, np.int32), 255)
         if det.should_warp:
             warp_scale = _geometry_scale(input_analysis, det.output_size, opts, config)
-            page = warp_document(original, det, warp_scale)
+            page = warp_document(working, det, warp_scale)
             geo_scale_used = warp_scale
         steps.append(_step(
             "document_detection", det.found,
@@ -177,7 +194,7 @@ def prepare_page(
 
     # ---- 3. Orientation + deskew ----------------------------------------------------------
     s = time.perf_counter()
-    page_analysis = an.analyze_text(page, config.analysis_max_side) if page is not original else input_analysis
+    page_analysis = an.analyze_text(page, config.analysis_max_side) if page is not working else input_analysis
     orient: OrientationResult = detect_orientation(page, page_analysis, ocr_fn=ocr_fn,
                                                    ocr_max_side=config.orientation_ocr_max_side)
     rotation = orient.rotation_cw if opts.auto_orientation else 0
@@ -234,7 +251,7 @@ def prepare_page(
     geometry_ok = preserved and horizontal_ok and abs(residual["line_angle"]) < 1.5
     if not geometry_ok:
         warnings.append("Automatic straightening could not be verified; showing the page with only the main rotation applied.")
-        corrected = an.rotate_cardinal_cw(original, rotation)
+        corrected = an.rotate_cardinal_cw(working, rotation)
         corrected_analysis = an.analyze_text(corrected, config.analysis_max_side)
     steps.append(_step(
         "geometry_verification", True,
@@ -355,6 +372,8 @@ def prepare_page(
                                else "OCR engine not available; rule-based choice")
     tick("variant_comparison", s)
 
+    best_scores = selection.get("scores") or {}
+    weak_reading = bool(best_scores) and max(v.get("score", 0.0) for v in best_scores.values()) < WEAK_READING_SCORE
     needs_confirmation = bool(opts.auto_orientation and orient.needs_confirmation and orient.rotation_cw != 0) or (
         opts.auto_orientation and orient.confidence < 0.4)
     timings["total"] = round((time.perf_counter() - t0) * 1000.0, 1)
@@ -387,9 +406,12 @@ def prepare_page(
         "recommended_variant": recommended,
         "selection": selection,
         "needs_user_choice": needs_choice,
-        "retake_recommended": quality_before.grade == "UNREADABLE"
+        # Retake advice follows the capture, not the enhanced result: enlarging or sharpening
+        # can make metrics look better without restoring detail the camera did not record.
+        # A test reading in which even the best version stays unreadable also asks for a retake.
+        "retake_recommended": quality_before.grade in ("POOR", "UNREADABLE")
         or any(i.code == "cut_off" for i in quality_before.issues)
-        or (quality_before.retake_recommended and quality_after.grade in ("POOR", "UNREADABLE")),
+        or weak_reading,
         "warnings": warnings,
         "timings_ms": timings,
         "ocr_evidence_used": bool(use_ocr),

@@ -50,6 +50,53 @@ def _odd(n: float) -> int:
     return n if n % 2 else n + 1
 
 
+def paper_grain_sigma(gray: np.ndarray) -> float:
+    """Grain on the paper itself: robust spread of bright (paper) pixels around their local mean.
+
+    Unlike a 3x3 high-frequency estimator this also sees spatially correlated grain (JPEG,
+    focus blur and enlargement turn sensor noise into small blobs). Central crop for speed.
+    """
+    h, w = gray.shape[:2]
+    ch, cw = min(h, 1200), min(w, 1200)
+    y0, x0 = (h - ch) // 2, (w - cw) // 2
+    crop = gray[y0:y0 + ch, x0:x0 + cw].astype(np.float32)
+    local = cv2.GaussianBlur(crop, (0, 0), 3.0)
+    resid = crop - local
+    paper = local >= np.percentile(local, 60)
+    # keep away from strokes: their edges are large residuals that are not grain
+    paper &= cv2.erode((crop > np.percentile(crop, 25)).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    vals = resid[paper]
+    if vals.size < 500:
+        return 0.0
+    return float(1.4826 * np.median(np.abs(vals - np.median(vals))))
+
+
+def native_denoise_for_dark_photo(img: np.ndarray) -> Tuple[np.ndarray, Optional[Dict[str, float]]]:
+    """Denoise a dark, grainy photo at its native resolution, before any resampling.
+
+    Brightening a dark photo later multiplies its sensor grain by the same gain; once the page
+    has been warped and enlarged the grain turns into blobs that denoisers cannot remove.
+    Returns (image, details) - details is None when the photo is not dark and grainy.
+    """
+    gray = to_gray(img)
+    h, w = gray.shape[:2]
+    crop = gray[h // 4: 3 * h // 4, w // 4: 3 * w // 4]
+    paper = float(np.percentile(crop, 90))
+    if paper >= 150:
+        return img, None
+    grain = paper_grain_sigma(gray)
+    gain = 245.0 / max(20.0, paper)
+    if grain * gain <= 4.0:
+        return img, None
+    hval = float(np.clip(grain * 1.3, 2.0, 12.0))
+    if img.ndim == 3:
+        out = cv2.fastNlMeansDenoisingColored(img, None, hval, hval, 7, 21)
+    else:
+        out = cv2.fastNlMeansDenoising(img, None, hval, 7, 21)
+    return out, {"paper_level": round(paper, 1), "grain_sigma": round(grain, 2), "brightening_gain": round(gain, 2),
+                 "h": round(hval, 2)}
+
+
 def correct_illumination(gray: np.ndarray, char_h: float) -> np.ndarray:
     bg = estimate_background(gray, kernel=_odd(max(15, char_h * 2.5)))
     out = gray.astype(np.float32) / bg.astype(np.float32) * 245.0
@@ -125,12 +172,24 @@ def plan_and_enhance(
             f"uneven lighting {uneven:.2f} / paper level {paper:.0f} measured",
             {"unevenness": uneven, "paper_level": paper}))
 
-    # 2. Denoise only measured grain (NLM keeps stroke edges; strength follows the estimate)
+    # 2. Denoise only measured grain (NLM keeps stroke edges; strength follows the estimate).
+    #    Brightening a dark photo multiplies its sensor noise by the same factor, so after an
+    #    illumination correction the noise is measured again on the corrected image.
     noise = m.get("noise_sigma", 0.0)
+    noise_source = "measured"
+    if any(st.name == "illumination_correction" for st in steps):
+        # Brightening multiplies sensor noise by the same gain (paper level -> ~245). Measuring
+        # it again is unreliable once the page has been enlarged (grain is smoothed into blobs
+        # that a high-frequency estimator under-reads), so the amplified level is predicted.
+        gain = 245.0 / max(20.0, float(m.get("paper_level", 245.0)))
+        remeasured = paper_grain_sigma(gray)
+        if remeasured > noise:
+            noise = remeasured
+            noise_source = f"on the paper after brightening x{gain:.1f}"
     if allow.get("denoise", True) and noise > 4.0:
-        h = float(np.clip(noise * 0.9, 3.0, 12.0))
+        h = float(np.clip(noise * 0.9, 3.0, 16.0))
         gray = cv2.fastNlMeansDenoising(gray, None, h=h, templateWindowSize=7, searchWindowSize=15)
-        steps.append(EnhancementStep("denoise", f"noise sigma {noise:.1f} measured", {"h": round(h, 2)}))
+        steps.append(EnhancementStep("denoise", f"noise sigma {noise:.1f} {noise_source}", {"h": round(h, 2)}))
 
     # 3. Upscale small text (cannot add detail; helps OCR segment small glyphs and decimals)
     factor = 1.0

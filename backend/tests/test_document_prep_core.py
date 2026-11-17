@@ -425,3 +425,59 @@ def test_expired_sessions_are_removed(store):
     assert short.cleanup_expired() >= 1
     with pytest.raises(SessionNotFound):
         store.get_session(user, sid)
+
+
+# --------------------------------------------------------------------------------------
+# Low light: denoise at native resolution, before any resampling
+# --------------------------------------------------------------------------------------
+
+
+def _dark_grainy(page: np.ndarray, seed: int = 4) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    dark = page.astype(np.float32) * 0.3
+    grain = cv2.GaussianBlur(rng.normal(0, 6.0, page.shape[:2]).astype(np.float32), (0, 0), 0.8)[..., None]
+    return np.clip(dark + grain, 0, 255).astype(np.uint8)
+
+
+def test_dark_grainy_photo_is_denoised_before_resampling(clean_page):
+    from services.document_prep.enhancement import native_denoise_for_dark_photo, paper_grain_sigma
+
+    dark = _dark_grainy(clean_page)
+    out, info = native_denoise_for_dark_photo(dark)
+    assert info is not None and info["brightening_gain"] > 3
+    assert paper_grain_sigma(to_gray_u8(out)) < 0.6 * paper_grain_sigma(to_gray_u8(dark))
+    page = prepare_page(png(dark), "dark.png", NO_OCR)
+    step = next(s for s in page.metadata["steps"] if s["step"] == "native_denoise")
+    assert step["applied"]
+    # characters and decimal points survive the whole low-light treatment
+    v = page.metadata["enhancement"]["verification"]
+    assert enhancement_is_safe(v)[0]
+    # the "original" version is still the untouched photo
+    assert np.array_equal(page.variants["original"], dark)
+
+
+def test_normal_photo_is_not_denoised(clean_page):
+    from services.document_prep.enhancement import native_denoise_for_dark_photo
+
+    out, info = native_denoise_for_dark_photo(clean_page)
+    assert info is None and out is clean_page
+
+
+def to_gray_u8(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+
+
+def test_retake_follows_the_capture_not_the_enhanced_metrics(dataset):
+    # A small-text capture of a dense bill: enlargement makes the prepared page measure well
+    # (graded GOOD afterwards), but the detail was never captured, so a retake is still advised.
+    import json
+    from real_world_validation import FIXTURES, photograph
+
+    gt = json.loads((FIXTURES / "ground_truth.json").read_text(encoding="utf-8"))
+    bill = cv2.imread(str(FIXTURES / "invoices" / gt["TC13_sri_balaji_13items"]["filename"]))
+    data = photograph(bill, "small_text", 1000 + 1 * 37 + 7)
+    page = prepare_page(data, "small.jpg", NO_OCR)
+    assert page.metadata["quality_before"]["grade"] in ("POOR", "UNREADABLE")
+    assert page.metadata["retake_recommended"]
+    clear = prepare_page(png(dataset["01_clear_portrait"].pages[0]), "c.png", NO_OCR)
+    assert not clear.metadata["retake_recommended"]
