@@ -169,7 +169,7 @@ def prepare_page(
     region_mask = None
     if opts.perspective:
         det = detect_document(original, input_analysis, config)
-        if det.found and det.quad:
+        if det.found and det.quad and det.outline_reliable:
             region_mask = np.zeros(original.shape[:2], np.uint8)
             cv2.fillConvexPoly(region_mask, np.asarray(det.quad, np.int32), 255)
         if det.should_warp:
@@ -265,7 +265,8 @@ def prepare_page(
     geometry = {
         "rotation_cw": float(rotation),
         "skew_deg": float(skew),
-        "perspective_deviation_deg": float(det.max_corner_deviation_deg) if det and det.found else 0.0,
+        "perspective_deviation_deg": float(det.max_corner_deviation_deg) if det and det.found and det.outline_reliable else 0.0,
+        "cut_off": 1.0 if det is not None and det.cut_off else 0.0,
     }
     quality_before = assess_quality(original, input_analysis, region_mask=region_mask, geometry=geometry)
     quality_corrected = assess_quality(corrected, corrected_analysis)
@@ -396,6 +397,9 @@ def prepare_page(
             "perspective_corrected": bool(det and det.should_warp),
             "quad": det.quad if det else None,
             "reasons": det.reasons if det else [],
+            "outline_reliable": bool(det.outline_reliable) if det else True,
+            "cut_off": bool(det and det.cut_off),
+            "cut_off_edges": list(det.cut_off_edges) if det else [],
         },
         "quality_before": quality_before.to_dict(),
         "quality_corrected": quality_corrected.to_dict(),
@@ -417,3 +421,33 @@ def prepare_page(
         "ocr_evidence_used": bool(use_ocr),
     }
     return PreparedPage(variants=variants, recommended_variant=recommended, metadata=to_jsonable(metadata))
+
+
+def assess_capture(data: bytes, filename: Optional[str] = None,
+                   config: DocumentPrepConfig = default_config) -> Dict[str, Any]:
+    """Quality check of a photo that is uploaded directly (R10): the same capture grading and
+    cut-off detection used by the camera flow, without preparing variants or running OCR."""
+    t0 = time.perf_counter()
+    loaded = load_image(data, filename, config)
+    original = cv2.cvtColor(loaded.rgb, cv2.COLOR_RGB2BGR)
+    analysis = an.analyze_text(original, config.analysis_max_side)
+    det = detect_document(original, analysis, config)
+    region_mask = None
+    if det.found and det.quad and det.outline_reliable:
+        region_mask = np.zeros(original.shape[:2], np.uint8)
+        cv2.fillConvexPoly(region_mask, np.asarray(det.quad, np.int32), 255)
+    geometry = {
+        "perspective_deviation_deg": float(det.max_corner_deviation_deg) if det.found and det.outline_reliable else 0.0,
+        "cut_off": 1.0 if det.cut_off else 0.0,
+    }
+    report = assess_quality(original, analysis, region_mask=region_mask, geometry=geometry)
+    retake = report.grade in ("POOR", "UNREADABLE") or any(i.code == "cut_off" for i in report.issues)
+    return to_jsonable({
+        "filename": filename,
+        "quality": report.to_dict(),
+        "retake_recommended": retake,
+        "document": {"found": det.found, "outline_reliable": det.outline_reliable, "cut_off": det.cut_off,
+                     "cut_off_edges": det.cut_off_edges, "reasons": det.reasons},
+        "exif_orientation": loaded.exif_orientation,
+        "seconds": round(time.perf_counter() - t0, 2),
+    })

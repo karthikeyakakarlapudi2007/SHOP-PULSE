@@ -61,6 +61,8 @@ class CanonicalInvoiceItemSchema(BaseModel):
     validation_issues: List[str] = Field(default_factory=list, description="Problems that need review")
     suggestions: List[str] = Field(default_factory=list, description="Possible OCR corrections (not applied)")
     suggested_rate: Optional[float] = Field(None, description="Amount ÷ quantity when no rate was printed (not applied)")
+    suggested_quantity: Optional[float] = Field(
+        None, description="Possible reading of a quantity with a lost decimal point, e.g. 25 -> 2.5 (not applied)")
     matched_product_id: Optional[UUID] = Field(None, description="ID of matched existing product")
     matched_product_name: Optional[str] = Field(None, description="Name of matched existing product")
     match_score: Optional[float] = Field(None, description="Inventory similarity score (0-1)")
@@ -74,6 +76,27 @@ class CanonicalInvoiceItemSchema(BaseModel):
     is_verified: bool = Field(False, description="Whether item has been verified by user or math")
     user_edited: bool = Field(False, description="Whether item has been edited by user")
     original_values: Optional[Dict[str, Any]] = Field(None, description="Original OCR extraction values prior to edits")
+    # --- Read vs calculated, and separately printed financial parts (all optional, additive) ---
+    derived_fields: List[str] = Field(
+        default_factory=list,
+        description="Fields CALCULATED rather than read (quantity, purchase_price, line_total); always need review")
+    cgst_amount: Optional[float] = Field(None, description="CGST amount printed for the line")
+    sgst_amount: Optional[float] = Field(None, description="SGST / UTGST amount printed for the line")
+    igst_amount: Optional[float] = Field(None, description="IGST amount printed for the line")
+    scheme_discount: Optional[float] = Field(None, description="Scheme discount amount printed for the line")
+    other_discount: Optional[float] = Field(None, description="Other discount (e.g. RS / trade discount) printed for the line")
+    discount_components: Dict[str, float] = Field(
+        default_factory=dict, description="Every printed discount column by name; discount is their sum")
+    net_amount: Optional[float] = Field(None, description="Printed line total including tax (Net / Amount column)")
+    cases: Optional[float] = Field(None, description="Cases printed for the line (Cs column or 'cases/pieces')")
+    units_per_case: Optional[float] = Field(None, description="Units per case printed for the line (e.g. UPC column)")
+    loose_quantity: Optional[float] = Field(None, description="Loose pieces printed for the line (Pcs column)")
+    free_quantity: Optional[float] = Field(
+        None, description="Free units on the line (e.g. '10+1' -> 1; a printed free line -> its whole quantity)")
+    paid_quantity: Optional[float] = Field(
+        None, description="Paid units when free units are printed ('10+1' -> 10); quantity = paid + free received")
+    quantity_text: Optional[str] = Field(None, description="Quantity exactly as printed (e.g. '0/12', '2+1')")
+    is_free_item: bool = Field(False, description="Printed free / promotional line (rate 0.00); kept with its quantity")
 
 
 class DetectedColumnSchema(BaseModel):
@@ -127,6 +150,15 @@ class InvoiceExtractResponse(BaseModel):
     total_review_items: int = 0
     total_excluded_items: int = 0
     pipeline_stages: List[str] = Field(default_factory=list, description="Stages completed during extraction")
+    printed_total: Optional[float] = Field(
+        None, description="Grand total printed on the invoice, when it could be identified reliably")
+    total_reconciliation: Optional[Dict[str, Any]] = Field(
+        None, description="Line amounts vs printed total: status matched | mismatch | not_completed, message, "
+                          "difference, adjustments used (warning only; values are never changed)")
+    bundle_notes: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Promotional bundle headings printed on the invoice (e.g. 'With Free Product'); "
+                    "informational only, never stock lines")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -143,6 +175,23 @@ class InvoiceConfirmItem(BaseModel):
         None, description="Origin of the MRP; treated as MANUAL when omitted")
     line_amount: Optional[float] = Field(None, ge=0, description="Line amount printed on the invoice")
     matched_product_id: Optional[UUID] = Field(None, description="Existing product ID if matched")
+    # Promotions: received quantity = paid + free (e.g. 10+1 -> quantity 11, paid 10, free 1).
+    # The printed rate / amount are kept; no cost is redistributed to the free units.
+    paid_quantity: Optional[float] = Field(None, ge=0, description="Paid units included in quantity")
+    free_quantity: Optional[float] = Field(None, ge=0, description="Free units included in quantity")
+    is_free_item: bool = Field(False, description="Printed free line (rate 0.00); never sets the product's cost")
+
+    @model_validator(mode="after")
+    def free_units_add_up(self) -> "InvoiceConfirmItem":
+        if self.paid_quantity is not None and self.free_quantity is not None:
+            if abs(self.quantity - (self.paid_quantity + self.free_quantity)) > 1e-9:
+                raise ValueError("quantity must equal paid + free units "
+                                 f"({self.paid_quantity:g} + {self.free_quantity:g})")
+        return self
+
+    @property
+    def has_free_units(self) -> bool:
+        return self.is_free_item or (self.free_quantity or 0) > 0
 
     @model_validator(mode="before")
     @classmethod
@@ -153,11 +202,16 @@ class InvoiceConfirmItem(BaseModel):
                     data["name"] = data["product_name"]
         return data
 
-    @field_validator("quantity")
+    @field_validator("quantity", "paid_quantity", "free_quantity")
     @classmethod
-    def whole_units(cls, v: float) -> float:
+    def whole_units(cls, v: Optional[float]) -> Optional[float]:
+        # Stock is tracked in whole units. A fractional quantity (2.5 kg) is rejected, never rounded:
+        # the whole request fails validation, so no stock is posted for the invoice.
+        if v is None:
+            return v
         if abs(v - round(v)) > 1e-9:
-            raise ValueError("quantity must be a whole number of stock units (stock is tracked in whole units)")
+            raise ValueError(f"quantity {v:g} is not a whole number: fractional stock quantities are not currently "
+                             "supported (stock is tracked in whole units). Correct the quantity before adding to stock.")
         return float(round(v))
 
 
@@ -200,6 +254,16 @@ class InvoiceConfirmRequest(BaseModel):
     invoice_number: Optional[str] = None
     invoice_date: Optional[str] = None
     items: List[InvoiceConfirmItem] = Field(..., min_length=1)
+    confirm_free_units: bool = Field(
+        False, description="Explicit confirmation that free / promotional units may be posted to stock")
+
+    @model_validator(mode="after")
+    def free_units_need_confirmation(self) -> "InvoiceConfirmRequest":
+        names = [i.name for i in self.items if i.has_free_units]
+        if names and not self.confirm_free_units:
+            raise ValueError("Free / promotional units must be confirmed before they are added to stock: "
+                             + ", ".join(names))
+        return self
 
     @field_validator("supplier_name", "invoice_number", mode="before")
     @classmethod
@@ -238,6 +302,9 @@ class InvoiceConfirmResponse(BaseModel):
     created_at: datetime
     processing_status: Optional[str] = "CONFIRMED"
     review_status: Optional[str] = "REVIEWED"
+    promotional_lines: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lines posted with free units: received, paid and free quantities with the printed rate and amount")
     saved_products: List[ProductResponse] = Field(
         default_factory=list,
         description="List of all saved and restocked product details with IDs, stock, and prices"

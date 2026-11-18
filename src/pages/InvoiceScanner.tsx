@@ -16,7 +16,24 @@ import {
   FileText
 } from 'lucide-react';
 import { getAccessToken } from '../api/client';
-import { documentPrepApi, type PrepExtractResult } from '../api/documentPrep';
+import { documentPrepApi, type PhotoAssessment, type PrepExtractResult } from '../api/documentPrep';
+import {
+  calculatedFieldLabels,
+  componentSummary,
+  formatMoney,
+  fractionalQuantityNotice,
+  hasFractionalQuantity,
+  hasFreeUnits,
+  isCalculated,
+  isPhotoFile,
+  photoWarning,
+  promoBreakdown,
+  promoPayload,
+  reconciliationNotice,
+  round3,
+  type PhotoWarning,
+  type TotalReconciliation,
+} from '../utils/invoiceReliability';
 import { DocumentPrepWorkflow } from '../components/invoice-capture/DocumentPrepWorkflow';
 import {
   META_LABELS,
@@ -45,8 +62,24 @@ export interface ExtractedItem {
   /** Possible corrections from the extraction (never applied automatically). */
   suggestions?: string[];
   suggested_rate?: number | null;
+  /** Possible reading of a quantity whose decimal point was lost (never applied automatically). */
+  suggested_quantity?: number | null;
   matched_product_id?: string | null;
   matched_product_name?: string | null;
+  /** Fields calculated rather than read from the invoice (always reviewed). */
+  derived_fields?: string[];
+  /** Printed free / promotional line (rate 0.00), kept with its quantity. */
+  is_free_item?: boolean;
+  free_quantity?: number | null;
+  paid_quantity?: number | null;
+  /** Quantity as extracted, kept so a fractional reading (2.5 kg) stays visible while it is corrected. */
+  extracted_quantity?: number | null;
+  taxable_amount?: number | null;
+  cgst_amount?: number | null;
+  sgst_amount?: number | null;
+  igst_amount?: number | null;
+  scheme_discount?: number | null;
+  other_discount?: number | null;
 }
 
 export interface ExtractedInvoice {
@@ -61,6 +94,10 @@ export interface ExtractedInvoice {
   confidence_score: number;
   items: ExtractedItem[];
   excel_url?: string;
+  /** Promotional bundle headings printed on the invoice (informational, never stock lines). */
+  bundle_notes?: { text: string; quantity_text?: string | null }[];
+  /** Line amounts vs the printed grand total (warning only). */
+  total_reconciliation?: TotalReconciliation | null;
 }
 
 export const InvoiceScanner: React.FC = () => {
@@ -81,6 +118,12 @@ export const InvoiceScanner: React.FC = () => {
   const [workflowKey, setWorkflowKey] = useState(0);
   // Header details still empty when the user pressed Confirm (they must acknowledge them once)
   const [missingAtConfirm, setMissingAtConfirm] = useState<InvoiceMetaField[]>([]);
+  // Quality warning for a photo sent straight to OCR (the camera flow shows its own)
+  const [directPhotoWarning, setDirectPhotoWarning] = useState<PhotoWarning | null>(null);
+  // Lines with free / promotional units awaiting the user's confirmation before stock is posted
+  const [freeUnitsToConfirm, setFreeUnitsToConfirm] = useState<string[]>([]);
+  // Confirm was blocked because a selected line has a fractional quantity (never rounded)
+  const [fractionalBlocked, setFractionalBlocked] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -145,11 +188,25 @@ export const InvoiceScanner: React.FC = () => {
       validation_issues: item.validation_issues || [],
       suggestions: item.suggestions || [],
       suggested_rate: typeof item.suggested_rate === 'number' ? item.suggested_rate : null,
+      suggested_quantity: typeof item.suggested_quantity === 'number' ? item.suggested_quantity : null,
       matched_product_id: item.matched_product_id || null,
       matched_product_name: item.matched_product_name || null,
+      derived_fields: Array.isArray(item.derived_fields) ? item.derived_fields : [],
+      is_free_item: Boolean(item.is_free_item),
+      free_quantity: typeof item.free_quantity === 'number' ? item.free_quantity : null,
+      paid_quantity: typeof item.paid_quantity === 'number' ? item.paid_quantity : null,
+      extracted_quantity: typeof item.quantity === 'number' ? item.quantity : null,
+      taxable_amount: typeof item.taxable_amount === 'number' ? item.taxable_amount : null,
+      cgst_amount: typeof item.cgst_amount === 'number' ? item.cgst_amount : null,
+      sgst_amount: typeof item.sgst_amount === 'number' ? item.sgst_amount : null,
+      igst_amount: typeof item.igst_amount === 'number' ? item.igst_amount : null,
+      scheme_discount: typeof item.scheme_discount === 'number' ? item.scheme_discount : null,
+      other_discount: typeof item.other_discount === 'number' ? item.other_discount : null,
     }));
 
     setMissingAtConfirm([]);
+    setFreeUnitsToConfirm([]);
+    setFractionalBlocked(false);
     setExtractedData({
       id: data.id,
       // Only what OCR found; missing details stay empty for the user to fill in
@@ -159,6 +216,8 @@ export const InvoiceScanner: React.FC = () => {
       confidence_score: data.confidence_score || 90,
       items: normalizedItems,
       excel_url: data.excel_url || `/api/v1/invoices/${data.id}/excel`,
+      bundle_notes: Array.isArray(data.bundle_notes) ? data.bundle_notes : [],
+      total_reconciliation: data.total_reconciliation ?? null,
     });
     setSelectedItemIds(new Set(normalizedItems.map((i) => i.id)));
     setConfirmedProducts([]);
@@ -178,6 +237,13 @@ export const InvoiceScanner: React.FC = () => {
 
     const formData = new FormData();
     formData.append('file', file);
+
+    // A photo sent straight to OCR gets the same quality check as the camera flow (in parallel;
+    // a failed check never blocks the extraction)
+    setDirectPhotoWarning(null);
+    const assessment: Promise<PhotoAssessment | null> = isPhotoFile(file)
+      ? documentPrepApi.assess(file, file.name).catch(() => null)
+      : Promise.resolve(null);
 
     try {
       setProgressStage('Preprocessing image & deskewing layout...');
@@ -205,6 +271,7 @@ export const InvoiceScanner: React.FC = () => {
       const data = await response.json();
       applyExtraction(data);
       setPreparation(null);
+      setDirectPhotoWarning(photoWarning(await assessment));
     } catch (err: any) {
       console.error('Invoice scanning error:', err);
       setError(err.message || 'Invoice extraction failed. Please try again.');
@@ -223,7 +290,7 @@ export const InvoiceScanner: React.FC = () => {
           const updated = { ...item, [field]: value };
           // If qty and price edited, recompute amount
           if ((field === 'quantity' || field === 'purchase_price') && updated.quantity && updated.purchase_price) {
-            updated.amount = Math.round(updated.quantity * updated.purchase_price * 100) / 100;
+            updated.amount = round3(updated.quantity * updated.purchase_price);
           }
           return updated;
         }
@@ -233,7 +300,7 @@ export const InvoiceScanner: React.FC = () => {
       return {
         ...prev,
         items: updatedItems,
-        total_amount: Math.round(newTotal * 100) / 100,
+        total_amount: round3(newTotal),
       };
     });
   };
@@ -248,7 +315,7 @@ export const InvoiceScanner: React.FC = () => {
         ...prev,
         items: updatedItems,
         total_items: updatedItems.length,
-        total_amount: Math.round(newTotal * 100) / 100,
+        total_amount: round3(newTotal),
       };
     });
     setSelectedItemIds((prev) => {
@@ -310,7 +377,7 @@ export const InvoiceScanner: React.FC = () => {
     setExtractedData((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
-  const handleConfirmToInventory = async (acceptMissingDetails = false) => {
+  const handleConfirmToInventory = async (acceptMissingDetails = false, acceptFreeUnits = false) => {
     if (!extractedData || extractedData.items.length === 0) return;
     const selectedItems = extractedData.items.filter((i) => selectedItemIds.has(i.id));
     if (selectedItems.length === 0) {
@@ -322,7 +389,8 @@ export const InvoiceScanner: React.FC = () => {
     const invalidItems = selectedItems.filter((i) => {
       const hasName = Boolean(i.product_name && i.product_name.trim());
       const hasValidQty = typeof i.quantity === 'number' && i.quantity > 0;
-      const hasValidPrice = typeof i.purchase_price === 'number' && i.purchase_price > 0;
+      // A printed free item keeps its printed rate of 0.00 (never discarded for being free)
+      const hasValidPrice = typeof i.purchase_price === 'number' && (i.purchase_price > 0 || (Boolean(i.is_free_item) && i.purchase_price === 0));
       return !hasName || !hasValidQty || !hasValidPrice;
     });
 
@@ -332,6 +400,16 @@ export const InvoiceScanner: React.FC = () => {
       );
       return;
     }
+
+    // Stock is tracked in whole units: a fractional quantity (2.5 kg) is never rounded. Nothing is posted
+    // for the invoice until the user corrects or deselects the line.
+    if (selectedItems.some(hasFractionalQuantity)) {
+      setMissingAtConfirm([]);
+      setFreeUnitsToConfirm([]);
+      setFractionalBlocked(true);
+      return;
+    }
+    setFractionalBlocked(false);
 
     const dateProblem = invoiceDateError(extractedData.invoice_date);
     if (dateProblem) {
@@ -345,6 +423,13 @@ export const InvoiceScanner: React.FC = () => {
       return;
     }
     setMissingAtConfirm([]);
+    const freeLines = selectedItems.filter((i) => hasFreeUnits(i));
+    if (freeLines.length > 0 && !acceptFreeUnits) {
+      // Free units are posted only after the user confirms them explicitly
+      setFreeUnitsToConfirm(freeLines.map((i) => `${i.product_name}: ${promoBreakdown(i) ?? `${i.quantity} units`}`));
+      return;
+    }
+    setFreeUnitsToConfirm([]);
 
     setIsConfirming(true);
     setError(null);
@@ -362,6 +447,7 @@ export const InvoiceScanner: React.FC = () => {
       const payload = {
         // Empty header details are left out (stored as unknown), never replaced
         ...confirmHeaderPayload(extractedData),
+        ...(freeLines.length > 0 ? { confirm_free_units: true } : {}),
         items: selectedItems.map((i) => {
           const purchasePrice = Number(i.purchase_price);
           // Preserve selling price, fall back to MRP or a standard margin if brand new
@@ -376,17 +462,20 @@ export const InvoiceScanner: React.FC = () => {
             name: i.product_name.trim(),
             product_name: i.product_name.trim(),
             category: i.category || 'Groceries',
-            quantity: Math.max(1, Math.round(Number(i.quantity))),
+            // Whole units only (checked above); never rounded
+            quantity: Number(i.quantity),
             unit: i.unit?.trim() || 'pcs',
             purchase_price: purchasePrice,
             selling_price: sellingPrice,
             mrp: typeof i.mrp === 'number' && i.mrp > 0 ? i.mrp : undefined,
             mrp_source: typeof i.mrp === 'number' && i.mrp > 0 ? 'INVOICE' : undefined,
+            // Printed amount as printed; otherwise paid units x rate kept to 3 decimals (never paise)
             line_amount:
-              typeof i.amount === 'number' && i.amount > 0
+              typeof i.amount === 'number' && (i.amount > 0 || i.is_free_item)
                 ? i.amount
-                : Math.round(purchasePrice * Number(i.quantity) * 100) / 100,
+                : round3(purchasePrice * Number(promoPayload(i).paid_quantity ?? i.quantity)),
             matched_product_id: i.matched_product_id || undefined,
+            ...promoPayload(i),
           };
         }),
       };
@@ -415,7 +504,7 @@ export const InvoiceScanner: React.FC = () => {
       const totalAmt = resData.total_amount ?? 0;
 
       setConfirmSuccess(
-        `Successfully confirmed ${selectedItems.length} items to your shelves (${restocked} restocked, ${created} newly created)! Total: ₹${totalAmt.toFixed(2)} (${totalUnits} units).`
+        `Successfully confirmed ${selectedItems.length} items to your shelves (${restocked} restocked, ${created} newly created)! Total: ${formatMoney(totalAmt)} (${totalUnits} units).`
       );
 
       if (Array.isArray(resData.saved_products)) {
@@ -438,6 +527,7 @@ export const InvoiceScanner: React.FC = () => {
     setConfirmSuccess(null);
     applyExtraction(result.extraction);
     setPreparation(result.preparation);
+    setDirectPhotoWarning(null);
   };
 
   const [isRetryingOriginal, setIsRetryingOriginal] = useState(false);
@@ -465,6 +555,8 @@ export const InvoiceScanner: React.FC = () => {
     setError(null);
     setConfirmSuccess(null);
     setMissingAtConfirm([]);
+    setFreeUnitsToConfirm([]);
+    setFractionalBlocked(false);
   };
 
   const metaField = (field: InvoiceMetaField, placeholder: string, extraError?: string | null) => {
@@ -496,6 +588,13 @@ export const InvoiceScanner: React.FC = () => {
       </div>
     );
   };
+
+  // Shown after a blocked confirm while a selected line still has a fractional quantity; disappears
+  // once the user corrects or deselects it
+  const fractionalNotice =
+    fractionalBlocked && extractedData
+      ? fractionalQuantityNotice(extractedData.items.filter((i) => selectedItemIds.has(i.id)))
+      : null;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -795,7 +894,7 @@ export const InvoiceScanner: React.FC = () => {
             <div>
               <p className="text-[11px] font-semibold text-[#5E6C64] uppercase tracking-wider">Total Value</p>
               <p className="text-sm font-black text-[#23866A]">
-                ₹{extractedData.total_amount.toFixed(2)}
+                {formatMoney(extractedData.total_amount)}
               </p>
             </div>
           </div>
@@ -817,6 +916,31 @@ export const InvoiceScanner: React.FC = () => {
                 className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-[#D6AE62]/60 bg-white hover:bg-[#FAF8F2] text-xs font-bold text-[#153D32] cursor-pointer disabled:opacity-50"
               >
                 Add to stock without {missingAtConfirm.length > 1 ? 'them' : 'it'}
+              </button>
+            </div>
+          )}
+
+          {fractionalNotice && (
+            <div role="alert" data-testid="fractional-quantity-block" className="flex items-start gap-3 p-4 rounded-xl bg-[#FDF1EF] border border-[#EF806D]/50 text-[#9A3B2B] text-xs sm:text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1 min-w-0 break-words">{fractionalNotice}</span>
+            </div>
+          )}
+
+          {freeUnitsToConfirm.length > 0 && (
+            <div role="alert" data-testid="free-units-confirm" className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-[#E7F6F1] border border-[#23866A]/30 text-[#16704F] text-xs sm:text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1">
+                Free / promotional units will be added to stock: {freeUnitsToConfirm.join('; ')}. The printed rate and
+                amount are kept; no cost is spread over the free units. Please confirm.
+              </span>
+              <button
+                type="button"
+                onClick={() => handleConfirmToInventory(true, true)}
+                disabled={isConfirming}
+                className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-3.5 py-2 rounded-xl border border-[#23866A]/50 bg-white hover:bg-[#FAF8F2] text-xs font-bold text-[#153D32] cursor-pointer disabled:opacity-50"
+              >
+                Add to stock including free units
               </button>
             </div>
           )}
@@ -858,6 +982,61 @@ export const InvoiceScanner: React.FC = () => {
               </div>
             </div>
 
+            {directPhotoWarning && (
+              <div
+                role="alert"
+                data-testid="direct-photo-warning"
+                className="mx-4 mt-3 rounded-xl border border-[#E8C88A] bg-[#FBF4E7] px-4 py-3 text-xs text-[#8A6420]"
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle className="w-4 h-4" />
+                  {directPhotoWarning.title}
+                </div>
+                <ul className="mt-1 list-disc pl-6 space-y-0.5">
+                  {directPhotoWarning.messages.map((m) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
+                {directPhotoWarning.retake && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExtractedData(null);
+                      setDirectPhotoWarning(null);
+                      setInputMode('camera');
+                    }}
+                    className="mt-2 inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-lg border border-[#8A6420]/40 bg-white font-bold text-[#8A6420] cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    Retake the photo
+                  </button>
+                )}
+              </div>
+            )}
+
+            {(() => {
+              const notice = reconciliationNotice(extractedData.total_reconciliation);
+              if (!notice) return null;
+              const tone = notice.tone === 'warn'
+                ? 'border-[#E8C88A] bg-[#FBF4E7] text-[#8A6420]'
+                : notice.tone === 'ok'
+                ? 'border-[#23866A]/30 bg-[#E7F6F1] text-[#16704F]'
+                : 'border-[#DDE9DF] bg-[#FAF8F2] text-[#5E6C64]';
+              return (
+                <div data-testid="total-reconciliation" role={notice.tone === 'warn' ? 'alert' : 'status'}
+                     className={`mx-4 mt-3 rounded-xl border px-4 py-2 text-xs ${tone}`}>
+                  <span className="font-bold">Invoice total check: </span>{notice.text}
+                </div>
+              );
+            })()}
+
+            {extractedData.bundle_notes && extractedData.bundle_notes.length > 0 && (
+              <div data-testid="bundle-notes" className="mx-4 mt-3 rounded-xl border border-[#DDE9DF] bg-[#FAF8F2] px-4 py-2 text-[11px] text-[#5E6C64]">
+                <span className="font-bold text-[#153D32]">Promotional bundles on this invoice (not stock lines): </span>
+                {extractedData.bundle_notes.map((b) => `${b.text}${b.quantity_text ? ` (${b.quantity_text})` : ''}`).join('; ')}
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -888,8 +1067,14 @@ export const InvoiceScanner: React.FC = () => {
                   {extractedData.items.map((item, idx) => {
                     const isSelected = selectedItemIds.has(item.id);
                     const isNameInvalid = !item.product_name || !item.product_name.trim();
-                    const isQtyInvalid = item.quantity === null || item.quantity === undefined || item.quantity <= 0;
-                    const isPriceInvalid = item.purchase_price === null || item.purchase_price === undefined || item.purchase_price <= 0;
+                    const isQtyFractional = hasFractionalQuantity(item);
+                    const isQtyInvalid = item.quantity === null || item.quantity === undefined || item.quantity <= 0 || isQtyFractional;
+                    const extractedFractional =
+                      typeof item.extracted_quantity === 'number' && hasFractionalQuantity({ quantity: item.extracted_quantity });
+                    const isPriceInvalid =
+                      item.purchase_price === null ||
+                      item.purchase_price === undefined ||
+                      (item.purchase_price <= 0 && !(item.is_free_item && item.purchase_price === 0));
 
                     return (
                       <tr 
@@ -933,6 +1118,23 @@ export const InvoiceScanner: React.FC = () => {
                               Matches: {item.matched_product_name}
                             </span>
                           )}
+                          {(item.is_free_item || calculatedFieldLabels(item).length > 0) && (
+                            <div className="mt-1 px-2 flex flex-wrap gap-1">
+                              {item.is_free_item && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#E7F6F1] text-[#16704F]">
+                                  Free item
+                                </span>
+                              )}
+                              {calculatedFieldLabels(item).map((f) => (
+                                <span key={f} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#FBF4E7] text-[#8A6420]">
+                                  {f} calculated, not read
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {componentSummary(item) && (
+                            <span className="text-[10px] text-[#5E6C64] block px-2 mt-0.5">{componentSummary(item)}</span>
+                          )}
                           {item.needs_review && (item.validation_issues?.length || item.suggestions?.length) ? (
                             <div className="mt-1 px-2 space-y-1">
                               {(item.validation_issues || []).slice(0, 2).map((issue) => (
@@ -951,7 +1153,16 @@ export const InvoiceScanner: React.FC = () => {
                                   onClick={() => handleUpdateItem(item.id, 'purchase_price', item.suggested_rate)}
                                   className="mt-0.5 inline-flex items-center px-2 py-1 rounded-md border border-[#23866A]/40 bg-[#E7F6F1] text-[10px] font-bold text-[#16704F] cursor-pointer"
                                 >
-                                  Use ₹{item.suggested_rate.toFixed(2)} as rate
+                                  Use {formatMoney(item.suggested_rate)} as rate
+                                </button>
+                              )}
+                              {typeof item.suggested_quantity === 'number' && item.suggested_quantity !== item.quantity && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateItem(item.id, 'quantity', item.suggested_quantity)}
+                                  className="mt-0.5 ml-1 inline-flex items-center px-2 py-1 rounded-md border border-[#23866A]/40 bg-[#E7F6F1] text-[10px] font-bold text-[#16704F] cursor-pointer"
+                                >
+                                  Use {item.suggested_quantity} as quantity
                                 </button>
                               )}
                             </div>
@@ -972,8 +1183,19 @@ export const InvoiceScanner: React.FC = () => {
                           />
                           {isQtyInvalid && (
                             <span className="text-[10px] text-[#EF806D] font-bold block px-1 mt-0.5">
-                              Qty &gt; 0
+                              {isQtyFractional ? 'Whole units only' : 'Qty > 0'}
                             </span>
+                          )}
+                          {extractedFractional && (
+                            <span data-testid="extracted-quantity" className="text-[10px] text-[#8A6420] font-semibold block px-1 mt-0.5">
+                              Read as {item.extracted_quantity}{item.unit ? ` ${item.unit}` : ''}
+                            </span>
+                          )}
+                          {isCalculated(item, 'quantity') && (
+                            <span className="text-[10px] text-[#8A6420] font-semibold block px-1 mt-0.5">calculated</span>
+                          )}
+                          {promoBreakdown(item) && (
+                            <span className="text-[10px] text-[#16704F] font-semibold block px-1 mt-0.5">{promoBreakdown(item)}</span>
                           )}
                         </td>
                         <td className="py-3 px-3">
@@ -989,10 +1211,13 @@ export const InvoiceScanner: React.FC = () => {
                             <span className="absolute left-1.5 top-1 text-[#5E6C64]">₹</span>
                             <input
                               type="number"
-                              step="0.01"
-                              min="0.01"
+                              step="0.001"
+                              min="0"
                               value={item.purchase_price ?? ''}
-                              onChange={(e) => handleUpdateItem(item.id, 'purchase_price', parseFloat(e.target.value) || null)}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value);
+                                handleUpdateItem(item.id, 'purchase_price', Number.isFinite(v) ? v : null);
+                              }}
                               className={`w-full pl-5 pr-1 py-1 rounded-md border text-xs font-bold focus:outline-none ${
                                 isPriceInvalid
                                   ? 'border-[#EF806D] bg-[#FDF1EF] text-[#EF806D]'
@@ -1005,13 +1230,16 @@ export const InvoiceScanner: React.FC = () => {
                               Rate required
                             </span>
                           )}
+                          {isCalculated(item, 'purchase_price') && (
+                            <span className="text-[10px] text-[#8A6420] font-semibold block px-1 mt-0.5">calculated</span>
+                          )}
                         </td>
                         <td className="py-3 px-3">
                           <div className="relative">
                             <span className="absolute left-1.5 top-1 text-[#5E6C64]">₹</span>
                             <input
                               type="number"
-                              step="0.01"
+                              step="0.001"
                               placeholder={
                                 item.mrp
                                   ? String(item.mrp)
@@ -1030,7 +1258,7 @@ export const InvoiceScanner: React.FC = () => {
                             <span className="absolute left-1.5 top-1 text-[#5E6C64]">₹</span>
                             <input
                               type="number"
-                              step="0.01"
+                              step="0.001"
                               value={item.mrp ?? ''}
                               onChange={(e) => handleUpdateItem(item.id, 'mrp', parseFloat(e.target.value) || null)}
                               className="w-full pl-5 pr-1 py-1 rounded-md border border-transparent hover:border-[#DDE9DF] focus:border-[#153D32] focus:bg-white focus:outline-none font-medium text-[#252D29]"
@@ -1039,7 +1267,7 @@ export const InvoiceScanner: React.FC = () => {
                         </td>
                         <td className="py-3 px-3">
                           <span className="font-extrabold text-[#23866A] px-2 block">
-                            ₹{(item.amount ?? (item.quantity && item.purchase_price ? item.quantity * item.purchase_price : 0)).toFixed(2)}
+                            {formatMoney(item.amount ?? (item.quantity && item.purchase_price ? round3(item.quantity * item.purchase_price) : 0))}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-center">
@@ -1082,7 +1310,7 @@ export const InvoiceScanner: React.FC = () => {
               <div className="text-right">
                 <span className="text-xs font-semibold text-[#5E6C64] mr-2">Grand Total:</span>
                 <span className="text-base font-black text-[#153D32]">
-                  ₹{extractedData.total_amount.toFixed(2)}
+                  {formatMoney(extractedData.total_amount)}
                 </span>
               </div>
             </div>

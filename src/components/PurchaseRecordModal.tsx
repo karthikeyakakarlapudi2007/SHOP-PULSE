@@ -6,7 +6,7 @@ import { PurchaseRecordDocument } from './PrintDocuments';
 import { useDialog } from '../hooks/useDialog';
 import { purchasesApi, type PurchaseBackend } from '../api/purchases';
 import { describeError } from '../utils/errorHandler';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatPrintedCurrency } from '../utils/formatCurrency';
 
 interface PurchaseRecordModalProps {
   purchaseId: string | null;
@@ -14,8 +14,9 @@ interface PurchaseRecordModalProps {
   onClose: () => void;
 }
 
+// Supplier-invoice values keep a printed third decimal (₹62.988)
 const money = (value: number | null | undefined) =>
-  value === null || value === undefined ? '—' : formatCurrency(Number(value));
+  value === null || value === undefined ? '—' : formatPrintedCurrency(Number(value));
 
 /** Read-only view of a recorded supplier invoice, with a print layout. Render with `key={purchaseId}`. */
 export const PurchaseRecordModal: React.FC<PurchaseRecordModalProps> = ({ purchaseId, shopName, onClose }) => {

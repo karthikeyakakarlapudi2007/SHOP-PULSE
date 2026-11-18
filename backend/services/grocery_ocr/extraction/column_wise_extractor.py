@@ -29,6 +29,14 @@ from services.grocery_ocr.schemas.table import DetectedColumn, TableCell, TableR
 
 logger = get_logger("extraction.column_wise_extractor")
 
+# "0/12" = cases / loose pieces; "2+1" = paid + free
+_CASES_SLASH_PIECES_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*$")
+_PLUS_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)\s*$")
+# Quantity headings that mean loose pieces (as opposed to a total quantity)
+_LOOSE_PIECES_HEADER_RE = re.compile(r"\b(?:pcs|pieces|ea|loose|units?)\b", re.I)
+# Informational promotional bundle heading printed above the paid and free lines
+_BUNDLE_HEADING_RE = re.compile(r"\(?\s*with\s+free\s+product", re.I)
+
 # Metadata keywords that identify footer or non-item lines
 NON_ITEM_PREFIXES = (
     "bank details", "terms and conditions", "total in words",
@@ -66,6 +74,17 @@ class ExtractedRowRecord(BaseModel):
     cell_provenance: Dict[str, str] = Field(default_factory=dict)
     financial_role_confidence: Dict[str, float] = Field(default_factory=dict)
     is_valid: bool = True
+    # Separately printed financial parts (CGST, SGST/UTGST, scheme / other discounts, ...)
+    components: Dict[str, Decimal] = Field(default_factory=dict)
+    # Line-level reasons for manual review and possible readings (never applied automatically)
+    review_reasons: List[str] = Field(default_factory=list)
+    suggestions: List[str] = Field(default_factory=list)
+    # Quantity structure printed on the invoice (cases / units per case / loose pieces / free)
+    quantity_details: Dict[str, Any] = Field(default_factory=dict)
+    derived_fields: List[str] = Field(default_factory=list)
+    is_free_item: bool = False
+    is_bundle_header: bool = False
+    barcode: Optional[str] = None
 
 
 class ColumnWiseExtractor:
@@ -149,6 +168,9 @@ class ColumnWiseExtractor:
 
         # 3. Financial Fields Extraction
         fin_conf: Dict[str, float] = {}
+        components: Dict[str, Decimal] = {}
+        review_reasons: List[str] = []
+        suggestions: List[str] = []
         if hasattr(self.price_extractor, "extract_financials_detailed"):
             fin_res = self.price_extractor.extract_financials_detailed(row, columns)
             p_price = fin_res.purchase_price
@@ -164,6 +186,9 @@ class ColumnWiseExtractor:
             fin_conf = fin_res.financial_role_confidence
             if fin_res.issues:
                 warnings.extend(fin_res.issues)
+            components = dict(getattr(fin_res, "components", {}) or {})
+            review_reasons.extend(getattr(fin_res, "review_reasons", []) or [])
+            suggestions.extend(getattr(fin_res, "suggestions", []) or [])
         else:
             prices = self.price_extractor.extract_prices(row, columns)
             p_price = prices.get("purchase_price")
@@ -176,11 +201,43 @@ class ColumnWiseExtractor:
             taxable_val = prices.get("taxable_amount")
             prn_amt = prices.get("printed_amount")
 
+        # 2b. Quantity structure: cases / units per case / loose pieces, "cases/pieces" (0/12) and
+        # "paid+free" (2+1). Pieces are calculated only when the relationship is printed explicitly.
+        qty, qty_details, derived_fields, qty_reasons, barcode = self._resolve_quantity_structure(
+            row, columns, qty, raw_qty)
+        review_reasons.extend(qty_reasons)
+        if qty_details.get("raw_quantity") and raw_qty is None:
+            raw_qty = qty_details["raw_quantity"]
+
+        # 2c. Promotional bundle heading ("... (With Free Product)" with "0+0" / "2+1" and no rate):
+        # informational only; reported to the caller, never a stock line.
+        plus_form = bool(qty_details.get("paid_plus_free") or qty_details.get("cases_plus_form"))
+        if _BUNDLE_HEADING_RE.search(raw_name) or (
+                plus_form and p_price is None and tax_amt is None and prn_amt is None):
+            return ExtractedRowRecord(
+                row_index=row.row_index, raw_product_name=raw_name, normalized_product_name=norm_name,
+                quantity=None, raw_quantity=raw_qty, taxable_amount=taxable_val, printed_amount=prn_amt,
+                quantity_details=qty_details, is_bundle_header=True, warnings=warnings,
+                review_reasons=["Bundle heading: informational, not a stock line"])
+
+        # Values that lie across a column boundary: their column is uncertain -> review
+        for cell in row.cells:
+            reason = getattr(cell, "review_reason", None) or ""
+            if getattr(cell, "review_required", False) and "boundary" in reason:
+                review_reasons.append(reason)
+
         # Must have at least one numeric signal (qty, price, or amount) to be an item
         if qty is None and p_price is None and prn_amt is None:
             return None
 
-        # 4. Faint Decimal Dot Repair in Quantities
+        # 2d. Printed free item: rate 0.00 and no amount, with a quantity. Kept as its own line with
+        # the zero rate; no cost is invented or redistributed.
+        is_free_item = bool(
+            p_price is not None and p_price == 0 and qty is not None and qty > 0
+            and (prn_amt is None or prn_amt == 0) and (taxable_val is None or taxable_val == 0))
+
+        # 4. Possibly faint decimal point in the quantity ('10' printed as '1.0'): the printed
+        # reading is KEPT; the alternative is only suggested and the line is flagged for review.
         if qty is not None and p_price is not None and prn_amt is not None and qty >= Decimal("10"):
             shifted_qty = (qty / Decimal("10")).quantize(Decimal("0.001"))
             gross_shifted = (shifted_qty * p_price).quantize(Decimal("0.01"))
@@ -188,13 +245,13 @@ class ColumnWiseExtractor:
             gross_orig = (qty * p_price).quantize(Decimal("0.01"))
             net_orig = gross_orig - (disc_val or Decimal("0.00")) + (tax_amt or Decimal("0.00"))
             if abs(net_shifted - prn_amt) <= Decimal("1.50") and abs(net_orig - prn_amt) > Decimal("5.00"):
-                logger.info(
-                    "Repaired faint OCR decimal in quantity: shifted from %s to %s for '%s'",
-                    qty, shifted_qty, raw_name
-                )
-                warnings.append(f"Repaired faint decimal in quantity: shifted from {qty} to {shifted_qty}")
-                qty = shifted_qty
-                raw_qty = str(shifted_qty)
+                note = (f"Quantity {qty.normalize():f} may be {shifted_qty.normalize():f} (faint decimal point): "
+                        f"{shifted_qty.normalize():f} x ₹{p_price} matches the printed amount ₹{prn_amt}")
+                logger.info("Possible faint decimal in quantity for '%s': %s", raw_name, note)
+                warnings.append(f"Possible faint decimal in quantity: {qty} may be {shifted_qty} (not applied)")
+                suggestions.append(note)
+                review_reasons.append("Quantity does not match the printed amount; a decimal point may be missing")
+                qty_details["suggested_quantity"] = shifted_qty.normalize()
 
         # 5. Extract Serial & HSN Code if columns present
         hsn_col_idx = next((c.column_index for c in columns if c.role == "hsn"), None)
@@ -252,7 +309,111 @@ class ColumnWiseExtractor:
             cell_provenance=cell_provenance,
             financial_role_confidence=fin_conf,
             is_valid=True,
+            components=components,
+            review_reasons=review_reasons,
+            suggestions=suggestions,
+            quantity_details=qty_details,
+            derived_fields=derived_fields,
+            is_free_item=is_free_item,
+            barcode=barcode,
         )
+
+    # ------------------------------------------------------------------------------------------
+    # Quantity structure (R5)
+    # ------------------------------------------------------------------------------------------
+
+    def _cell_text(self, row: TableRow, columns: List[DetectedColumn], role: str) -> Optional[str]:
+        col = next((c for c in columns if c.role == role), None)
+        if col is None or col.column_index >= len(row.cells):
+            return None
+        txt = row.cells[col.column_index].cleaned_text.strip()
+        return txt or None
+
+    def _resolve_quantity_structure(
+        self,
+        row: TableRow,
+        columns: List[DetectedColumn],
+        qty: Optional[Decimal],
+        raw_qty: Optional[str],
+    ) -> Tuple[Optional[Decimal], Dict[str, Any], List[str], List[str], Optional[str]]:
+        """Return (quantity, details, derived_fields, review_reasons, barcode).
+
+        * "a/b" in the quantity cell = a cases / b loose pieces (e.g. "0/12").
+        * "a+b" in the quantity cell = a paid + b free units; quantity is the paid a, the free b is
+          reported (never added to stock automatically).
+        * Cases + units-per-case + pieces columns: total pieces = cases x units per case + pieces,
+          calculated ONLY when all three are read and the quantity column holds loose pieces;
+          the result is marked as calculated so it is always reviewed.
+        * A 'UPC' value of 8+ digits is a barcode, not units per case.
+        """
+        details: Dict[str, Any] = {}
+        derived: List[str] = []
+        reasons: List[str] = []
+        barcode: Optional[str] = None
+        qp = self.numeric_parser.parse_quantity
+
+        qty_txt = (raw_qty or self._cell_text(row, columns, "qty") or "").strip()
+        cases_txt = self._cell_text(row, columns, "cases")
+        upc_txt = self._cell_text(row, columns, "units_per_case")
+        qty_col = next((c for c in columns if c.role == "qty"), None)
+
+        loose = qty
+        cases: Optional[Decimal] = None
+        if qty_txt:
+            details["raw_quantity"] = qty_txt
+            m_slash = _CASES_SLASH_PIECES_RE.match(qty_txt)
+            m_plus = _PLUS_RE.match(qty_txt)
+            if m_slash:
+                cases, loose = Decimal(m_slash.group(1)), Decimal(m_slash.group(2))
+                details["quantity_format"] = "cases/pieces"
+            elif m_plus:
+                paid, free = Decimal(m_plus.group(1)), Decimal(m_plus.group(2))
+                details.update(paid_plus_free=True, free_quantity=free, paid_quantity=paid)
+                loose = paid  # line arithmetic uses the paid units; the received quantity is paid + free
+                if free > 0:
+                    reasons.append(f"Promotion printed as '{qty_txt}': {paid.normalize():f} paid + {free.normalize():f} free "
+                                   f"= {(paid + free).normalize():f} units received. Please confirm before stock is posted; "
+                                   "the printed rate and amount are kept (no cost is redistributed).")
+        if cases_txt:
+            details["raw_cases"] = cases_txt
+            if _PLUS_RE.match(cases_txt):
+                details["cases_plus_form"] = True
+            else:
+                parsed_cases = qp(cases_txt).value
+                if parsed_cases is not None:
+                    cases = parsed_cases
+        units: Optional[Decimal] = None
+        if upc_txt:
+            digits = re.sub(r"\D", "", upc_txt)
+            if len(digits) >= 8:
+                barcode = digits  # a printed barcode, not a pack count
+            else:
+                units = qp(upc_txt).value
+        if cases is not None:
+            details["cases"] = cases
+        if units is not None:
+            details["units_per_case"] = units
+        if loose is not None:
+            details["loose_pieces"] = loose
+
+        qty_is_loose_pieces = details.get("quantity_format") == "cases/pieces" or (
+            qty_col is not None and _LOOSE_PIECES_HEADER_RE.search(qty_col.header_text or ""))
+        quantity = loose
+        if cases is not None and cases > 0:
+            if units is not None and units > 0 and qty_is_loose_pieces:
+                quantity = (cases * units + (loose or Decimal("0"))).quantize(Decimal("0.001"))
+                derived.append("quantity")
+                reasons.append(
+                    f"Quantity calculated from the invoice: {cases.normalize():f} case(s) x "
+                    f"{units.normalize():f} per case + {(loose or Decimal('0')).normalize():f} loose = "
+                    f"{quantity.normalize():f}. Please check it.")
+            else:
+                quantity = None if qty_is_loose_pieces else loose
+                reasons.append(
+                    f"{cases.normalize():f} case(s) printed but the number of units per case is not clear; "
+                    "please enter the total quantity.")
+        return quantity, details, derived, reasons, barcode
+
 
     def extract_rows(
         self,

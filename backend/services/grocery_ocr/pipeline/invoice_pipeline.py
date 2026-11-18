@@ -7,6 +7,7 @@ Never writes to the database during extraction.
 Preserves complete OCR evidence, word coordinates, and Decimal precision.
 """
 
+import re
 import time
 import uuid
 from decimal import Decimal
@@ -54,6 +55,63 @@ from services.grocery_ocr.validation.cross_validator import UnifiedValidationSer
 from services.grocery_ocr.validation.invoice_validator import BaseInvoiceValidator, IInvoiceValidator
 
 logger = get_logger("pipeline.orchestrator")
+
+
+_MONEY_TOKEN_RE = re.compile(r"^[₹(]?\d[\d,]*\.\d{2,3}[)|\]]?$")
+_INT_PART_FRAGMENT_RE = re.compile(r"^\d[\d,]*\.$")       # '130.'
+_FRACTION_FRAGMENT_RE = re.compile(r"^\.\d{2,3}[|\]]?$")  # '.00'
+
+
+def money_token_stats(page: Any) -> Dict[str, int]:
+    """Count well-formed money values and decimal fragments in an OCR page reading."""
+    words = [w.text.strip() for w in getattr(page, "words", []) or [] if getattr(w, "text", "").strip()]
+    return {
+        "money_values": sum(1 for t in words if _MONEY_TOKEN_RE.match(t)),
+        "split_integer_parts": sum(1 for t in words if _INT_PART_FRAGMENT_RE.match(t)),
+        "split_fractions": sum(1 for t in words if _FRACTION_FRAGMENT_RE.match(t)),
+    }
+
+
+def decimal_values_look_split(stats: Dict[str, int]) -> bool:
+    """Evidence that the layout analysis cut numbers at the decimal point."""
+    # Three or more numbers broken at the decimal point is demonstrable loss; whether the second
+    # reading is actually better is decided separately (it must hold clearly more money values).
+    return stats["split_integer_parts"] + stats["split_fractions"] >= 3
+
+
+def extraction_metadata(rec: Any) -> Dict[str, Any]:
+    """Line-level extraction facts that the API needs (all JSON-safe)."""
+    return {
+        "financial_components": {k: str(v) for k, v in (getattr(rec, "components", {}) or {}).items()},
+        "review_reasons": list(getattr(rec, "review_reasons", []) or []),
+        "extraction_suggestions": list(getattr(rec, "suggestions", []) or []),
+        "quantity_details": {k: (str(v) if isinstance(v, Decimal) else v)
+                             for k, v in (getattr(rec, "quantity_details", {}) or {}).items()},
+        "derived_fields": list(getattr(rec, "derived_fields", []) or []),
+        "is_free_item": bool(getattr(rec, "is_free_item", False)),
+    }
+
+
+_CARRIED_FIELDS = ("taxable_amount", "discount_pct", "raw_cells", "barcode")
+
+
+def carry_forward_unexported_fields(pre_items: Sequence[Any], post_items: Sequence[Any]) -> int:
+    """Copy fields that the Excel round trip cannot hold from the pre-Excel items to the parsed
+    items. Rows are matched by position and only when the product text matches, so a value can
+    never move to a different product. Returns the number of rows updated."""
+    if len(pre_items) != len(post_items):
+        return 0
+    updated = 0
+    for pre, post in zip(pre_items, post_items):
+        if (pre.raw_product_name or "").strip() != (post.raw_product_name or "").strip():
+            continue
+        for key, value in (pre.metadata or {}).items():
+            post.metadata.setdefault(key, value)
+        for field_name in _CARRIED_FIELDS:
+            if getattr(post, field_name, None) in (None, {}, "") and getattr(pre, field_name, None) not in (None, {}, ""):
+                setattr(post, field_name, getattr(pre, field_name))
+        updated += 1
+    return updated
 
 
 class InvoicePipeline:
@@ -114,6 +172,44 @@ class InvoicePipeline:
             price_extractor=self.price_extractor,
             numeric_parser=getattr(self.price_extractor, "numeric_parser", None),
         )
+
+    def _compare_fallback_segmentation(
+        self,
+        image_bytes: bytes,
+        page_idx: int,
+        default_page: OCRPageResult,
+        metadata: InvoiceProcessingMetadata,
+    ) -> OCRPageResult:
+        """R3: the automatic page layout (PSM 3) can split ruled-table numbers at the decimal point
+        ('130.' / '00') and lose them. Only when the default reading shows such fragments is the page
+        read again with the configured fallback mode; the fallback reading is kept only if it holds
+        clearly more well-formed money values. The decision is recorded for audit."""
+        default_psm = str(getattr(self.config, "default_ocr_psm", "3"))
+        fallback_psm = str(getattr(self.config, "fallback_ocr_psm", "") or "")
+        default_stats = money_token_stats(default_page)
+        record: Dict[str, Any] = {"page": page_idx, "default_psm": default_psm, "default": default_stats,
+                                  "chosen_psm": default_psm}
+        metadata.custom_properties.setdefault("ocr_psm_selection", []).append(record)
+        metadata.custom_properties.setdefault("ocr_psm_used", default_psm)
+        if not fallback_psm or fallback_psm == default_psm or not decimal_values_look_split(default_stats):
+            record["fallback_tried"] = False
+            return default_page
+        try:
+            alt_page = self.ocr_engine.recognize(image_bytes, page_number=page_idx, options={"psm": fallback_psm})
+        except Exception as exc:  # the default reading is still valid
+            record.update(fallback_tried=True, fallback_error=str(exc))
+            return default_page
+        alt_stats = money_token_stats(alt_page)
+        record.update(fallback_tried=True, fallback_psm=fallback_psm, fallback=alt_stats)
+        d_vals, a_vals = default_stats["money_values"], alt_stats["money_values"]
+        if a_vals >= d_vals + max(3, 0.1 * d_vals):  # clearly more amounts read whole
+            record["chosen_psm"] = fallback_psm
+            metadata.custom_properties["ocr_psm_used"] = fallback_psm
+            metadata.warnings.append(
+                f"Page {page_idx}: the table was re-read with a single-block layout because the automatic layout "
+                f"split decimal values ({default_stats['money_values']} -> {alt_stats['money_values']} amounts read)")
+            return alt_page
+        return default_page
 
     def process(
         self,
@@ -198,6 +294,8 @@ class InvoicePipeline:
                         prep_res = self.image_processor.preprocess(img_bytes)
                         # Recognize characters and extract word coordinates
                         ocr_page = self.ocr_engine.recognize(prep_res.processed_bytes, page_number=page_idx)
+                        ocr_page = self._compare_fallback_segmentation(
+                            prep_res.processed_bytes, page_idx, ocr_page, metadata)
                         ocr_pages.append(ocr_page)
 
                     full_text = "\n\n".join(p.raw_text for p in ocr_pages)
@@ -262,6 +360,17 @@ class InvoicePipeline:
                         )
                         rec = self.column_wise_extractor.extract_row(row, schema or columns)
                         if rec is None:
+                            continue
+                        if rec.is_bundle_header:
+                            # Informational bundle heading ("... (With Free Product)", qty "2+1"):
+                            # kept as a note for the reviewer, never turned into a stock line
+                            metadata.custom_properties.setdefault("bundle_headers", []).append({
+                                "page": page.page_number,
+                                "row_index": r_idx,
+                                "text": rec.raw_product_name,
+                                "quantity_text": rec.quantity_details.get("raw_quantity"),
+                                "printed_amount": str(rec.taxable_amount or rec.printed_amount or "") or None,
+                            })
                             continue
 
                         raw_name = rec.raw_product_name
@@ -359,6 +468,10 @@ class InvoicePipeline:
                             raw_cells=raw_cells,
                         )
 
+                        item.metadata.update(extraction_metadata(rec))
+                        if rec.barcode:
+                            item.barcode = rec.barcode
+
                         if match_res and match_res.matched_product_id:
                             item.metadata["matched_product_id"] = match_res.matched_product_id
                             item.metadata["matched_product_name"] = match_res.matched_product_name
@@ -437,6 +550,10 @@ class InvoicePipeline:
                         parsed_from_excel.metadata.custom_properties["xlsx_file_path"] = saved_xlsx_path
                         parsed_from_excel.metadata.custom_properties["xlsx_generated_bytes"] = validated_invoice.metadata.custom_properties.get("xlsx_generated_bytes", 0)
 
+                        # Fields the audit workbook does not hold (financial components, review
+                        # reasons, taxable value, ...) are carried over row by row
+                        carry_forward_unexported_fields(validated_invoice.items, parsed_from_excel.items)
+
                         # Run final cross-validation on parsed items
                         final_invoice = self.cross_validator.cross_validate_invoice(parsed_from_excel)
                         final_invoice.metadata.ocr_evidence = validated_invoice.metadata.ocr_evidence
@@ -449,6 +566,9 @@ class InvoicePipeline:
                         final_invoice.metadata.pipeline_stages_completed.extend(["workbook_parsing", "integrity_validation"])
                         final_invoice.metadata.stage_timings_ms.update(validated_invoice.metadata.stage_timings_ms)
                         final_invoice.metadata.tables_detected = validated_invoice.metadata.tables_detected
+                        # OCR-mode decisions, bundle notes, quality report ... are not workbook data
+                        for key, value in validated_invoice.metadata.custom_properties.items():
+                            final_invoice.metadata.custom_properties.setdefault(key, value)
                         final_invoice.invoice_id = invoice_id
                         final_invoice.original_filename = filename
 

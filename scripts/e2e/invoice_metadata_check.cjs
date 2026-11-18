@@ -4,6 +4,9 @@
  * rejected, manual entry is saved exactly, real invoice numbers are protected against duplicates and
  * invoices without a number are never flagged as duplicates.
  *
+ * The test invoice has a loose-weight line (Toor Dal 2.5 kg). Stock is tracked in whole units and that
+ * line is never rounded (P0), so it is deselected before each confirmation; the header checks are unchanged.
+ *
  * Run (backend on :8000 with a throwaway DATABASE_URL, Vite on :5173):
  *   backend/.venv/bin/python scripts/e2e/prepare_metadata_assets.py /tmp/meta-e2e
  *   node scripts/e2e/invoice_metadata_check.cjs /tmp/meta-e2e
@@ -23,6 +26,7 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 }, deviceScaleFactor: 1 })).newPage();
   let confirmCalls = 0;
+  let looseLinesDeselected = 0;
   page.on('request', (r) => { if (r.url().includes('/invoices/confirm')) confirmCalls++; });
   await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
   await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
@@ -32,6 +36,14 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', file);
     await page.click('button:has-text("Extract Line Items")');
     await page.waitForSelector('text=Extracted Grocery Line Items', { timeout: 120000 });
+    // Deselect lines with a fractional quantity (whole-unit stock only; checked separately)
+    for (const row of await page.locator('tbody tr').all()) {
+      const qty = row.locator('input[type=number][step="1"]');
+      if ((await qty.count()) && !Number.isInteger(Number(await qty.inputValue()))) {
+        await row.locator('input[type=checkbox]').uncheck();
+        looseLinesDeselected++;
+      }
+    }
   }
   const val = (label) => page.locator(`input[aria-label="${label}"]`).inputValue();
 
@@ -84,6 +96,7 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   check('extracted details shown normally', s1 === 'SRI LAKSHMI WHOLESALE TRADERS' && n1 === 'INV-00427' && d1 === '08/10/2026', JSON.stringify([s1, n1, d1]));
   check('no "Not detected" hint for extracted details', (await page.locator('text=Not detected – enter manually').count()) === 0);
   await page.screenshot({ path: `${SP}/meta_3_detected.png` });
+  check('loose-weight line was present and deselected before each confirmation', looseLinesDeselected >= 5, `${looseLinesDeselected}`);
   await browser.close();
   console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed`);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });

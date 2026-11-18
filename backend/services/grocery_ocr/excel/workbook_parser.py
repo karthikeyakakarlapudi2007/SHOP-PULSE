@@ -292,7 +292,12 @@ class BaseWorkbookParser(IWorkbookParser):
         try:
             d = Decimal(str(val))
             if quantize_exp:
-                d = d.quantize(quantize_exp)
+                if quantize_exp == self.config.currency_quantize_exp:
+                    # Money keeps a third printed decimal (62.988); never rounded to paise here
+                    d3 = d.quantize(Decimal("0.001"))
+                    d = d3 if d3 != d3.quantize(quantize_exp) else d.quantize(quantize_exp)
+                else:
+                    d = d.quantize(quantize_exp)
             return d
         except (InvalidOperation, ValueError):
             return None

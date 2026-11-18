@@ -251,3 +251,27 @@ def test_heic_upload_preview_and_original_fallback(no_ocr, monkeypatch):
     res = client.post(f"{API}/sessions/{sid}/extract", json={"source": "original"}, headers=h)
     assert res.status_code == 200, res.text
     assert captured == {"name": "invoice-scan.pdf", "head": b"%PDF-"}
+
+
+def test_assess_endpoint_reports_quality_for_direct_uploads():
+    """R10: a directly uploaded photo gets the same quality grade and retake advice."""
+    headers = auth("assess@example.com")
+    case = build_dataset()["17_unrecoverable"]
+    ok, buf = cv2.imencode(".jpg", case.pages[0])
+    r = client.post("/api/v1/document-prep/assess", headers=headers,
+                    files={"file": ("photo.jpg", buf.tobytes(), "image/jpeg")})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["quality"]["grade"] in ("POOR", "UNREADABLE") and body["retake_recommended"] is True
+    clear = build_dataset()["01_clear_portrait"]
+    ok, buf = cv2.imencode(".jpg", clear.pages[0])
+    body = client.post("/api/v1/document-prep/assess", headers=headers,
+                       files={"file": ("photo.jpg", buf.tobytes(), "image/jpeg")}).json()
+    assert body["retake_recommended"] is False
+
+
+def test_assess_endpoint_requires_login_and_a_photo():
+    assert client.post("/api/v1/document-prep/assess", files={"file": ("p.jpg", b"x", "image/jpeg")}).status_code == 401
+    headers = auth("assess2@example.com")
+    r = client.post("/api/v1/document-prep/assess", headers=headers, files={"file": ("bill.pdf", b"%PDF-1.4", "application/pdf")})
+    assert r.status_code == 415

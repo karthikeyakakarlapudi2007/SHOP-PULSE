@@ -200,7 +200,7 @@ class BaseWorkbookGenerator(IWorkbookGenerator):
             r_idx = ws.max_row
             ws.cell(row=r_idx, column=8).number_format = "#,##0.000" if item.quantity is not None else "@"
             for col_c in (10, 11, 12, 13, 15, 16, 17):
-                ws.cell(row=r_idx, column=col_c).number_format = "#,##0.00"
+                ws.cell(row=r_idx, column=col_c).number_format = "#,##0.00#"  # a printed 3rd decimal stays visible
             ws.cell(row=r_idx, column=14).number_format = "0.00"
 
         self._finalize_sheet_formatting(ws, num_cols=len(headers), is_data_empty=len(invoice.items) == 0)

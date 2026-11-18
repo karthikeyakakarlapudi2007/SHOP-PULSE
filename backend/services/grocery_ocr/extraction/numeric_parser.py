@@ -14,6 +14,9 @@ from services.grocery_ocr.logger import get_logger
 
 logger = get_logger("extraction.numeric_parser")
 
+# Finest precision kept for printed money values (Indian invoices print up to 3 decimals).
+PRINTED_DECIMAL_LIMIT = Decimal("0.001")
+
 
 class ParsedNumericResult(BaseModel):
     """Result of parsing a numeric token from an OCR cell."""
@@ -42,9 +45,12 @@ class NumericParser:
     ) -> ParsedNumericResult:
         """
         Parses monetary price or total string into Decimal (e.g. '₹1,378.62', '2760.00', '700/-').
+
+        A value printed with three decimals ('62.988', '7.143') keeps them: printed financial values
+        are never rounded away. Two or fewer decimals are quantized to the currency step as before.
         """
         exp = quantize_exp or self.config.currency_quantize_exp
-        return self._parse_number(text, exp, is_quantity=False)
+        return self._parse_number(text, exp, is_quantity=False, keep_printed_decimals=quantize_exp is None)
 
     def parse_quantity(
         self,
@@ -61,7 +67,8 @@ class NumericParser:
         self,
         text: Optional[str],
         quantize_exp: Decimal,
-        is_quantity: bool = False
+        is_quantity: bool = False,
+        keep_printed_decimals: bool = False,
     ) -> ParsedNumericResult:
         if not text:
             return ParsedNumericResult(value=None, raw_text=None, is_valid=True, confidence=0.0)
@@ -150,7 +157,12 @@ class NumericParser:
                 val = -val
 
             if quantize_exp:
-                val = val.quantize(quantize_exp)
+                exp_used = quantize_exp
+                if keep_printed_decimals and "." in cleaned:
+                    printed_places = len(cleaned.split(".", 1)[1])
+                    if printed_places > -quantize_exp.as_tuple().exponent:
+                        exp_used = PRINTED_DECIMAL_LIMIT  # e.g. 62.988 stays 62.988
+                val = val.quantize(exp_used)
 
             return ParsedNumericResult(
                 value=val,

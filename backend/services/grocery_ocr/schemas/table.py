@@ -24,6 +24,8 @@ ColumnRoleType = Literal[
     "gst_rate",
     "total",
     "taxable",
+    "cases",
+    "units_per_case",
     "unknown",
     "ignore",
 ]

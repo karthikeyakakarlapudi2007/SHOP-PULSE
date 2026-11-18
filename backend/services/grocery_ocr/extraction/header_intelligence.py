@@ -42,8 +42,8 @@ HEADER_SEMANTIC_ALIASES: Dict[ColumnRoleType, List[str]] = {
         "[msn", "msn", "hsm", "hsn."
     ],
     "qty": [
-        "billed qty", "billed quantity", "billed", "quantity", "unit qty", "qnty", "qty.", "qty",
-        "units", "nos", "no.", "number", "pieces", "pcs", "packets", "count", "qnt", "vol", "volume",
+        "qtysold", "qty sold", "billed qty", "billed quantity", "billed", "quantity", "unit qty", "qnty", "qty.", "qty",
+        "units", "nos", "no.", "number", "pieces", "pcs", "loose pcs", "packets", "count", "qnt", "vol", "volume",
         # Common OCR misreads:
         "ary.", "ary", "gty", "qtv", "oty", "qy", "qt.",
         # Indian languages:
@@ -55,7 +55,8 @@ HEADER_SEMANTIC_ALIASES: Dict[ColumnRoleType, List[str]] = {
         "packaging", "packing", "measure", "type", "uom code"
     ],
     "rate": [
-        "unit price", "unit rate", "basic rate", "price", "rate",
+        "unit price", "unit rate", "basic rate", "base rate", "basic rt", "basic.rt", "netrate", "net rate",
+        "price", "rate",
         "item rate", "item price", "basic price", "price/unit", "price / unit", "rate/unit",
         "rate / unit", "unit cost", "cost/unit", "cost / unit", "rate (₹)", "rate(₹)", "price (₹)",
         # Common OCR misreads:
@@ -85,7 +86,8 @@ HEADER_SEMANTIC_ALIASES: Dict[ColumnRoleType, List[str]] = {
         "एमआरपी", "ఎం.ఆర్.పి", "அ.சி.வி"
     ],
     "discount": [
-        "discount amount", "trade disc", "scheme disc", "discount", "disc", "disc.", "less",
+        "discount amount", "trade disc", "scheme disc", "sch disc", "rs disc", "rs discount", "r.s. disc",
+        "spl disc", "special disc", "addl disc", "discount", "disc", "disc.", "less",
         "rebate", "concession", "dis amt", "dis. amt", "cash discount", "cd amt", "td amt",
         # Indian languages:
         "छूट", "कटौती", "తగ్గింపు", "రాయితీ", "தள்ளுபடி", "ರಿಯಾಯಿತಿ"
@@ -95,7 +97,7 @@ HEADER_SEMANTIC_ALIASES: Dict[ColumnRoleType, List[str]] = {
         "trade disc %", "scheme %", "sch %"
     ],
     "tax_amount": [
-        "tax amount", "tax amt", "tax", "gst amount", "gst amt", "gstamt", "gst value", "cgst amt", "sgst amt", "igst amt",
+        "tax amount", "tax amt", "tax", "gst amount", "gst amt", "gstamt", "gst value", "cgst amt", "sgst amt", "igst amt", "s/utgst amt", "utgst amt", "s utgst amt",
         "total tax", "vat amount", "vat amt", "tax value", "cgst", "sgst", "igst", "cess amt",
         # Common OCR misreads:
         "rel", "lax", "tex", "1ax", "fe",
@@ -111,12 +113,19 @@ HEADER_SEMANTIC_ALIASES: Dict[ColumnRoleType, List[str]] = {
         "assessable amount", "basic amount", "basic value", "taxable val", "basic val"
     ],
     "total": [
-        "net amount", "total amount", "line total", "net amt", "tot amt", "value",
+        "net amount", "total amount", "line total", "net amt", "netamount", "totamount", "tot amount", "tot amt", "value",
         "total value", "amount", "total", "extended amount", "item total", "item amount",
         "final amount", "net value", "line amt", "net payable", "amount (₹)", "amount(₹)",
         "total (₹)", "total(₹)", "bill amount", "payable amount",
         # Indian languages:
         "कुल", "कुल राशि", "మొత్తం", "தொகை", "ಒಟ್ಟು", "মোট"
+    ],
+    "cases": [
+        "cases", "case", "cs", "ctn", "ctns", "cartons", "case qty", "cases qty", "box qty",
+    ],
+    "units_per_case": [
+        "upc", "units per case", "unit per case", "units/case", "pcs/case", "pcs per case", "case size",
+        "pieces per case",
     ],
     "unknown": [],
     "ignore": [],
@@ -139,6 +148,8 @@ CANONICAL_HEADER_LABELS: Dict[ColumnRoleType, str] = {
     "gst_rate": "GST_RATE",
     "taxable": "TAXABLE_AMOUNT",
     "total": "AMOUNT",
+    "cases": "CASES",
+    "units_per_case": "UNITS_PER_CASE",
     "unknown": "UNKNOWN",
     "ignore": "IGNORE",
 }
@@ -310,10 +321,43 @@ class HeaderIntelligenceEngine:
                         break
 
                 if not matched:
-                    consolidated.append(nc)
+                    consolidated.append(self._qualify_group_sub_label(nc, consolidated, median_font_height))
 
         consolidated.sort(key=lambda c: c.bbox.x0)
         return consolidated
+
+    _SUB_LABEL_RE = re.compile(r"^\s*(?:amount|amt\.?|%|rate|value)\s*$", re.I)
+
+    def _qualify_group_sub_label(
+        self,
+        nc: HeaderCandidate,
+        line_above: List[HeaderCandidate],
+        median_font_height: float,
+    ) -> HeaderCandidate:
+        """A generic sub-label ('Amount', 'Amt', '%') printed under a group heading such as 'IGST' or
+        'Discount' belongs to that group ('IGST Amount' -> tax amount, 'IGST %' -> GST rate); on its
+        own 'Amount' would be read as the line total."""
+        if not self._SUB_LABEL_RE.match(nc.raw_text or ""):
+            return nc
+        groups = [c for c in line_above if c.role in ("tax_amount", "gst_rate", "discount", "discount_pct")
+                  and c.bbox.y1 <= nc.bbox.y0 + median_font_height]
+        if not groups:
+            return nc
+        nc_cx = (nc.bbox.x0 + nc.bbox.x1) / 2.0
+
+        def dist(c: HeaderCandidate) -> float:
+            return abs((c.bbox.x0 + c.bbox.x1) / 2.0 - nc_cx)
+
+        g = min(groups, key=dist)
+        if dist(g) > max(g.bbox.width, nc.bbox.width) * 1.5 + 2.0 * median_font_height:
+            return nc
+        combined = f"{g.raw_text} {nc.raw_text}".strip()
+        role, conf, norm = self.classify_text(combined)
+        if role == "unknown":
+            return nc
+        return HeaderCandidate(raw_text=combined, role=role, normalized_label=norm, bbox=nc.bbox,
+                               words=nc.words, confidence=min(conf, 85.0),
+                               is_percent="%" in combined or role in ("discount_pct", "gst_rate"))
 
     def _extract_line_candidates(
         self,

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Product, Sale } from '../types';
 import type { PurchaseBackend } from '../api/purchases';
-import { formatCurrency } from '../utils/formatCurrency';
+import { formatCurrency, formatPrintedCurrency } from '../utils/formatCurrency';
 
 /**
  * Print-only documents. They only display values that already exist on the record; amounts are
@@ -10,6 +10,10 @@ import { formatCurrency } from '../utils/formatCurrency';
 
 const money = (value: number | null | undefined): string =>
   value === null || value === undefined || Number.isNaN(Number(value)) ? '—' : formatCurrency(Number(value));
+
+// Supplier-invoice (purchase) values keep a printed third decimal (₹62.988)
+const printedMoney = (value: number | null | undefined): string =>
+  value === null || value === undefined || Number.isNaN(Number(value)) ? '—' : formatPrintedCurrency(Number(value));
 
 const dateTime = (iso?: string | null): string => {
   if (!iso) return '—';
@@ -116,16 +120,16 @@ export const PurchaseRecordDocument: React.FC<{ purchase: PurchaseBackend; shopN
             <td className="wrap">{item.product_name || 'Product no longer in catalog'}</td>
             <td className="num">{item.quantity}</td>
             <td>{item.product_unit || '—'}</td>
-            <td className="num">{money(item.purchase_price)}</td>
+            <td className="num">{printedMoney(item.purchase_price)}</td>
             <td className="num">{money(item.mrp)}</td>
-            <td className="num">{money(item.line_amount)}</td>
+            <td className="num">{printedMoney(item.line_amount)}</td>
           </tr>
         ))}
       </tbody>
       <tfoot>
         <tr className="grand">
           <th scope="row" colSpan={6} className="num">Recorded total</th>
-          <td className="num">{money(purchase.total_amount)}</td>
+          <td className="num">{printedMoney(purchase.total_amount)}</td>
         </tr>
       </tfoot>
     </table>

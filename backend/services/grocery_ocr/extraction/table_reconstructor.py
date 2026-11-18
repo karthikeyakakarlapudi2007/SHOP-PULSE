@@ -164,7 +164,8 @@ class BaseTableReconstructor(ITableReconstructor):
 
             for r_idx, r_words in enumerate(physical_rows_words):
                 row_text = " ".join(w.text for w in r_words).strip()
-                is_hdr = r_idx in table_region.header_row_indices
+                # includes the second line of a multi-line heading found by the column detector
+                is_hdr = r_idx in table_region.header_row_indices or interim_rows[r_idx].is_header
                 is_sum = table_region.summary_start_y is not None and any(
                     w.bbox.y0 >= (table_region.summary_start_y - 2.0) for w in r_words
                 )
@@ -381,6 +382,7 @@ class BaseTableReconstructor(ITableReconstructor):
 
         # Prepare bucket for each column
         col_word_buckets: List[List[OCRWord]] = [[] for _ in columns]
+        straddling: Dict[int, List[str]] = {}
         warnings: List[str] = []
         needs_review = False
 
@@ -399,6 +401,15 @@ class BaseTableReconstructor(ITableReconstructor):
 
             if matched_col_idx >= 0:
                 col_word_buckets[matched_col_idx].append(w)
+                # A value lying across a column boundary is ambiguous: kept where its centre falls,
+                # but flagged so the reviewer checks which column it belongs to
+                col = columns[matched_col_idx]
+                width = max(1.0, w.bbox.x1 - w.bbox.x0)
+                over_left = (col.x_start or 0.0) - w.bbox.x0
+                over_right = w.bbox.x1 - (col.x_end if col.x_end is not None else float("inf"))
+                if (matched_col_idx > 0 and over_left > 0.3 * width) or (
+                        matched_col_idx < len(columns) - 1 and over_right > 0.3 * width):
+                    straddling.setdefault(matched_col_idx, []).append(w.text)
             else:
                 # Fallback to closest column boundary
                 distances = [
@@ -449,6 +460,11 @@ class BaseTableReconstructor(ITableReconstructor):
 
             cell_review = False
             cell_reason = None
+            if c_idx in straddling:
+                cell_review = True
+                cell_reason = (f"Value '{' '.join(straddling[c_idx])}' lies across the boundary of column "
+                               f"'{col.header_text}'; its column is uncertain.")
+                needs_review = True
 
             # Check numeric association sanity for numeric columns
             if col.role in ("qty", "rate", "purchase_price", "selling_price", "mrp", "total", "tax_amount"):
@@ -497,9 +513,16 @@ class BaseTableReconstructor(ITableReconstructor):
         # Find key column indices
         desc_col_idx = next((i for i, c in enumerate(columns) if c.role == "product"), 1 if len(columns) > 1 else 0)
         serial_col_idx = next((i for i, c in enumerate(columns) if c.role == "serial"), -1)
+        hsn_col_idx = next((i for i, c in enumerate(columns) if c.role == "hsn"), -1)
         numeric_col_indices = [
             i for i, c in enumerate(columns)
             if c.role in ("qty", "rate", "purchase_price", "selling_price", "mrp", "total")
+        ]
+        # Any value column (used to recognise a numbers-only line that belongs to the name above)
+        value_col_indices = [
+            i for i, c in enumerate(columns)
+            if c.role in ("qty", "rate", "purchase_price", "selling_price", "mrp", "total", "taxable",
+                          "tax_amount", "discount", "cases", "units_per_case")
         ]
 
         # Only evaluate data rows (after header, not summary)
@@ -539,8 +562,13 @@ class BaseTableReconstructor(ITableReconstructor):
             )
 
             # Evaluate if row qualifies as a continuation of curr_parent
+            # A line with its own HSN code or any value (taxable, tax, discount, cases ...) is a line
+            # of its own (e.g. a bundle heading), never the wrapped text of the product above
+            hsn_text = (row.cells[hsn_col_idx].cleaned_text.strip()
+                        if 0 <= hsn_col_idx < len(row.cells) else "")
+            has_own_values = bool(hsn_text) or self._row_has_values(row, value_col_indices)
             is_continuation = False
-            if curr_parent is not None and not has_numeric_data and not has_serial and desc_text:
+            if curr_parent is not None and not has_numeric_data and not has_serial and desc_text and not has_own_values:
                 # Check vertical proximity: continuation line must be within 1.8 * median_h
                 prev_y1 = curr_parent.bbox.y1 if curr_parent.bbox else 0.0
                 curr_y0 = row.bbox.y0 if row.bbox else 0.0
@@ -548,6 +576,32 @@ class BaseTableReconstructor(ITableReconstructor):
 
                 if v_gap <= max(18.0, median_h * 1.8):
                     is_continuation = True
+
+            # Name line followed by its numbers-only line (thermal / dot-matrix bills print the
+            # description on one line and qty / rate / amount on the next). Joined only when the
+            # numbers line has no description and no serial of its own and the line above has a
+            # description but no numbers at all - so two products are never merged.
+            if (
+                curr_parent is not None and not desc_text and not has_serial
+                and self._row_has_values(row, value_col_indices)
+                and not self._row_has_values(curr_parent, value_col_indices)
+                and (curr_parent.cells[desc_col_idx].cleaned_text.strip() if desc_col_idx < len(curr_parent.cells) else "")
+                and (row.bbox is None or curr_parent.bbox is None
+                     or row.bbox.y0 - curr_parent.bbox.y1 <= max(24.0, median_h * 2.5))
+            ):
+                for ci, cell in enumerate(row.cells):
+                    if ci < len(curr_parent.cells) and cell.cleaned_text.strip() and not curr_parent.cells[ci].cleaned_text.strip():
+                        curr_parent.cells[ci] = cell.model_copy(update={"row_index": curr_parent.row_index})
+                row.is_continuation = True
+                row.parent_row_index = curr_parent.row_index
+                curr_parent.original_lines.append(row.raw_text)
+                curr_parent.raw_text = f"{curr_parent.raw_text} {row.raw_text}".strip()
+                if curr_parent.bbox and row.bbox:
+                    curr_parent.bbox = BoundingBox(
+                        x0=min(curr_parent.bbox.x0, row.bbox.x0), y0=min(curr_parent.bbox.y0, row.bbox.y0),
+                        x1=max(curr_parent.bbox.x1, row.bbox.x1), y1=max(curr_parent.bbox.y1, row.bbox.y1))
+                curr_parent.metadata["joined_numbers_line"] = True
+                continue
 
             if is_continuation and curr_parent is not None:
                 # Mark continuation line
@@ -597,6 +651,10 @@ class BaseTableReconstructor(ITableReconstructor):
                 consolidated_rows.append(row)
 
         return consolidated_rows
+
+    @staticmethod
+    def _row_has_values(row: TableRow, col_indices: List[int]) -> bool:
+        return any(ci < len(row.cells) and row.cells[ci].cleaned_text.strip() for ci in col_indices)
 
     def _group_row_words_into_basic_cells(
         self,

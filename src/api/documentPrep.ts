@@ -100,7 +100,27 @@ export interface PrepExtractResult {
   };
 }
 
+/** Photo-quality check for a directly uploaded photo (no preparation, no OCR). */
+export interface PhotoAssessment {
+  filename?: string | null;
+  quality: QualityReport;
+  retake_recommended: boolean;
+  document: {
+    found: boolean;
+    outline_reliable: boolean;
+    cut_off: boolean;
+    cut_off_edges: string[];
+    reasons: string[];
+  };
+}
+
 export const documentPrepApi = {
+  /** Grade a photo that is sent straight to OCR, so poor or cut-off photos are reported (R10). */
+  assess: (file: Blob, filename: string) => {
+    const form = new FormData();
+    form.append('file', file, filename);
+    return uploadWithProgress<PhotoAssessment>(`${BASE}/assess`, form);
+  },
   createSession: () => apiClient.post<PrepSession>(`${BASE}/sessions`),
   getSession: (sessionId: string) => apiClient.get<PrepSession>(`${BASE}/sessions/${sessionId}`),
   deleteSession: (sessionId: string) => apiClient.delete<void>(`${BASE}/sessions/${sessionId}`),
