@@ -6,11 +6,12 @@ from db.models.sale import Sale
 from db.models.sale_item import SaleItem
 from db.models.product import Product
 from schemas.sale import SaleCreate
+from services.money import bill_total, sale_line_amount, to_number
 
 def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
     try:
         validated_items = []
-        total_amount = 0.0
+        line_amounts = []  # Decimal, each rounded to 2 dp half-up (approved sale rule)
 
         for item in sale_in.items:
             product = db.query(Product).filter(Product.id == item.product_id).first()
@@ -24,14 +25,14 @@ def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
                 )
             
             unit_price = item.unit_price if item.unit_price is not None else product.selling_price
-            item_total = item.quantity * unit_price
-            total_amount += item_total
+            # Line = quantity x unit price (3-dp prices kept), rounded once to paise; bill = sum of lines
+            line_amounts.append(sale_line_amount(item.quantity, unit_price))
             validated_items.append((product, item, unit_price))
 
         # Create Sale Header
         db_sale = Sale(
             shop_id=shop_id,
-            total_amount=total_amount,
+            total_amount=to_number(bill_total(line_amounts)),
             payment_method=sale_in.payment_method,
         )
         db.add(db_sale)

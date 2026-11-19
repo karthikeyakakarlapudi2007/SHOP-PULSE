@@ -9,6 +9,7 @@ from db.models.product import Product
 from schemas.dashboard import DashboardResponse, TopProductResponse
 from schemas.product import ProductResponse
 from schemas.sale import SaleResponse
+from services.money import round_currency, sum_decimal, to_number
 
 def get_dashboard_data(db: Session, shop_id: UUID) -> DashboardResponse:
     now = datetime.now(timezone.utc)
@@ -16,15 +17,16 @@ def get_dashboard_data(db: Session, shop_id: UUID) -> DashboardResponse:
     today_start_naive = today_start.replace(tzinfo=None)
 
     # 1. Total sales amount today
-    today_sales_val = (
-        db.query(func.coalesce(func.sum(Sale.total_amount), 0.0))
+    # Summed in Decimal from the stored bill totals (no binary SQL SUM), rounded half-up to paise
+    today_sale_totals = (
+        db.query(Sale.total_amount)
         .filter(
             Sale.shop_id == shop_id,
             (Sale.created_at >= today_start) | (Sale.created_at >= today_start_naive)
         )
-        .scalar()
+        .all()
     )
-    today_sales = float(today_sales_val or 0.0)
+    today_sales = to_number(round_currency(sum_decimal(t for (t,) in today_sale_totals)))
 
     # 2. Total active products count
     products_count = (

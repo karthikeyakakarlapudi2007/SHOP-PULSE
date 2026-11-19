@@ -22,6 +22,7 @@ Secrets: API keys are only placed in request headers, never in URLs, logs or res
 import logging
 import math
 import re
+from decimal import Decimal
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -33,6 +34,7 @@ import httpx
 
 from core.config import settings
 from services.product_matching import best_name_match, normalize_gtin
+from services.money import keep_printed_precision, to_decimal, to_number
 
 logger = logging.getLogger(__name__)
 
@@ -90,18 +92,19 @@ def validate_mrp_value(value: Any) -> Optional[float]:
     """Accepts a positive, finite, plausible number (or numeric string such as '₹1,250.00')."""
     if value is None or isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        num = float(value)
+    if isinstance(value, (int, float, Decimal)):
+        num = to_decimal(value)  # floats through their shortest repr, never Decimal(float)
     elif isinstance(value, str):
         cleaned = re.sub(r"(?i)₹|rs\.?|inr|,|\s", "", value)
         if not re.fullmatch(r"\d+(?:\.\d+)?", cleaned):
             return None
-        num = float(cleaned)
+        num = to_decimal(cleaned)
     else:
         return None
-    if not math.isfinite(num) or num <= 0 or num > MAX_PLAUSIBLE_MRP:
+    if num is None or num <= 0 or num > MAX_PLAUSIBLE_MRP:
         return None
-    return round(num, 2)
+    # Printed precision kept (up to 3 decimals, half-up), e.g. 289.00 -> 289.0, 49.995 stays 49.995
+    return to_number(keep_printed_precision(num))
 
 
 def _dig(obj: Any, dotted: Optional[str]) -> Any:

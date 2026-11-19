@@ -17,8 +17,9 @@ from __future__ import annotations
 import itertools
 import re
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from services.money import format_rupees
 
 # Labels that name the final payable total of the whole invoice
 _TOTAL_LABEL = re.compile(
@@ -115,13 +116,12 @@ def find_printed_totals(lines: Sequence[str]) -> PrintedTotals:
 
 
 def _rs(v: Decimal) -> str:
-    """₹1,234.50 / ₹62.988 (a printed third decimal is kept)."""
-    v = Decimal(v)
-    return f"₹{v:,.3f}" if v.quantize(Decimal("0.001")) != v.quantize(Decimal("0.01")) else f"₹{v:,.2f}"
+    """₹1,234.50 / ₹62.988 (a printed third decimal is kept; half-up, shared money formatter)."""
+    return format_rupees(v)
 
 
 def _tolerance(total: Decimal) -> Decimal:
-    return max(Decimal("1.00"), (total * Decimal("0.001")).quantize(Decimal("0.01")))
+    return max(Decimal("1.00"), (total * Decimal("0.001")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _explain(lines_total: Decimal, printed: Decimal, adj: Dict[str, Decimal]) -> Optional[Tuple[List[str], Decimal]]:

@@ -5,7 +5,7 @@ or DetectedColumn definitions. Prevents cross-column token bleeding, validates c
 data types, and ensures complete decimal financial precision.
 """
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 from pydantic import BaseModel, Field
@@ -239,10 +239,10 @@ class ColumnWiseExtractor:
         # 4. Possibly faint decimal point in the quantity ('10' printed as '1.0'): the printed
         # reading is KEPT; the alternative is only suggested and the line is flagged for review.
         if qty is not None and p_price is not None and prn_amt is not None and qty >= Decimal("10"):
-            shifted_qty = (qty / Decimal("10")).quantize(Decimal("0.001"))
-            gross_shifted = (shifted_qty * p_price).quantize(Decimal("0.01"))
+            shifted_qty = (qty / Decimal("10")).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+            gross_shifted = (shifted_qty * p_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             net_shifted = gross_shifted - (disc_val or Decimal("0.00")) + (tax_amt or Decimal("0.00"))
-            gross_orig = (qty * p_price).quantize(Decimal("0.01"))
+            gross_orig = (qty * p_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             net_orig = gross_orig - (disc_val or Decimal("0.00")) + (tax_amt or Decimal("0.00"))
             if abs(net_shifted - prn_amt) <= Decimal("1.50") and abs(net_orig - prn_amt) > Decimal("5.00"):
                 note = (f"Quantity {qty.normalize():f} may be {shifted_qty.normalize():f} (faint decimal point): "

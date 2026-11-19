@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from sqlalchemy import func, desc, asc, and_, or_
 from db.models.sale import Sale
 from db.models.sale_item import SaleItem
 from db.models.product import Product
+from services.money import quantize_half_up, round_currency, sale_line_amount, sum_decimal, to_decimal, to_number
 from schemas.insights import (
     SalesOverviewResponse,
     ProductSalesPerformanceItem,
@@ -88,11 +90,9 @@ def get_sales_insights(
     p_end_naive = p_end.replace(tzinfo=None)
 
     # 1. Current Period Overview
-    curr_sales_q = (
-        db.query(
-            func.coalesce(func.sum(Sale.total_amount), 0.0),
-            func.count(Sale.id)
-        )
+    # Money is summed in Decimal from the stored bill totals (no binary SQL SUM); half-up to paise
+    curr_totals = (
+        db.query(Sale.total_amount)
         .filter(
             Sale.shop_id == shop_id,
             or_(
@@ -100,18 +100,15 @@ def get_sales_insights(
                 and_(Sale.created_at >= c_start_naive, Sale.created_at <= c_end_naive)
             )
         )
-        .first()
+        .all()
     )
-    total_sales = float(curr_sales_q[0] or 0.0) if curr_sales_q else 0.0
-    tx_count = int(curr_sales_q[1] or 0) if curr_sales_q else 0
-    avg_ticket = (total_sales / tx_count) if tx_count > 0 else 0.0
+    total_sales_d = round_currency(sum_decimal(t for (t,) in curr_totals))
+    tx_count = len(curr_totals)
+    avg_ticket_d = round_currency(total_sales_d / tx_count) if tx_count > 0 else Decimal("0")
 
     # 2. Previous Period Overview
-    prev_sales_q = (
-        db.query(
-            func.coalesce(func.sum(Sale.total_amount), 0.0),
-            func.count(Sale.id)
-        )
+    prev_totals = (
+        db.query(Sale.total_amount)
         .filter(
             Sale.shop_id == shop_id,
             or_(
@@ -119,20 +116,20 @@ def get_sales_insights(
                 and_(Sale.created_at >= p_start_naive, Sale.created_at < c_start_naive)
             )
         )
-        .first()
+        .all()
     )
-    prev_total = float(prev_sales_q[0] or 0.0) if prev_sales_q else 0.0
-    prev_tx_count = int(prev_sales_q[1] or 0) if prev_sales_q else 0
+    prev_total_d = round_currency(sum_decimal(t for (t,) in prev_totals))
+    prev_tx_count = len(prev_totals)
 
     growth_rate: Optional[float] = None
-    if prev_total > 0:
-        growth_rate = round(((total_sales - prev_total) / prev_total) * 100, 1)
+    if prev_total_d > 0:
+        growth_rate = to_number(quantize_half_up((total_sales_d - prev_total_d) / prev_total_d * 100, "0.1"))
 
     overview = SalesOverviewResponse(
-        total_sales=round(total_sales, 2),
+        total_sales=to_number(total_sales_d),
         transaction_count=tx_count,
-        average_transaction_value=round(avg_ticket, 2),
-        previous_period_sales=round(prev_total, 2),
+        average_transaction_value=to_number(avg_ticket_d),
+        previous_period_sales=to_number(prev_total_d),
         previous_period_transactions=prev_tx_count,
         sales_growth_rate=growth_rate,
         period=period,
@@ -148,7 +145,6 @@ def get_sales_insights(
             Product.category,
             Product.unit,
             func.sum(SaleItem.quantity).label("qty_sold"),
-            func.sum(SaleItem.quantity * SaleItem.unit_price).label("revenue")
         )
         .join(SaleItem, SaleItem.product_id == Product.id)
         .join(Sale, SaleItem.sale_id == Sale.id)
@@ -185,7 +181,26 @@ def get_sales_insights(
     sold_products_list: List[ProductSalesPerformanceItem] = []
     active_sold_ids = set()
 
-    for pid, pname, pcat, punit, qty, rev in curr_items_raw:
+    # Revenue per product = sum of its sale lines, each rounded half-up to paise exactly as the bills are
+    # (approved rule), computed in Decimal from the stored quantity and unit price of every line
+    line_rows = (
+        db.query(SaleItem.product_id, SaleItem.quantity, SaleItem.unit_price)
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .filter(
+            Sale.shop_id == shop_id,
+            or_(
+                and_(Sale.created_at >= c_start, Sale.created_at <= c_end),
+                and_(Sale.created_at >= c_start_naive, Sale.created_at <= c_end_naive)
+            )
+        )
+        .all()
+    )
+    revenue_by_product: Dict[Any, Decimal] = {}
+    for line_pid, line_qty, line_price in line_rows:
+        revenue_by_product[line_pid] = revenue_by_product.get(line_pid, Decimal("0")) + sale_line_amount(line_qty, line_price)
+
+    for pid, pname, pcat, punit, qty in curr_items_raw:
+        rev = revenue_by_product.get(pid, Decimal("0"))
         active_sold_ids.add(pid)
         prev_q = prev_qty_map.get(pid, 0)
         p_growth = None
@@ -200,7 +215,7 @@ def get_sales_insights(
                 product_name=pname,
                 category=pcat or "Other",
                 quantity_sold=int(qty or 0),
-                revenue=round(float(rev or 0.0), 2),
+                revenue=to_number(rev),
                 unit=punit or "pcs",
                 previous_quantity_sold=prev_q,
                 growth_rate=p_growth
@@ -275,17 +290,17 @@ def get_sales_insights(
         if d <= c_end.date():
             d_str = d.strftime("%Y-%m-%d")
             label = d.strftime("%d %b")
-            date_agg[d_str] = {"label": label, "revenue": 0.0, "count": 0}
+            date_agg[d_str] = {"label": label, "revenue": Decimal("0"), "count": 0}
 
     for dt, amt in sales_in_period:
         if dt:
             d_key = dt.strftime("%Y-%m-%d")
             if d_key in date_agg:
-                date_agg[d_key]["revenue"] += float(amt or 0.0)
+                date_agg[d_key]["revenue"] += to_decimal(amt) or Decimal("0")
                 date_agg[d_key]["count"] += 1
 
     for d_str, data in sorted(date_agg.items()):
-        rev = round(data["revenue"], 2)
+        rev = to_number(round_currency(data["revenue"]))
         cnt = data["count"]
         if rev > peak_rev:
             peak_rev = rev
@@ -483,7 +498,7 @@ def get_ai_insights(db: Session, shop_id: UUID) -> AiInsightsResponse:
                     grounded_data_points=[
                         f"Current 7-day sales: ₹{sales_data.overview.total_sales:,.2f}",
                         f"Previous 7-day sales: ₹{sales_data.overview.previous_period_sales:,.2f}",
-                        f"Difference: +₹{(sales_data.overview.total_sales - sales_data.overview.previous_period_sales):,.2f}"
+                        f"Difference: +₹{round_currency(to_decimal(sales_data.overview.total_sales) - to_decimal(sales_data.overview.previous_period_sales)):,.2f}"
                     ],
                     suggested_action="Review top selling items to support customer demand."
                 )

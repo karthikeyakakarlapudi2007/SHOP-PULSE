@@ -7,7 +7,7 @@ Preserves missing values as None (never zero).
 
 import io
 from abc import ABC, abstractmethod
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Union
 import openpyxl
 
@@ -294,10 +294,10 @@ class BaseWorkbookParser(IWorkbookParser):
             if quantize_exp:
                 if quantize_exp == self.config.currency_quantize_exp:
                     # Money keeps a third printed decimal (62.988); never rounded to paise here
-                    d3 = d.quantize(Decimal("0.001"))
-                    d = d3 if d3 != d3.quantize(quantize_exp) else d.quantize(quantize_exp)
+                    d3 = d.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+                    d = d3 if d3 != d3.quantize(quantize_exp, rounding=ROUND_HALF_UP) else d.quantize(quantize_exp, rounding=ROUND_HALF_UP)
                 else:
-                    d = d.quantize(quantize_exp)
+                    d = d.quantize(quantize_exp, rounding=ROUND_HALF_UP)
             return d
         except (InvalidOperation, ValueError):
             return None

@@ -5,7 +5,7 @@ Uses Python Decimal exclusively; never floats. Preserves verbatim raw strings.
 """
 
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
 
@@ -162,7 +162,7 @@ class NumericParser:
                     printed_places = len(cleaned.split(".", 1)[1])
                     if printed_places > -quantize_exp.as_tuple().exponent:
                         exp_used = PRINTED_DECIMAL_LIMIT  # e.g. 62.988 stays 62.988
-                val = val.quantize(exp_used)
+                val = val.quantize(exp_used, rounding=ROUND_HALF_UP)
 
             return ParsedNumericResult(
                 value=val,

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import re
 from typing import List, Tuple, Any, Optional
 from uuid import UUID
@@ -9,6 +10,7 @@ from schemas.voice import (
     UnmatchedVoiceItem,
 )
 from services.voice_parser import ExtractedItem
+from services.money import bill_total, quantize_half_up, round_currency, round_price, sale_line_amount, to_decimal, to_number
 
 def normalize_text_for_search(text: str) -> str:
     """Removes punctuation and lowercases text for fuzzy token search while preserving Indic scripts."""
@@ -103,13 +105,22 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
         sku=p.get("sku"),
     )
 
+# Precision of the exact unit price derived from a spoken total (so quantity x price reproduces the total)
+_EXACT_UNIT_PRICE = Decimal("0.0000000001")
+
+
 def make_matched_item(prod: VoiceProductCandidate, item: ExtractedItem) -> MatchedVoiceItem:
-    if getattr(item, "spoken_price", None) is not None and item.spoken_price > 0:
-        line_total = round(float(item.spoken_price), 2)
-        unit_price = round(line_total / float(item.quantity), 2) if item.quantity > 0 else line_total
+    qty = to_decimal(item.quantity)
+    spoken = to_decimal(getattr(item, "spoken_price", None))
+    if spoken is not None and spoken > 0:
+        # The spoken amount is the line total. The exact unit price is kept for the sale, the 3-dp one is
+        # for display: ₹100 for 3 -> 33.333 shown, 33.3333333333 x 3 -> ₹100.00 recorded (never ₹99.99).
+        line = round_currency(spoken)
+        exact = quantize_half_up(line / qty, _EXACT_UNIT_PRICE) if qty is not None and qty > 0 else line
+        shown = round_price(exact)
     else:
-        unit_price = prod.selling_price
-        line_total = round(unit_price * float(item.quantity), 2)
+        exact = shown = to_decimal(prod.selling_price) or Decimal("0")
+        line = sale_line_amount(qty if qty is not None else 0, exact)
 
     unit = getattr(item, "unit", None) or prod.unit
 
@@ -117,8 +128,9 @@ def make_matched_item(prod: VoiceProductCandidate, item: ExtractedItem) -> Match
         product_id=prod.id,
         name=prod.name,
         quantity=item.quantity,
-        unit_price=unit_price,
-        total_price=line_total,
+        unit_price=to_number(shown),
+        unit_price_exact=to_number(exact),
+        total_price=to_number(line),
         unit=unit,
         current_stock=prod.current_stock,
         is_out_of_stock=prod.current_stock <= 0,
@@ -272,8 +284,9 @@ def match_items_to_inventory(
                 )
             )
 
-    subtotal = round(sum(m.total_price for m in matched_items), 2)
-    tax = 0.0  # ShopPulse standard GST calculation default
-    total = round(subtotal + tax, 2)
+    # Bill = sum of the rounded lines (Decimal); no GST is calculated for voice bills
+    subtotal_d = bill_total(to_decimal(m.total_price) for m in matched_items)
+    tax_d = Decimal("0")
+    subtotal, tax, total = to_number(subtotal_d), to_number(tax_d), to_number(round_currency(subtotal_d + tax_d))
 
     return matched_items, ambiguous_items, unmatched_items, subtotal, tax, total

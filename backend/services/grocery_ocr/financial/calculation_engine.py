@@ -4,7 +4,7 @@ Executes exact Decimal calculations for Gross, Discount, Taxable, GST, and Net L
 Maintains strict separation between printed amounts and calculated amounts.
 """
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -78,28 +78,34 @@ class FinancialCalculationEngine:
                 discrepancy_explanation="Cannot compute expected amount: quantity or unit rate is missing",
             )
 
-        # 2. Compute gross amount = quantity × unit_rate
-        gross = (quantity * unit_rate).quantize(self.config.currency_quantize_exp)
+        # 2. Compute gross amount = quantity × unit_rate. Components stay exact; only the final amount is
+        #    rounded (half-up). Reported components are rounded half-up for display.
+        cur = self.config.currency_quantize_exp
+        gross_exact = quantity * unit_rate
+        gross = gross_exact.quantize(cur, rounding=ROUND_HALF_UP)
 
         # 3. Factor in discount
-        discount_amt = Decimal("0.00")
+        discount_exact = Decimal("0.00")
         if discount is not None:
-            discount_amt = discount
+            discount_exact = discount
         elif discount_pct is not None:
-            discount_amt = (gross * discount_pct / Decimal("100")).quantize(self.config.currency_quantize_exp)
+            discount_exact = gross_exact * discount_pct / Decimal("100")
+        discount_amt = discount_exact.quantize(cur, rounding=ROUND_HALF_UP) if discount is None else discount_exact
 
         # 4. Determine taxable amount
-        taxable = printed_taxable if printed_taxable is not None else (gross - discount_amt)
+        taxable_exact = printed_taxable if printed_taxable is not None else (gross_exact - discount_exact)
+        taxable = printed_taxable if printed_taxable is not None else taxable_exact.quantize(cur, rounding=ROUND_HALF_UP)
 
         # 5. Factor in tax / GST
-        tax_amt = Decimal("0.00")
+        tax_exact = Decimal("0.00")
         if tax_amount is not None:
-            tax_amt = tax_amount
+            tax_exact = tax_amount
         elif gst_rate is not None:
-            tax_amt = (taxable * gst_rate / Decimal("100")).quantize(self.config.currency_quantize_exp)
+            tax_exact = taxable_exact * gst_rate / Decimal("100")
+        tax_amt = tax_exact.quantize(cur, rounding=ROUND_HALF_UP) if tax_amount is None else tax_exact
 
-        # 6. Final calculated amount
-        calculated = (taxable + tax_amt).quantize(self.config.currency_quantize_exp)
+        # 6. Final calculated amount: rounded once, half-up
+        calculated = (taxable_exact + tax_exact).quantize(cur, rounding=ROUND_HALF_UP)
 
         # 7. Compare with printed amount
         rounding_diff: Optional[Decimal] = None

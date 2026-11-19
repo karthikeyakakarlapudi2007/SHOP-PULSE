@@ -108,3 +108,24 @@ Not changed: schema, data, money calculations, stock behaviour, OCR engine, Voic
 | Browser checks (launcher, isolated) | 25/25, 12/12, 6/6, 17/17, 18/18 (unchanged from baseline); unit registry 16/16 |
 | Protected database | `shoppulse.db` SHA-256, size and modification time unchanged before and after all runs; no schema, model or migration file touched |
 | Clean-up | no test servers running; two launcher temp folders kept from the earlier failed `unit_registry_check` runs were removed (test data only) |
+
+## 2026-11-19 – Workstream 4: Decimal-safe backend money (implemented, uncommitted)
+
+Audit: `DECIMAL_AUDIT.md`. Implementation and limitations: `DECIMAL_IMPLEMENTATION.md`. Decisions 1 to 4 approved.
+
+| Area | Files |
+|---|---|
+| Money module (new) | `backend/services/money.py` (invoice helpers moved here) |
+| Sales, purchases | `services/sale.py`, `services/purchase.py` |
+| Voice | `services/inventory_matcher.py`, `schemas/voice.py` (optional `unit_price_exact`) |
+| Reports | `services/insights.py`, `services/dashboard.py`, `services/notification.py` |
+| Invoice and OCR | `services/invoice.py`, `services/mrp_lookup.py`, `services/invoice_reconciliation.py`, `grocery_ocr/financial/calculation_engine.py`, `grocery_ocr/extraction/numeric_parser.py`, `grocery_ocr/extraction/column_wise_extractor.py`, `grocery_ocr/excel/workbook_parser.py` |
+| Tests (new) | `backend/tests/test_decimal_money.py` (34) |
+
+| Verification | Result |
+|---|---|
+| Backend full suite | **850 passed, 7 skipped, 0 failed** (previously 816) |
+| Vitest, TypeScript, lint, build | 111 passed (15 files); pass; exit 0 (the same 12 pre-existing warning files); pass |
+| Browser checks (launcher) | 25/25, 12/12, 6/6, 17/17, 18/18, 16/16 |
+| OCR dataset re-run | zero differences vs workstream 1 |
+| `backend/shoppulse.db` | SHA-256, size and modification time unchanged; no schema, model or migration file changed; historical records not rewritten (covered by a test) |

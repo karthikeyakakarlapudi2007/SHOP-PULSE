@@ -15,7 +15,9 @@ class MatchedVoiceItem(BaseModel):
     product_id: str
     name: str
     quantity: Union[int, float] = Field(..., gt=0)
-    unit_price: float
+    unit_price: float = Field(..., description="Unit price for display (up to 3 decimals)")
+    unit_price_exact: Optional[float] = Field(
+        None, description="Precise unit price to send with the sale: quantity x this, rounded to paise, equals total_price")
     total_price: float
     unit: str
     current_stock: int

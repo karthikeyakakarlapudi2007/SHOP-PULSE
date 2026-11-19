@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 from services.grocery_ocr.engines.ocr_engine import TesseractOCREngine
 from sqlalchemy import null as sa_null
 from services.invoice_reconciliation import reconcile_invoice_total
+from services.money import format_rupees, keep_printed_precision, quantize_half_up, to_decimal, to_number
 from services.grocery_ocr.pipeline.invoice_pipeline import InvoicePipeline
 
 USE_NEW_GROCERY_OCR = os.getenv("USE_NEW_GROCERY_OCR", "true").lower() in ("true", "1", "yes")
@@ -142,31 +143,11 @@ def parse_smart_price_py(tok: Optional[str], allow_zero: bool = False) -> Option
         return None
 
 
-def _dec(value: Any) -> Optional[Decimal]:
-    """Decimal from a Decimal / int / float / str (floats via their shortest repr); None stays None."""
-    if value is None or value == "":
-        return None
-    if isinstance(value, Decimal):
-        return value
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _money(value: Decimal, places: str = "0.01") -> Decimal:
-    """Round half-up (commercial rounding), never banker's rounding."""
-    return value.quantize(Decimal(places), rounding=ROUND_HALF_UP)
-
-
-def _num(value: Optional[Decimal]) -> Optional[float]:
-    return float(value) if value is not None else None
-
-
-def _keep_printed_precision(value: Decimal) -> Decimal:
-    """Up to 3 decimals, as printed (62.988 stays 62.988, 560.5 stays 560.50); never rounded to paise."""
-    v3 = value.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
-    return v3 if v3 != v3.quantize(Decimal("0.01")) else v3.quantize(Decimal("0.01"))
+# Decimal money helpers now live in services/money.py (shared with sales, purchases, voice and reports)
+_dec = to_decimal
+_money = quantize_half_up
+_num = to_number
+_keep_printed_precision = keep_printed_precision
 
 
 def resolve_item_arithmetic_py(
@@ -242,11 +223,8 @@ def suggest_misread_decimal_rate(
     if m:
         digits = m.group(1)
     else:
-        try:
-            value = float(text.replace(",", ""))
-        except ValueError:
-            return None
-        if value != int(value):
+        value = _dec(text.replace(",", ""))
+        if value is None or value != value.to_integral_value():
             return None
         digits = str(int(value))
     if len(digits) < 3:
@@ -256,13 +234,14 @@ def suggest_misread_decimal_rate(
         readings.add(digits[:i] + "." + digits[i:])  # decimal point dropped
         if i < len(digits) - 1:
             readings.add(digits[:i] + "." + digits[i + 1:])  # decimal point read as a digit
-    target = printed_amount + discount - tax
+    # Decimal throughout (no float tolerance comparisons); a match keeps up to 3 decimals
+    q, target = _dec(quantity), _dec(printed_amount) + (_dec(discount) or Decimal("0")) - (_dec(tax) or Decimal("0"))
     matches = set()
     for r in readings:
-        cand = float(r)
-        if cand > 0 and abs(quantity * cand - target) <= 0.011:
-            matches.add(round(cand, 3))
-    return matches.pop() if len(matches) == 1 else None
+        cand = Decimal(r)
+        if cand > 0 and abs(q * cand - target) <= Decimal("0.011"):
+            matches.add(_keep_printed_precision(cand))
+    return float(matches.pop()) if len(matches) == 1 else None
 
 
 def _detect_type(file_bytes: bytes, filename: str) -> str:
@@ -384,12 +363,9 @@ def extract_metadata(lines: List[str], header_text: Optional[str]) -> Dict[str, 
                 nums = re.findall(r"(?:₹|rs\.?\s*)?\d[\d,]*(?:\.\d+)?", line, re.I)
                 if nums:
                     clean_num = re.sub(r"[^\d.]", "", nums[-1])
-                    try:
-                        value = float(clean_num)
-                    except (ValueError, TypeError):
-                        value = None
+                    value = _dec(clean_num)  # Decimal from the printed text, never via float
                     if value is not None and value > 0:
-                        invoice_total, best_priority = value, priority
+                        invoice_total, best_priority = _num(_keep_printed_precision(value)), priority
                 break
 
     return {
@@ -586,9 +562,9 @@ def _extract_invoice_with_new_pipeline(
         if arith_status == "MISMATCH" and pp is not None and prn is not None:
             raw_rate = (it.raw_cells or {}).get("rate") or (it.raw_cells or {}).get("purchase_price") or pp
             misread = suggest_misread_decimal_rate(raw_rate, q, prn, disc, tax)
-            if misread is not None and abs(misread - pp) > 0.005:
+            if misread is not None and abs(_dec(misread) - _dec(pp)) > Decimal("0.005"):
                 line_suggestions.append(
-                    f"Rate ₹{pp:,.2f} may be a misread decimal point: ₹{misread:,.2f} × {q:g} = ₹{prn:,.2f} "
+                    f"Rate {format_rupees(pp)} may be a misread decimal point: {format_rupees(misread)} × {q:g} = {format_rupees(prn)} "
                     "(printed amount). Please check the invoice and confirm."
                 )
                 line_suggested_rate = line_suggested_rate if line_suggested_rate is not None else misread
