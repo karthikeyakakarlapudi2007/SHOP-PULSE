@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { PRODUCT_CATEGORIES } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useUnitRegistry } from '../hooks/useUnitRegistry';
 import type { ProductFormField, ProductFormValues } from '../utils/validators';
 
 interface ProductFormFieldsProps {
@@ -27,6 +28,8 @@ export const ProductFormFields: React.FC<ProductFormFieldsProps> = ({
   onChange,
 }) => {
   const { t } = useLanguage();
+  // Unit suggestions from the canonical unit registry (GET /api/v1/units); the field stays free text
+  const { index: unitIndex } = useUnitRegistry();
   const id = (field: ProductFormField) => `${idPrefix}-${field}`;
   const errorId = (field: ProductFormField) => `${idPrefix}-${field}-error`;
 
@@ -173,7 +176,15 @@ export const ProductFormFields: React.FC<ProductFormFieldsProps> = ({
             placeholder="pkts / kg"
             className={`${inputBase} px-3 py-2.5 text-base sm:text-sm`}
             {...fieldProps('unit')}
+            list={unitIndex ? `${id('unit')}-options` : undefined}
           />
+          {unitIndex && (
+            <datalist id={`${id('unit')}-options`} data-testid="unit-options">
+              {unitIndex.units.map((u) => (
+                <option key={u.id} value={u.label} />
+              ))}
+            </datalist>
+          )}
         </div>
       </div>
     </>

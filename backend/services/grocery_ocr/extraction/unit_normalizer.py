@@ -10,91 +10,14 @@ from pydantic import BaseModel, Field
 
 from services.grocery_ocr.config import GroceryOCRConfig, default_config
 from services.grocery_ocr.logger import get_logger
+from services.unit_registry import ocr_alias_map
 
 logger = get_logger("extraction.unit_normalizer")
 
-# Canonical unit mapping for standard retail and wholesale grocery invoice units
-CANONICAL_UNITS: Dict[str, str] = {
-    # Count / Pieces
-    "pcs": "PCS",
-    "pc": "PCS",
-    "piece": "PCS",
-    "pieces": "PCS",
-    "nos": "NOS",
-    "no": "NOS",
-    "num": "NOS",
-    "doz": "DOZ",
-    "dozen": "DOZ",
-    "dz": "DOZ",
-    "set": "SET",
-    "sets": "SET",
-
-    # Weight
-    "kg": "KG",
-    "kgs": "KG",
-    "kes": "KG",
-    "kilo": "KG",
-    "kilos": "KG",
-    "kilogram": "KG",
-    "kilograms": "KG",
-    "g": "G",
-    "gm": "G",
-    "gms": "G",
-    "gram": "G",
-    "grams": "G",
-    "qtl": "QTL",
-    "quintal": "QTL",
-    "ton": "TON",
-    "tonne": "TON",
-
-    # Volume
-    "l": "L",
-    "lt": "L",
-    "ltr": "L",
-    "ltrs": "L",
-    "litre": "L",
-    "litres": "L",
-    "liter": "L",
-    "liters": "L",
-    "ml": "ML",
-    "mls": "ML",
-
-    # Packaging / Bags / Containers (Wholesale Kirana)
-    "bag": "BAG",
-    "bags": "BAG",
-    "bor": "BOR",
-    "bora": "BOR",
-    "bori": "BOR",
-    "boras": "BOR",
-    "pkt": "PKT",
-    "pkts": "PKT",
-    "pack": "PKT",
-    "packs": "PKT",
-    "packet": "PKT",
-    "packets": "PKT",
-    "box": "BOX",
-    "boxes": "BOX",
-    "bx": "BOX",
-    "pet": "PET",
-    "pets": "PET",
-    "btl": "PET",
-    "btls": "PET",
-    "bottle": "PET",
-    "bottles": "PET",
-    "tin": "TIN",
-    "tins": "TIN",
-    "can": "CAN",
-    "cans": "CAN",
-    "jar": "JAR",
-    "jars": "JAR",
-    "pouch": "POUCH",
-    "pouches": "POUCH",
-    "ctn": "CARTON",
-    "carton": "CARTON",
-    "cartons": "CARTON",
-    "case": "CASE",
-    "cases": "CASE",
-}
+# Canonical unit mapping (alias -> OCR code, e.g. "kgs" -> "KG", "bottle" -> "PET").
+# Derived from the canonical unit registry (services/unit_registry.py), which now holds every alias
+# that used to be listed here; the OCR codes and their meaning are unchanged.
+CANONICAL_UNITS: Dict[str, str] = ocr_alias_map()
 
 
 class UnitNormalizationResult(BaseModel):

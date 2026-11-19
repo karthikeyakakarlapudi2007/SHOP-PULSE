@@ -1,0 +1,580 @@
+{
+ "version": 1,
+ "max_fraction_digits": 3,
+ "families": [
+  {
+   "id": "mass",
+   "label": "Mass",
+   "kind": "measure",
+   "base_unit": "g",
+   "auto_convertible": true,
+   "units": [
+    "kg",
+    "g",
+    "qtl",
+    "ton"
+   ]
+  },
+  {
+   "id": "volume",
+   "label": "Volume",
+   "kind": "measure",
+   "base_unit": "ml",
+   "auto_convertible": true,
+   "units": [
+    "L",
+    "ml"
+   ]
+  },
+  {
+   "id": "count",
+   "label": "Count",
+   "kind": "count",
+   "base_unit": "pcs",
+   "auto_convertible": true,
+   "units": [
+    "pcs",
+    "nos",
+    "dozen"
+   ]
+  },
+  {
+   "id": "packet",
+   "label": "Packet",
+   "kind": "package",
+   "base_unit": "packet",
+   "auto_convertible": false,
+   "units": [
+    "packet"
+   ]
+  },
+  {
+   "id": "box",
+   "label": "Box",
+   "kind": "package",
+   "base_unit": "box",
+   "auto_convertible": false,
+   "units": [
+    "box"
+   ]
+  },
+  {
+   "id": "bottle",
+   "label": "Bottle",
+   "kind": "package",
+   "base_unit": "bottle",
+   "auto_convertible": false,
+   "units": [
+    "bottle"
+   ]
+  },
+  {
+   "id": "bag",
+   "label": "Bag",
+   "kind": "package",
+   "base_unit": "bag",
+   "auto_convertible": false,
+   "units": [
+    "bag"
+   ]
+  },
+  {
+   "id": "bora",
+   "label": "Bora",
+   "kind": "package",
+   "base_unit": "bora",
+   "auto_convertible": false,
+   "units": [
+    "bora"
+   ]
+  },
+  {
+   "id": "tin",
+   "label": "Tin",
+   "kind": "package",
+   "base_unit": "tin",
+   "auto_convertible": false,
+   "units": [
+    "tin"
+   ]
+  },
+  {
+   "id": "can",
+   "label": "Can",
+   "kind": "package",
+   "base_unit": "can",
+   "auto_convertible": false,
+   "units": [
+    "can"
+   ]
+  },
+  {
+   "id": "jar",
+   "label": "Jar",
+   "kind": "package",
+   "base_unit": "jar",
+   "auto_convertible": false,
+   "units": [
+    "jar"
+   ]
+  },
+  {
+   "id": "pouch",
+   "label": "Pouch",
+   "kind": "package",
+   "base_unit": "pouch",
+   "auto_convertible": false,
+   "units": [
+    "pouch"
+   ]
+  },
+  {
+   "id": "carton",
+   "label": "Carton",
+   "kind": "package",
+   "base_unit": "carton",
+   "auto_convertible": false,
+   "units": [
+    "carton"
+   ]
+  },
+  {
+   "id": "case",
+   "label": "Case",
+   "kind": "package",
+   "base_unit": "case",
+   "auto_convertible": false,
+   "units": [
+    "case"
+   ]
+  },
+  {
+   "id": "set",
+   "label": "Set",
+   "kind": "package",
+   "base_unit": "set",
+   "auto_convertible": false,
+   "units": [
+    "set"
+   ]
+  }
+ ],
+ "units": [
+  {
+   "id": "kg",
+   "label": "kg",
+   "family": "mass",
+   "kind": "measure",
+   "base_unit": "g",
+   "factor_to_base": 1000,
+   "allows_fraction": true,
+   "convertible": true,
+   "compatible_units": [
+    "kg",
+    "g",
+    "qtl",
+    "ton"
+   ],
+   "aliases": [
+    "kes",
+    "kg",
+    "kgs",
+    "kilo",
+    "kilogram",
+    "kilograms",
+    "kilos"
+   ]
+  },
+  {
+   "id": "g",
+   "label": "g",
+   "family": "mass",
+   "kind": "measure",
+   "base_unit": "g",
+   "factor_to_base": 1,
+   "allows_fraction": true,
+   "convertible": true,
+   "compatible_units": [
+    "kg",
+    "g",
+    "qtl",
+    "ton"
+   ],
+   "aliases": [
+    "g",
+    "gm",
+    "gms",
+    "gr",
+    "gram",
+    "grams"
+   ]
+  },
+  {
+   "id": "qtl",
+   "label": "quintal",
+   "family": "mass",
+   "kind": "measure",
+   "base_unit": "g",
+   "factor_to_base": 100000,
+   "allows_fraction": false,
+   "convertible": true,
+   "compatible_units": [
+    "kg",
+    "g",
+    "qtl",
+    "ton"
+   ],
+   "aliases": [
+    "qtl",
+    "quintal",
+    "quintals"
+   ]
+  },
+  {
+   "id": "ton",
+   "label": "tonne",
+   "family": "mass",
+   "kind": "measure",
+   "base_unit": "g",
+   "factor_to_base": 1000000,
+   "allows_fraction": false,
+   "convertible": true,
+   "compatible_units": [
+    "kg",
+    "g",
+    "qtl",
+    "ton"
+   ],
+   "aliases": [
+    "ton",
+    "tonne",
+    "tonnes",
+    "tons"
+   ]
+  },
+  {
+   "id": "L",
+   "label": "L",
+   "family": "volume",
+   "kind": "measure",
+   "base_unit": "ml",
+   "factor_to_base": 1000,
+   "allows_fraction": true,
+   "convertible": true,
+   "compatible_units": [
+    "L",
+    "ml"
+   ],
+   "aliases": [
+    "l",
+    "liter",
+    "liters",
+    "litre",
+    "litres",
+    "lt",
+    "ltr",
+    "ltrs"
+   ]
+  },
+  {
+   "id": "ml",
+   "label": "ml",
+   "family": "volume",
+   "kind": "measure",
+   "base_unit": "ml",
+   "factor_to_base": 1,
+   "allows_fraction": true,
+   "convertible": true,
+   "compatible_units": [
+    "L",
+    "ml"
+   ],
+   "aliases": [
+    "milliliter",
+    "milliliters",
+    "millilitre",
+    "millilitres",
+    "ml",
+    "mls"
+   ]
+  },
+  {
+   "id": "pcs",
+   "label": "pcs",
+   "family": "count",
+   "kind": "count",
+   "base_unit": "pcs",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": true,
+   "compatible_units": [
+    "pcs",
+    "nos",
+    "dozen"
+   ],
+   "aliases": [
+    "pc",
+    "pcs",
+    "piece",
+    "pieces"
+   ]
+  },
+  {
+   "id": "nos",
+   "label": "nos",
+   "family": "count",
+   "kind": "count",
+   "base_unit": "pcs",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": true,
+   "compatible_units": [
+    "pcs",
+    "nos",
+    "dozen"
+   ],
+   "aliases": [
+    "no",
+    "nos",
+    "num"
+   ]
+  },
+  {
+   "id": "dozen",
+   "label": "dozen",
+   "family": "count",
+   "kind": "count",
+   "base_unit": "pcs",
+   "factor_to_base": 12,
+   "allows_fraction": false,
+   "convertible": true,
+   "compatible_units": [
+    "pcs",
+    "nos",
+    "dozen"
+   ],
+   "aliases": [
+    "doz",
+    "dozen",
+    "dozens",
+    "dz"
+   ]
+  },
+  {
+   "id": "packet",
+   "label": "packet",
+   "family": "packet",
+   "kind": "package",
+   "base_unit": "packet",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "packet"
+   ],
+   "aliases": [
+    "pack",
+    "packet",
+    "packets",
+    "packs",
+    "pkt",
+    "pkts"
+   ]
+  },
+  {
+   "id": "box",
+   "label": "box",
+   "family": "box",
+   "kind": "package",
+   "base_unit": "box",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "box"
+   ],
+   "aliases": [
+    "box",
+    "boxes",
+    "bx"
+   ]
+  },
+  {
+   "id": "bottle",
+   "label": "bottle",
+   "family": "bottle",
+   "kind": "package",
+   "base_unit": "bottle",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "bottle"
+   ],
+   "aliases": [
+    "bottle",
+    "bottles",
+    "btl",
+    "btls",
+    "pet",
+    "pets"
+   ]
+  },
+  {
+   "id": "bag",
+   "label": "bag",
+   "family": "bag",
+   "kind": "package",
+   "base_unit": "bag",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "bag"
+   ],
+   "aliases": [
+    "bag",
+    "bags"
+   ]
+  },
+  {
+   "id": "bora",
+   "label": "bora",
+   "family": "bora",
+   "kind": "package",
+   "base_unit": "bora",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "bora"
+   ],
+   "aliases": [
+    "bor",
+    "bora",
+    "boras",
+    "bori"
+   ]
+  },
+  {
+   "id": "tin",
+   "label": "tin",
+   "family": "tin",
+   "kind": "package",
+   "base_unit": "tin",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "tin"
+   ],
+   "aliases": [
+    "tin",
+    "tins"
+   ]
+  },
+  {
+   "id": "can",
+   "label": "can",
+   "family": "can",
+   "kind": "package",
+   "base_unit": "can",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "can"
+   ],
+   "aliases": [
+    "can",
+    "cans"
+   ]
+  },
+  {
+   "id": "jar",
+   "label": "jar",
+   "family": "jar",
+   "kind": "package",
+   "base_unit": "jar",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "jar"
+   ],
+   "aliases": [
+    "jar",
+    "jars"
+   ]
+  },
+  {
+   "id": "pouch",
+   "label": "pouch",
+   "family": "pouch",
+   "kind": "package",
+   "base_unit": "pouch",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "pouch"
+   ],
+   "aliases": [
+    "pouch",
+    "pouches"
+   ]
+  },
+  {
+   "id": "carton",
+   "label": "carton",
+   "family": "carton",
+   "kind": "package",
+   "base_unit": "carton",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "carton"
+   ],
+   "aliases": [
+    "carton",
+    "cartons",
+    "ctn"
+   ]
+  },
+  {
+   "id": "case",
+   "label": "case",
+   "family": "case",
+   "kind": "package",
+   "base_unit": "case",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "case"
+   ],
+   "aliases": [
+    "case",
+    "cases"
+   ]
+  },
+  {
+   "id": "set",
+   "label": "set",
+   "family": "set",
+   "kind": "package",
+   "base_unit": "set",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "set"
+   ],
+   "aliases": [
+    "set",
+    "sets"
+   ]
+  }
+ ]
+}

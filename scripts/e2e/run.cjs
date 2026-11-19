@@ -38,6 +38,7 @@ const CHECKS = {
   direct_upload_warning_check: 'prepare_warning_assets.py',
   review_promotions_precision_check: null,
   fractional_quantity_block_check: null,
+  unit_registry_check: null,
 };
 
 const log = (msg) => console.log(`[e2e] ${msg}`);

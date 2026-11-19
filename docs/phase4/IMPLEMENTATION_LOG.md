@@ -58,3 +58,53 @@ Baseline before 9a: 667 backend tests. Now 687 (+20 new); no existing test chang
 - **Incident during 9a:** one Vitest run made before that fix opened `backend/shoppulse.db` through the auto-started backend. SQLite then removed the empty `-wal` and the `-shm` side files. `shoppulse.db` itself is unchanged (SHA-256 `63c44cad…639d`, 303,104 bytes, modified 2026-11-18 18:05:22). All later fingerprints use that state as the baseline.
 - **Side files:** `backend/shoppulse.db-wal` (0 bytes) and `-shm` were created on 2026-11-19 06:49 by the read-only Phase 0 audit queries. The data is unchanged and the files were left in place.
 - **Process clean-up:** one check process (the test-mode Vite on port 5175, started for the auto-start check) had to be stopped by its exact command line, because `setsid` forked. It was this task's own process.
+
+## 2026-11-19 – Workstream 1: canonical unit registry (implemented, uncommitted)
+
+Design, contract and limitations: `UNIT_REGISTRY.md`.
+
+### Files
+
+| File | Change |
+|---|---|
+| `backend/services/unit_registry.py` | **new**: the canonical registry (families, units, aliases, fraction rules), lookups, exact conversion, quantity validation, product-specific conversion objects |
+| `backend/services/grocery_ocr/extraction/unit_normalizer.py` | the literal 72-alias table is replaced by the registry-derived `CANONICAL_UNITS` (same name, same codes) |
+| `backend/services/product_matching.py` | its private alias and factor tables are replaced by registry lookups |
+| `backend/schemas/units.py`, `backend/api/routes/units.py`, `backend/api/main.py` | **new** read-only, authenticated `GET /api/v1/units` |
+| `backend/tests/test_unit_registry.py` | **new**: 108 tests |
+| `src/api/units.ts`, `src/utils/unitRegistry.ts`, `src/hooks/useUnitRegistry.ts` | **new**: types, lookups, cached loader |
+| `src/components/ProductFormFields.tsx` | unit suggestions from the registry (field stays free text) |
+| `src/tests/unitRegistry.test.ts`, `src/tests/fixtures/unit_registry.json` | **new**: frontend tests; the fixture is checked against the live registry by a backend test |
+| `scripts/e2e/unit_registry_check.cjs`, `scripts/e2e/harness/product-form.html`, `product_form.tsx`, `scripts/e2e/run.cjs` | **new** browser check (desktop and phone, registry available or down), registered in the launcher |
+| `src/tests/testIsolation.test.ts` | lint fix (unsafe optional chaining), from workstream 9a |
+| `docs/phase4/UNIT_REGISTRY.md`, this log | documentation |
+
+Not changed: schema, data, money calculations, stock behaviour, OCR engine, Voice-to-Bill.
+
+### Verification (executed)
+
+| Level | Result |
+|---|---|
+| Unit and integration (backend) | `test_unit_registry.py` 108 passed |
+| Unit (frontend) | `unitRegistry.test.ts` 7 passed |
+| System | backend **795 passed, 7 skipped, 0 failed**; Vitest **111 passed** (15 files); TypeScript, lint (exit 0; warnings only in untouched files) and production build pass |
+| System (browser, launcher) | mobile 25/25, metadata 12/12, direct upload 6/6, promotions 17/17, fractional 18/18, unit registry 16/16; `backend/shoppulse.db` unchanged |
+| Regression (OCR datasets, in-memory DB) | every extracted item value, unit and header identical to the last recorded run; only `status` differs (23 cases) because of the earlier status fix |
+| Protected database | SHA-256 `63c44cad…` unchanged before and after all runs |
+
+### Notes
+- **`unit_registry_check` was flaky at first, from the check itself:** it opened the page without a token, the anonymous 401 made the API client clear the token, and the check had set the token in between. Fixed by installing the token before the first load. It then passed 3 runs in a row.
+- **Bug found by the tests and fixed before the report:** `ProductUnitConversion.create` passed a unit object to the lookup. `get_unit` now accepts a resolved `UnitDefinition`.
+
+### Final verification before commit (2026-11-19)
+
+| Check | Result |
+|---|---|
+| Product-matching investigation | the only new spelling is "kilos". Same sizes now match across spellings; two old cases where different sizes could merge (5 vs 10 kilos, 2.5 vs 25 kilos) are now blocked. Distinct brands and items at the same weight still don't match. 21 regression tests added (generated names) |
+| `test_unit_registry.py` | 129 passed |
+| Full backend suite | **816 passed, 7 skipped, 0 failed** (baseline 687; +129 registry tests) |
+| Full Vitest suite (re-run after the `testIsolation` lint fix) | **111 passed, 15 files** (baseline 104; +7) |
+| TypeScript, lint, production build | pass; lint exit 0, no warnings in workstream 1 files |
+| Browser checks (launcher, isolated) | 25/25, 12/12, 6/6, 17/17, 18/18 (unchanged from baseline); unit registry 16/16 |
+| Protected database | `shoppulse.db` SHA-256, size and modification time unchanged before and after all runs; no schema, model or migration file touched |
+| Clean-up | no test servers running; two launcher temp folders kept from the earlier failed `unit_registry_check` runs were removed (test data only) |

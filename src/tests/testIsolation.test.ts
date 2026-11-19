@@ -17,7 +17,7 @@ describe('test isolation: no auto-started backend', () => {
   });
 
   it('the /api proxy keeps the development default unless a test target is given', () => {
-    const target = (config.server?.proxy as Record<string, { target: string }>)['/api'].target;
-    expect(target).toBe(process.env.SHOPPULSE_API_TARGET || 'http://127.0.0.1:8000');
+    const proxy = config.server?.proxy as Record<string, { target: string }> | undefined;
+    expect(proxy?.['/api']?.target).toBe(process.env.SHOPPULSE_API_TARGET || 'http://127.0.0.1:8000');
   });
 });
