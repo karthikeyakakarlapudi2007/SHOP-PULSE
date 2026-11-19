@@ -65,6 +65,15 @@ const EXTRACTION = {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     check(`${label}: page has no horizontal overflow`, overflow <= 1, `overflow ${overflow}px`);
 
+    // Phone pass: the 10 + 1 line's quantity is edited to 13. Free units stay as printed, paid units become 12,
+    // and the amount is recalculated from paid units only (12 x 35 = 420, not 13 x 35 = 455).
+    const edited = label === 'phone';
+    if (edited) {
+      await page.locator('tr:has(input[aria-label="Select E2E Soap 75G"]) input[type=number][step="1"]').fill('13');
+      check('phone: quantity edit keeps the free unit and recalculates from paid units',
+        (await page.locator('text=12 paid + 1 free = 13 received').count()) === 1
+        && (await page.locator('tr:has(input[aria-label="Select E2E Soap 75G"]) >> text=₹420.00').count()) === 1);
+    }
     await page.click('button:has-text("Items to Inventory")');
     await page.waitForTimeout(400);
     check(`${label}: free units need confirmation before posting`, (await page.locator('[data-testid="free-units-confirm"]').count()) === 1 && confirmBodies.length === 0);
@@ -75,16 +84,19 @@ const EXTRACTION = {
     const soap = (body.items || []).find((i) => i.name === 'E2E Soap 75G') || {};
     const cookies = (body.items || []).find((i) => i.name === 'E2E Butter Cookies 5RS') || {};
     check(`${label}: confirmation sent explicitly with the paid/free breakdown`, body.confirm_free_units === true
-      && soap.quantity === 11 && soap.paid_quantity === 10 && soap.free_quantity === 1 && soap.line_amount === 350);
+      && (edited
+        ? soap.quantity === 13 && soap.paid_quantity === 12 && soap.free_quantity === 1 && soap.line_amount === 420
+        : soap.quantity === 11 && soap.paid_quantity === 10 && soap.free_quantity === 1 && soap.line_amount === 350),
+      JSON.stringify([soap.quantity, soap.paid_quantity, soap.free_quantity, soap.line_amount]));
     check(`${label}: printed 3-decimal amount sent unchanged`, cookies.line_amount === 62.988 && cookies.purchase_price === 5.249);
     await page.close();
   }
 
   const products = (await fetch(`${API}/products?limit=100`, { headers: auth }).then((r) => r.json())).items;
   const soapP = products.find((p) => p.name === 'E2E Soap 75G');
-  check('stock: 11 + 11 units received (two confirmations), printed rate kept as cost', soapP && soapP.current_stock === 22 && soapP.purchase_price === 35);
+  check('stock: 11 + 13 units received (two confirmations), rate kept as cost', soapP && soapP.current_stock === 24 && soapP.purchase_price === 35);
   const purchases = (await fetch(`${API}/purchases`, { headers: auth }).then((r) => r.json())).items;
-  check('purchase total stored with 3 decimals', purchases.length === 2 && purchases.every((p) => p.total_amount === 412.988), JSON.stringify(purchases.map((p) => p.total_amount)));
+  check('purchase total stored with 3 decimals', purchases.length === 2 && purchases.map((p) => p.total_amount).sort((a, b) => a - b).join() === '412.988,482.988', JSON.stringify(purchases.map((p) => p.total_amount)));
   await browser.close();
   console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed`);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });

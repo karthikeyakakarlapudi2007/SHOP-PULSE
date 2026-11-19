@@ -133,6 +133,37 @@ export function promoPayload(item: PromoInput): { paid_quantity?: number; free_q
   return out;
 }
 
+export interface EditableLine extends PromoInput {
+  purchase_price: number | null;
+  amount: number | null;
+}
+
+/**
+ * Apply a review edit to a line. When the quantity or rate changes, the amount is recalculated from the
+ * paid units (rate × paid), never from all received units: on a "10 paid + 1 free" line the free units
+ * stay as printed and an edited quantity changes only the paid units. If the new quantity is smaller
+ * than the free units the breakdown no longer applies and the line is treated as an ordinary line.
+ */
+export function applyLineEdit<T extends EditableLine>(item: T, field: keyof T, value: unknown): T {
+  const updated = { ...item, [field]: value } as T;
+  const promo = !updated.is_free_item && typeof updated.free_quantity === 'number' && updated.free_quantity > 0;
+  if (field === 'quantity' && promo) {
+    const q = updated.quantity;
+    if (typeof q === 'number' && q >= (updated.free_quantity as number)) {
+      updated.paid_quantity = q - (updated.free_quantity as number);
+    } else {
+      updated.paid_quantity = null;
+      updated.free_quantity = null;
+    }
+  }
+  if ((field === 'quantity' || field === 'purchase_price') && updated.quantity && updated.purchase_price) {
+    const paid = typeof updated.paid_quantity === 'number' && typeof updated.free_quantity === 'number'
+      && updated.free_quantity > 0 ? updated.paid_quantity : updated.quantity;
+    updated.amount = round3(paid * updated.purchase_price);
+  }
+  return updated;
+}
+
 // ------------------------------------------------------------------- whole-unit stock (P0)
 
 export interface QuantityInput {

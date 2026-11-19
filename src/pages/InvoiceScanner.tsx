@@ -18,6 +18,7 @@ import {
 import { getAccessToken } from '../api/client';
 import { documentPrepApi, type PhotoAssessment, type PrepExtractResult } from '../api/documentPrep';
 import {
+  applyLineEdit,
   calculatedFieldLabels,
   componentSummary,
   formatMoney,
@@ -287,12 +288,8 @@ export const InvoiceScanner: React.FC = () => {
       if (!prev) return null;
       const updatedItems = prev.items.map((item) => {
         if (item.id === id) {
-          const updated = { ...item, [field]: value };
-          // If qty and price edited, recompute amount
-          if ((field === 'quantity' || field === 'purchase_price') && updated.quantity && updated.purchase_price) {
-            updated.amount = round3(updated.quantity * updated.purchase_price);
-          }
-          return updated;
+          // Recalculates the amount from the paid units when qty or rate changes (free units stay as printed)
+          return applyLineEdit(item, field, value);
         }
         return item;
       });

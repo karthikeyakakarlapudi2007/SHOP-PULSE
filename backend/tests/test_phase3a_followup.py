@@ -225,3 +225,21 @@ def test_extraction_totals_keep_three_decimals(monkeypatch):
     res = run_api(monkeypatch, [item("COOKIE A", 12, D("5.249"), D("62.988")), item("COOKIE B", 12, D("7.143"), D("85.716"))],
                   "Net Amount : 148.704")
     assert res.total_amount == 148.704 and res.total_reconciliation["status"] == "matched"
+
+
+# ------------------------------------------------------------------------------------- invoice status
+
+
+def test_invoice_with_a_flagged_line_is_never_reported_as_success(monkeypatch):
+    """Before: 2 good lines out of 3 passed the 70% confidence rule, so the invoice read 'success'
+    although one line still needed checking."""
+    good = [item("SALT 1KG", 20, 22, 440), item("SUGAR 1KG", 10, 44, 440)]
+    bad = item("OIL 1L", 12, 140, 1500)  # 12 x 140 = 1680, printed 1500: flagged
+    res = run_api(monkeypatch, good + [bad])
+    assert res.items[2].needs_review is True and not any(i.needs_review for i in res.items[:2])
+    assert res.status == "needs_review" and res.reason == "1 of 3 lines needs review"
+
+
+def test_invoice_with_only_clean_lines_is_still_a_success(monkeypatch):
+    res = run_api(monkeypatch, [item("SALT 1KG", 20, 22, 440), item("SUGAR 1KG", 10, 44, 440)])
+    assert res.status == "success" and not any(i.needs_review for i in res.items)

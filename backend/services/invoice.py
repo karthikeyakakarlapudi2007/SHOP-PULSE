@@ -776,6 +776,11 @@ def _extract_invoice_with_new_pipeline(
         # Never rejected for a mismatch: the reviewer checks the lines
         status_str = "needs_review"
         reason_str = reconciliation["message"]
+    elif items and any(i.needs_review for i in items):
+        # The invoice is never reported as a success while any of its lines still needs checking
+        flagged = sum(1 for i in items if i.needs_review)
+        status_str = "needs_review"
+        reason_str = f"{flagged} of {len(items)} line{'s' if len(items) != 1 else ''} need{'s' if flagged == 1 else ''} review"
     elif items:
         valid_items = [i for i in items if i.confidence >= 60 and i.purchase_price is not None and i.quantity is not None]
         if valid_items and (len(valid_items) / len(items)) >= 0.7:

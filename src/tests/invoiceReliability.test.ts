@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  applyLineEdit,
   calculatedFieldLabels,
   componentSummary,
   formatMoney,
@@ -189,5 +190,34 @@ describe('P0: fractional quantities are never rounded into stock', () => {
     const src = readFileSync(resolve(__dirname, '../pages/InvoiceScanner.tsx'), 'utf8');
     expect(src).not.toMatch(/Math\.round\(Number\(i\.quantity\)\)/);
     expect(src).toMatch(/selectedItems\.some\(hasFractionalQuantity\)/);
+  });
+});
+
+describe('editing a line recalculates the amount from paid units only', () => {
+  const promo = { quantity: 11, paid_quantity: 10, free_quantity: 1, purchase_price: 35, amount: 350, is_free_item: false };
+
+  it('rate edit on a 10 + 1 line: amount = paid units x rate (free units cost nothing extra)', () => {
+    const r = applyLineEdit(promo, 'purchase_price', 36);
+    expect(r.amount).toBe(360);
+    expect([r.quantity, r.paid_quantity, r.free_quantity]).toEqual([11, 10, 1]);
+  });
+
+  it('quantity edit keeps the printed free units and changes only the paid units', () => {
+    const r = applyLineEdit(promo, 'quantity', 13);
+    expect([r.paid_quantity, r.free_quantity]).toEqual([12, 1]);
+    expect(r.amount).toBe(420); // was 13 x 35 = 455 before the fix
+  });
+
+  it('a quantity below the free units drops the breakdown (ordinary line)', () => {
+    const r = applyLineEdit({ ...promo, free_quantity: 6, paid_quantity: 6, quantity: 12 }, 'quantity', 4);
+    expect([r.paid_quantity, r.free_quantity]).toEqual([null, null]);
+    expect(r.amount).toBe(140);
+  });
+
+  it('ordinary lines and printed free lines behave as before; 3 decimals kept', () => {
+    expect(applyLineEdit({ quantity: 12, purchase_price: 5, amount: 60 }, 'purchase_price', 5.249).amount).toBe(62.988);
+    expect(applyLineEdit({ quantity: 20, purchase_price: 22, amount: 440 }, 'quantity', 25).amount).toBe(550);
+    const free = applyLineEdit({ quantity: 6, purchase_price: 0, amount: 0, is_free_item: true }, 'quantity', 8);
+    expect([free.quantity, free.amount]).toEqual([8, 0]);
   });
 });

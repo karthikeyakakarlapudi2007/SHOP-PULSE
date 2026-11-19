@@ -66,6 +66,15 @@ All test values are generic. Values from the private invoice photos were removed
 - A mismatch can also come from a missed or extra line, not only a decimal error. Suggestions are given only when one or two lines explain the gap at ×/÷10, 100 or 1000.
 - Money is still stored as `Float` until the Numeric(14,3) migration is approved. Values round-trip correctly to 3 decimals, but SQL `SUM` adds binary doubles.
 - Loose-weight lines (2.5 kg) must be re-expressed in whole units or deselected until fractional stock (P2) is approved.
-- Pre-existing: editing the quantity of a paid + free line recalculates its amount from all received units. The printed amount is replaced only if the user edits that line.
-- Pre-existing: the document-level `status` can read `success` while individual lines are flagged. The review screen flags those lines individually.
 - The boundary refinement acts only where numeric values form a clear block. Ambiguous layouts keep the previous behaviour plus the straddle flag.
+
+## 6. Follow-up fixes (two pre-existing issues)
+
+- **Editing a paid + free line:** changing its quantity or rate recalculated the amount from all received units
+  (13 × ₹35 = ₹455 for "12 paid + 1 free"), and the free-unit breakdown was dropped. The free units now stay as
+  printed, an edited quantity changes only the paid units, and the amount is paid units × rate (₹420). A quantity
+  below the free units turns the line into an ordinary line. Tested in `invoiceReliability.test.ts` and in the
+  phone pass of `review_promotions_precision_check.cjs` (now 17 checks).
+- **Invoice status:** an invoice with any line still needing review is reported as `needs_review` (reason
+  "1 of 3 lines needs review"), never `success`. The review screen does not use this field; it only changes the
+  API value. Tested in `test_phase3a_followup.py`.
