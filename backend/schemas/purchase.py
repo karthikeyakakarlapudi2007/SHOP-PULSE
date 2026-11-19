@@ -2,10 +2,12 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
+from schemas.quantity import Quantity
 
 class PurchaseItemCreate(BaseModel):
     product_id: UUID = Field(..., description="Product ID to purchase")
-    quantity: int = Field(..., gt=0, description="Quantity of product purchased (must be > 0)")
+    quantity: Quantity = Field(..., gt=0, description="Quantity purchased (> 0; fractional only for kg, g, L, ml)")
+    unit: Optional[str] = Field(None, description="Unit of the quantity when it differs from the product unit (e.g. g for a kg product)")
     purchase_price: float = Field(..., ge=0, description="Unit purchase price (must be >= 0)")
 
 class PurchaseCreate(BaseModel):
@@ -16,7 +18,7 @@ class PurchaseItemResponse(BaseModel):
     id: UUID
     purchase_id: UUID
     product_id: UUID
-    quantity: int
+    quantity: Quantity
     purchase_price: float
     # Additional read-only details for viewing/printing a purchase record
     product_name: Optional[str] = None

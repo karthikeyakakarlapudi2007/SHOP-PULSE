@@ -50,8 +50,7 @@ const EXTRACTION = {
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ ...EXTRACTION, invoice_number: `${EXTRACTION.invoice_number}-${label}` }),
     }));
-    await page.goto(HARNESS);
-    await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
+    await page.addInitScript((t) => localStorage.setItem('shoppulse_token', t), tok);  // token present before any page script (no 401 race)
     await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', { name: 'bill.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 e2e') });

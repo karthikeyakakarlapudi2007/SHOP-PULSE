@@ -164,7 +164,7 @@ export function applyLineEdit<T extends EditableLine>(item: T, field: keyof T, v
   return updated;
 }
 
-// ------------------------------------------------------------------- whole-unit stock (P0)
+// ------------------------------------------------------------------- units and fractional quantities (Phase 4)
 
 export interface QuantityInput {
   product_name?: string;
@@ -174,27 +174,106 @@ export interface QuantityInput {
   free_quantity?: number | null;
 }
 
-const isWhole = (v: number) => Math.abs(v - Math.round(v)) < 1e-9;
-
 /**
- * True when a line's quantity (or its paid / free units) is not a whole number. Stock is tracked in
- * whole units, so such a line is never rounded: confirmation is blocked until the user corrects it.
+ * The registry lookups the review screen needs: the unit index built from GET /api/v1/units
+ * (createUnitIndex). No unit list is kept here; every rule comes from the canonical registry.
  */
-export function hasFractionalQuantity(item: QuantityInput): boolean {
-  return [item.quantity, item.paid_quantity, item.free_quantity].some((v) => typeof v === 'number' && !isWhole(v));
+export interface UnitRules {
+  normalize(raw: string | null | undefined): string | null;
+  allowsFraction(raw: string): boolean | null;
+  maxFractionDigits: number;
+  units: { id: string; allows_fraction: boolean }[];
 }
 
-/** Blocking message for lines with a fractional quantity; null when there are none. */
-export function fractionalQuantityNotice(items: QuantityInput[]): string | null {
-  const lines = items.filter(hasFractionalQuantity);
+const isWhole = (v: number) => Math.abs(v - Math.round(v)) < 1e-9;
+
+const quantityValues = (item: QuantityInput) =>
+  [item.quantity, item.paid_quantity, item.free_quantity].filter((v): v is number => typeof v === 'number');
+
+/** True when a line's quantity (or its paid / free units) is not a whole number. */
+export function hasFractionalQuantity(item: QuantityInput): boolean {
+  return quantityValues(item).some((v) => !isWhole(v));
+}
+
+export type UnitProblem = 'missing' | 'unregistered';
+
+/**
+ * Why a line's unit cannot be used for stock: not printed / not read, or not a registered unit.
+ * A missing unit is never assumed to be pcs and no unit is guessed from the product name.
+ */
+export function unitProblem(unit: string | null | undefined, rules: UnitRules): UnitProblem | null {
+  if (!unit || !unit.trim()) return 'missing';
+  return rules.normalize(unit) ? null : 'unregistered';
+}
+
+/** Short per-line warning for a unit problem. */
+export function unitProblemText(unit: string | null | undefined, problem: UnitProblem): string {
+  return problem === 'missing'
+    ? 'Unit missing: select the unit printed on the invoice'
+    : `'${(unit ?? '').trim()}' is not a registered unit: select one`;
+}
+
+/** Blocking message for selected lines whose unit is missing or unregistered; null when all are valid. */
+export function unitBlockNotice(items: QuantityInput[], rules: UnitRules | null): string | null {
+  if (!rules) {
+    return items.length
+      ? 'The unit list could not be loaded, so the units cannot be checked. Nothing has been added to stock. ' +
+          'Reload the page and try again.'
+      : null;
+  }
+  const lines = items.filter((i) => unitProblem(i.unit, rules));
   if (lines.length === 0) return null;
   const list = lines
-    .map((i) => `${i.product_name || 'Unnamed item'} (${i.quantity ?? '?'}${i.unit ? ` ${i.unit}` : ''})`)
+    .map((i) =>
+      unitProblem(i.unit, rules) === 'missing'
+        ? `${i.product_name || 'Unnamed item'} (unit missing)`
+        : `${i.product_name || 'Unnamed item'} ('${(i.unit ?? '').trim()}' is not a registered unit)`,
+    )
     .join('; ');
   return (
-    `Fractional stock quantities are not currently supported: stock is tracked in whole units. ` +
-    `Nothing has been added to stock. Correct the quantity of ${list} — for example enter whole packs or bags ` +
-    `and adjust the rate — or deselect ${lines.length > 1 ? 'these lines' : 'the line'}.`
+    `Every line needs a registered unit before it is added to stock. Nothing has been added to stock. ` +
+    `Select the unit for ${list}, or deselect ${lines.length > 1 ? 'these lines' : 'the line'}.`
+  );
+}
+
+export type QuantityProblem = 'whole_only' | 'too_many_decimals';
+
+/**
+ * Whether a line's quantity suits its unit: fractions only for units the registry marks as fractional
+ * (kg, g, L, ml), with at most maxFractionDigits decimals. Never rounded. Null when the unit itself is
+ * missing or unregistered (that is reported first).
+ */
+export function quantityProblem(item: QuantityInput, rules: UnitRules | null): QuantityProblem | null {
+  if (!rules || unitProblem(item.unit, rules)) return null;
+  const values = quantityValues(item);
+  if (values.every(isWhole)) return null;
+  if (!rules.allowsFraction(item.unit as string)) return 'whole_only';
+  const scale = 10 ** rules.maxFractionDigits;
+  return values.every((v) => Math.abs(v * scale - Math.round(v * scale)) < 1e-6) ? null : 'too_many_decimals';
+}
+
+/** Units that accept fractions, from the registry (for messages). */
+export function fractionalUnitList(rules: UnitRules): string {
+  return rules.units.filter((u) => u.allows_fraction).map((u) => u.id).join(', ');
+}
+
+/** Blocking message for selected lines whose quantity does not suit the unit; null when there are none. */
+export function fractionalQuantityNotice(items: QuantityInput[], rules: UnitRules | null): string | null {
+  if (!rules) return null;
+  const lines = items.filter((i) => quantityProblem(i, rules));
+  if (lines.length === 0) return null;
+  const list = lines
+    .map((i) => {
+      const name = `${i.product_name || 'Unnamed item'} (${i.quantity ?? '?'} ${(i.unit ?? '').trim()})`;
+      return quantityProblem(i, rules) === 'whole_only'
+        ? `${name}: ${(i.unit ?? '').trim()} is counted in whole numbers`
+        : `${name}: at most ${rules.maxFractionDigits} decimal places`;
+    })
+    .join('; ');
+  return (
+    `Fractional quantities are allowed only for ${fractionalUnitList(rules)}. Nothing has been added to stock. ` +
+    `Correct ${list} — for example enter whole packs and adjust the rate, or choose the measured unit — ` +
+    `or deselect ${lines.length > 1 ? 'these lines' : 'the line'}. Quantities are never rounded.`
   );
 }
 

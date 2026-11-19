@@ -101,7 +101,8 @@ _FAMILY_LIST: Tuple[UnitFamily, ...] = (
     *(UnitFamily(pid, label, "package", pid) for pid, label in (
         ("packet", "Packet"), ("box", "Box"), ("bottle", "Bottle"), ("bag", "Bag"), ("bora", "Bora"),
         ("tin", "Tin"), ("can", "Can"), ("jar", "Jar"), ("pouch", "Pouch"), ("carton", "Carton"),
-        ("case", "Case"), ("set", "Set"),
+        ("case", "Case"), ("set", "Set"), ("bar", "Bar"), ("sachet", "Sachet"), ("roll", "Roll"),
+        ("strip", "Strip"), ("tray", "Tray"), ("tube", "Tube"),
     )),
 )
 
@@ -139,6 +140,13 @@ _UNIT_LIST: Tuple[UnitDefinition, ...] = (
     UnitDefinition("carton", "carton", "carton", 1, False, "CARTON", ("ctn", "carton", "cartons")),
     UnitDefinition("case", "case", "case", 1, False, "CASE", ("case", "cases")),
     UnitDefinition("set", "set", "set", 1, False, "SET", ("set", "sets")),
+    # Common retail package units added with fractional inventory (Phase 4); OCR code = former verbatim text
+    UnitDefinition("bar", "bar", "bar", 1, False, "BAR", ("bar", "bars")),
+    UnitDefinition("sachet", "sachet", "sachet", 1, False, "SACHET", ("sachet", "sachets")),
+    UnitDefinition("roll", "roll", "roll", 1, False, "ROLL", ("roll", "rolls")),
+    UnitDefinition("strip", "strip", "strip", 1, False, "STRIP", ("strip", "strips")),
+    UnitDefinition("tray", "tray", "tray", 1, False, "TRAY", ("tray", "trays")),
+    UnitDefinition("tube", "tube", "tube", 1, False, "TUBE", ("tube", "tubes")),
 )
 
 FAMILIES: Dict[str, UnitFamily] = {f.id: f for f in _FAMILY_LIST}

@@ -31,11 +31,11 @@ class _NoProducts:
         return []
 
 
-def item(name, qty=None, rate=None, amount=None, **kw) -> ExtractedInvoiceItem:
+def item(name, qty=None, rate=None, amount=None, unit="pcs", **kw) -> ExtractedInvoiceItem:
     d = lambda v: Decimal(str(v)) if v is not None else None  # noqa: E731
     return ExtractedInvoiceItem(item_id=f"i_{uuid.uuid4().hex[:6]}", raw_product_name=name,
                                 normalized_product_name=name, quantity=d(qty), purchase_price=d(rate),
-                                printed_amount=d(amount), validation_status="VERIFIED", ocr_confidence=95.0, **kw)
+                                printed_amount=d(amount), validation_status="VERIFIED", ocr_confidence=95.0, unit=unit, **kw)
 
 
 def run_api(monkeypatch, items: List[ExtractedInvoiceItem], text: str = "", custom: Optional[dict] = None):

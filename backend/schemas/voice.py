@@ -1,12 +1,13 @@
 from typing import List, Optional, Union
 from uuid import UUID
 from pydantic import BaseModel, Field
+from schemas.quantity import Quantity
 
 class VoiceProductCandidate(BaseModel):
     id: str
     name: str
     selling_price: float
-    current_stock: int
+    current_stock: Quantity
     unit: str
     category: Optional[str] = None
     sku: Optional[str] = None
@@ -20,10 +21,10 @@ class MatchedVoiceItem(BaseModel):
         None, description="Precise unit price to send with the sale: quantity x this, rounded to paise, equals total_price")
     total_price: float
     unit: str
-    current_stock: int
+    current_stock: Quantity
     is_out_of_stock: bool = False
     is_insufficient_stock: bool = False
-    available_stock: int
+    available_stock: Quantity
 
 class AmbiguousVoiceItem(BaseModel):
     queried_name: str

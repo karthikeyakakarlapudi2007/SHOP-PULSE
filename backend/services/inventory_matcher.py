@@ -11,6 +11,7 @@ from schemas.voice import (
 )
 from services.voice_parser import ExtractedItem
 from services.money import bill_total, quantize_half_up, round_currency, round_price, sale_line_amount, to_decimal, to_number
+from services.stock import quantity_number
 
 def normalize_text_for_search(text: str) -> str:
     """Removes punctuation and lowercases text for fuzzy token search while preserving Indic scripts."""
@@ -90,7 +91,7 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
             id=str(p.id),
             name=p.name,
             selling_price=float(p.selling_price if hasattr(p, "selling_price") else getattr(p, "price", 0.0)),
-            current_stock=int(p.current_stock if hasattr(p, "current_stock") else getattr(p, "stock", 0)),
+            current_stock=quantity_number(p.current_stock if hasattr(p, "current_stock") else getattr(p, "stock", 0)),
             unit=str(p.unit or "pcs"),
             category=getattr(p, "category", None),
             sku=getattr(p, "sku", None),
@@ -99,7 +100,7 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
         id=str(p["id"]),
         name=p["name"],
         selling_price=float(p.get("selling_price", p.get("price", 0.0))),
-        current_stock=int(p.get("current_stock", p.get("stock", 0))),
+        current_stock=quantity_number(p.get("current_stock", p.get("stock", 0))),
         unit=str(p.get("unit", "pcs")),
         category=p.get("category"),
         sku=p.get("sku"),

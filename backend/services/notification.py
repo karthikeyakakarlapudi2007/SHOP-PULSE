@@ -10,6 +10,7 @@ from db.models.product import Product
 from db.models.sale import Sale
 from db.models.user import User
 from services.money import round_currency, sum_decimal
+from services.stock import quantity_number
 from schemas.notification import (
     NotificationCreate,
     NotificationPreferenceUpdate,
@@ -168,8 +169,8 @@ def evaluate_shop_notifications(
     )
 
     for p in products:
-        stock = int(p.current_stock or 0)
-        reorder = int(p.reorder_level) if (p.reorder_level is not None) else 0
+        stock = quantity_number(p.current_stock)  # fractional stock is never truncated
+        reorder = quantity_number(p.reorder_level) if (p.reorder_level is not None) else 0
         has_threshold = p.reorder_level is not None and p.reorder_level > 0
 
         if stock <= 0:

@@ -157,6 +157,66 @@
    "units": [
     "set"
    ]
+  },
+  {
+   "id": "bar",
+   "label": "Bar",
+   "kind": "package",
+   "base_unit": "bar",
+   "auto_convertible": false,
+   "units": [
+    "bar"
+   ]
+  },
+  {
+   "id": "sachet",
+   "label": "Sachet",
+   "kind": "package",
+   "base_unit": "sachet",
+   "auto_convertible": false,
+   "units": [
+    "sachet"
+   ]
+  },
+  {
+   "id": "roll",
+   "label": "Roll",
+   "kind": "package",
+   "base_unit": "roll",
+   "auto_convertible": false,
+   "units": [
+    "roll"
+   ]
+  },
+  {
+   "id": "strip",
+   "label": "Strip",
+   "kind": "package",
+   "base_unit": "strip",
+   "auto_convertible": false,
+   "units": [
+    "strip"
+   ]
+  },
+  {
+   "id": "tray",
+   "label": "Tray",
+   "kind": "package",
+   "base_unit": "tray",
+   "auto_convertible": false,
+   "units": [
+    "tray"
+   ]
+  },
+  {
+   "id": "tube",
+   "label": "Tube",
+   "kind": "package",
+   "base_unit": "tube",
+   "auto_convertible": false,
+   "units": [
+    "tube"
+   ]
   }
  ],
  "units": [
@@ -574,6 +634,108 @@
    "aliases": [
     "set",
     "sets"
+   ]
+  },
+  {
+   "id": "bar",
+   "label": "bar",
+   "family": "bar",
+   "kind": "package",
+   "base_unit": "bar",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "bar"
+   ],
+   "aliases": [
+    "bar",
+    "bars"
+   ]
+  },
+  {
+   "id": "sachet",
+   "label": "sachet",
+   "family": "sachet",
+   "kind": "package",
+   "base_unit": "sachet",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "sachet"
+   ],
+   "aliases": [
+    "sachet",
+    "sachets"
+   ]
+  },
+  {
+   "id": "roll",
+   "label": "roll",
+   "family": "roll",
+   "kind": "package",
+   "base_unit": "roll",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "roll"
+   ],
+   "aliases": [
+    "roll",
+    "rolls"
+   ]
+  },
+  {
+   "id": "strip",
+   "label": "strip",
+   "family": "strip",
+   "kind": "package",
+   "base_unit": "strip",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "strip"
+   ],
+   "aliases": [
+    "strip",
+    "strips"
+   ]
+  },
+  {
+   "id": "tray",
+   "label": "tray",
+   "family": "tray",
+   "kind": "package",
+   "base_unit": "tray",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "tray"
+   ],
+   "aliases": [
+    "tray",
+    "trays"
+   ]
+  },
+  {
+   "id": "tube",
+   "label": "tube",
+   "family": "tube",
+   "kind": "package",
+   "base_unit": "tube",
+   "factor_to_base": 1,
+   "allows_fraction": false,
+   "convertible": false,
+   "compatible_units": [
+    "tube"
+   ],
+   "aliases": [
+    "tube",
+    "tubes"
    ]
   }
  ]

@@ -1,8 +1,9 @@
 /**
- * Browser check (P0): a fractional quantity (2.5 kg) is never rounded into stock.
- * Confirmation is blocked with an explanation, the extracted quantity stays visible for correction,
- * nothing is posted until the line is corrected (desktop) or deselected (phone), and whole-number lines
- * are posted as before. Runs at desktop width and on an emulated Pixel 7.
+ * Browser check (P0, updated for Phase 4): a fractional quantity in a whole-number unit (2.5 box) is
+ * never rounded into stock. kg, g, L and ml accept fractions (checked in invoice_units_fraction_check);
+ * boxes, packets, pcs, dozen, quintal and tonne do not. Confirmation is blocked with an explanation, the
+ * extracted quantity stays visible for correction, nothing is posted until the line is corrected (desktop)
+ * or deselected (phone), and whole-number lines are posted as before. Desktop width and an emulated Pixel 7.
  *
  * The extraction response is fixed (page.route); confirmation goes to the real backend. Generic test values.
  *
@@ -24,7 +25,7 @@ const extraction = (label) => ({
     { id: 'salt', product_name: `E2E Salt 1KG ${label}`, quantity: 20, unit: 'pcs', purchase_price: 22.0, rate: 22.0,
       amount: 440.0, line_total: 440.0, confidence: 95, confidence_level: 'HIGH', needs_review: false,
       validation_issues: [], suggestions: [], derived_fields: [], selling_price: 25.0 },
-    { id: 'sugar', product_name: `E2E Sugar Loose ${label}`, quantity: 2.5, unit: 'kg', purchase_price: 44.0, rate: 44.0,
+    { id: 'giftbox', product_name: `E2E Gift Box ${label}`, quantity: 2.5, unit: 'box', purchase_price: 44.0, rate: 44.0,
       amount: 110.0, line_total: 110.0, confidence: 95, confidence_level: 'HIGH', needs_review: false,
       validation_issues: [], suggestions: [], derived_fields: [], selling_price: 50.0 },
   ],
@@ -46,16 +47,16 @@ const extraction = (label) => ({
     const confirmBodies = [];
     page.on('request', (r) => { if (r.url().includes('/invoices/confirm')) confirmBodies.push(JSON.parse(r.postData() || '{}')); });
     await page.route('**/api/v1/invoices/extract', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(extraction(label)) }));
-    await page.goto(HARNESS);
-    await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
+    await page.addInitScript((t) => localStorage.setItem('shoppulse_token', t), tok);  // token present before any page script (no 401 race)
     await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', { name: 'bill.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 e2e') });
     await page.click('button:has-text("Extract Line Items")');
     await page.waitForSelector('text=Extracted Grocery Line Items', { timeout: 60000 });
+    await page.waitForSelector('select[data-testid="unit-select"]:not([disabled])', { timeout: 30000 });  // unit registry loaded
 
-    const sugarRow = page.locator(`tr:has(input[aria-label="Select E2E Sugar Loose ${label}"])`);
-    const sugarQty = sugarRow.locator('input[type=number][step="1"]');
+    const sugarRow = page.locator(`tr:has(input[aria-label="Select E2E Gift Box ${label}"])`);
+    const sugarQty = sugarRow.locator('input[type=number][step="1"]');  // box: whole numbers only
     check(`${label}: extracted 2.5 kept in the field (not rounded)`, (await sugarQty.inputValue()) === '2.5');
     check(`${label}: line marked "Whole units only"`, (await sugarRow.locator('text=Whole units only').count()) === 1);
 
@@ -63,8 +64,8 @@ const extraction = (label) => ({
     await page.waitForTimeout(500);
     const block = page.locator('[data-testid="fractional-quantity-block"]');
     const blockText = (await block.count()) ? await block.innerText() : '';
-    check(`${label}: confirmation blocked with an explanation`, /not currently supported/.test(blockText) && /Nothing has been added to stock/.test(blockText)
-      && blockText.includes(`E2E Sugar Loose ${label} (2.5 kg)`), blockText.slice(0, 120));
+    check(`${label}: confirmation blocked with an explanation`, /allowed only for kg, g, L, ml/.test(blockText) && /Nothing has been added to stock/.test(blockText)
+      && blockText.includes(`E2E Gift Box ${label} (2.5 box): box is counted in whole numbers`), blockText.slice(0, 160));
     check(`${label}: no request sent, no bypass button`, confirmBodies.length === 0 && (await block.locator('button').count()) === 0
       && (await page.locator('[data-testid="free-units-confirm"]').count()) === 0);
     check(`${label}: no stock posted while blocked`, !(await products()).some((p) => p.name.endsWith(label)));
@@ -74,13 +75,12 @@ const extraction = (label) => ({
     await page.screenshot({ path: `${SP}/fractional_${label}.png`, fullPage: false });
 
     if (label === 'desktop') {
-      // Correct it: 2.5 kg entered as 5 packs of 500 g at the per-pack rate
+      // Correct it to whole boxes (the unit is already registered)
       await sugarQty.fill('5');
-      await sugarRow.locator('input[type=text]').nth(1).fill('500g pack');
       check('desktop: banner clears once corrected; extracted reading still shown', (await block.count()) === 0
         && (await sugarRow.locator('[data-testid="extracted-quantity"]').innerText()).includes('Read as 2.5'));
     } else {
-      await page.click(`input[aria-label="Select E2E Sugar Loose ${label}"]`);
+      await page.click(`input[aria-label="Select E2E Gift Box ${label}"]`);
       check('phone: banner clears once the line is deselected', (await block.count()) === 0);
     }
     await page.click('button:has-text("Items to Inventory")');
@@ -88,12 +88,12 @@ const extraction = (label) => ({
     const body = confirmBodies[0] || {};
     const qty = Object.fromEntries((body.items || []).map((i) => [i.name.replace(` ${label}`, ''), i.quantity]));
     check(`${label}: only whole quantities sent`, label === 'desktop'
-      ? qty['E2E Salt 1KG'] === 20 && qty['E2E Sugar Loose'] === 5
-      : qty['E2E Salt 1KG'] === 20 && !('E2E Sugar Loose' in qty), JSON.stringify(qty));
+      ? qty['E2E Salt 1KG'] === 20 && qty['E2E Gift Box'] === 5
+      : qty['E2E Salt 1KG'] === 20 && !('E2E Gift Box' in qty), JSON.stringify(qty));
     const mine = Object.fromEntries((await products()).filter((p) => p.name.endsWith(label)).map((p) => [p.name.replace(` ${label}`, ''), p.current_stock]));
     check(`${label}: stock posted after correction (whole-number lines as before)`, label === 'desktop'
-      ? mine['E2E Salt 1KG'] === 20 && mine['E2E Sugar Loose'] === 5
-      : mine['E2E Salt 1KG'] === 20 && !('E2E Sugar Loose' in mine), JSON.stringify(mine));
+      ? mine['E2E Salt 1KG'] === 20 && mine['E2E Gift Box'] === 5
+      : mine['E2E Salt 1KG'] === 20 && !('E2E Gift Box' in mine), JSON.stringify(mine));
     await page.close();
   }
   await browser.close();

@@ -63,6 +63,7 @@ UnitDefinition(id, label, family, factor (base units per unit, whole number), al
 | box | box, boxes, bx |
 | bottle | bottle, bottles, btl, btls, pet, pets |
 | bag / bora / tin / can / jar / pouch / carton / case / set | bag(s); bor, bora, bori, boras; tin(s); can(s); jar(s); pouch(es); ctn, carton(s); case(s); set(s) |
+| bar / sachet / roll / strip / tray / tube (added with fractional inventory) | bar(s); sachet(s); roll(s); strip(s); tray(s); tube(s) |
 
 - **No alias was removed [C]:** all 72 former OCR aliases map to the same OCR code (regression test).
 - **Added:** `gr` (from product matching), millilitre / milliliter (singular and plural), `dozens`, `quintals`, `tons`, `tonnes`.

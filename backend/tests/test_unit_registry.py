@@ -209,7 +209,10 @@ def test_ocr_normaliser_keeps_every_former_alias_and_code():
         assert CANONICAL_UNITS[alias] == code, alias
         assert UnitNormalizer().normalize(alias.upper()).normalized_unit == code
     added = set(CANONICAL_UNITS) - set(LEGACY_OCR_ALIASES)
-    assert added == {"gr", "quintals", "tons", "tonnes", "millilitre", "millilitres", "milliliter", "milliliters", "dozens"}
+    assert added == {"gr", "quintals", "tons", "tonnes", "millilitre", "millilitres", "milliliter", "milliliters", "dozens",
+                     # retail package units added with fractional inventory (Phase 4)
+                     "bar", "bars", "sachet", "sachets", "roll", "rolls", "strip", "strips", "tray", "trays",
+                     "tube", "tubes"}
 
 
 @pytest.mark.parametrize("raw", ["XYZ", "Bundle", "units"])

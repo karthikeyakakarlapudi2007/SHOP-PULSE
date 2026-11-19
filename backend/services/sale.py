@@ -7,6 +7,7 @@ from db.models.sale_item import SaleItem
 from db.models.product import Product
 from schemas.sale import SaleCreate
 from services.money import bill_total, sale_line_amount, to_number
+from services.stock import format_quantity, remove_stock, to_stock_quantity
 
 def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
     try:
@@ -18,16 +19,18 @@ def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
             if not product or product.shop_id != shop_id:
                 raise ValueError(f"Product {item.product_id} not found or does not belong to your shop.")
             
-            if product.current_stock < item.quantity:
+            # Quantity in the product's stock unit (fractions only for kg, g, L, ml; compatible units converted)
+            qty = to_stock_quantity(item.quantity, item.unit, product)
+            if (product.current_stock or 0) < float(qty):  # early, friendly check; the atomic update decides
                 raise ValueError(
                     f"Insufficient stock for product '{product.name}'. "
-                    f"Available: {product.current_stock}, requested: {item.quantity}"
+                    f"Available: {format_quantity(product.current_stock)}, requested: {format_quantity(qty)}"
                 )
-            
+
             unit_price = item.unit_price if item.unit_price is not None else product.selling_price
-            # Line = quantity x unit price (3-dp prices kept), rounded once to paise; bill = sum of lines
-            line_amounts.append(sale_line_amount(item.quantity, unit_price))
-            validated_items.append((product, item, unit_price))
+            # Line = quantity x unit price per stock unit (3-dp prices kept), rounded once; bill = sum of lines
+            line_amounts.append(sale_line_amount(qty, unit_price))
+            validated_items.append((product, qty, unit_price))
 
         # Create Sale Header
         db_sale = Sale(
@@ -39,18 +42,18 @@ def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
         db.flush()  # Obtain db_sale.id
 
         # Create Sale Items & Deduct Inventory
-        for product, item, unit_price in validated_items:
+        for product, qty, unit_price in validated_items:
             db_item = SaleItem(
                 sale_id=db_sale.id,
                 product_id=product.id,
-                quantity=item.quantity,
+                quantity=float(qty),
                 unit_price=unit_price,
             )
             db.add(db_item)
 
-            # Deduct product stock in the same transaction
-            product.current_stock -= item.quantity
-            db.add(product)
+            # Atomic, conditional deduction in the same transaction: concurrent sales cannot overwrite each
+            # other or drive stock negative (InsufficientStockError rolls the whole sale back)
+            remove_stock(db, product, qty)
 
         db.commit()
         db.refresh(db_sale)
@@ -91,7 +94,7 @@ def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
                                 user_id=shop.owner_id,
                                 shop_id=shop_id,
                                 title=f"Low Stock Alert: {product.name}",
-                                message=f"{product.name} dropped to {product.current_stock} {product.unit or 'units'} (threshold: {reorder} {product.unit or 'units'}).",
+                                message=f"{product.name} dropped to {format_quantity(product.current_stock)} {product.unit or 'units'} (threshold: {format_quantity(reorder)} {product.unit or 'units'}).",
                                 category="inventory",
                                 priority="high",
                                 product_id=product.id,

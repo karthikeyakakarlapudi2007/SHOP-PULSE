@@ -46,6 +46,8 @@ from services.grocery_ocr.engines.ocr_engine import TesseractOCREngine
 from sqlalchemy import null as sa_null
 from services.invoice_reconciliation import reconcile_invoice_total
 from services.money import format_rupees, keep_printed_precision, quantize_half_up, to_decimal, to_number
+from services.stock import add_stock, format_quantity, to_stock_quantity, validate_unit_text
+from services.unit_registry import try_normalize_unit
 from services.grocery_ocr.pipeline.invoice_pipeline import InvoicePipeline
 
 USE_NEW_GROCERY_OCR = os.getenv("USE_NEW_GROCERY_OCR", "true").lower() in ("true", "1", "yes")
@@ -557,6 +559,14 @@ def _extract_invoice_with_new_pipeline(
             needs_review = True
         line_validation_issues = (list(review_reasons) + [i for i in (it.validation_issues or []) if i not in review_reasons]
                                   + list(mrp_issues or []) + list(arith.get("issues", [])))
+        # A missing or unregistered unit needs review: it is never assumed to be pcs
+        if not norm_unit:
+            line_validation_issues.append("Unit not printed or not read: enter the unit before adding to stock.")
+            needs_review = True
+        elif try_normalize_unit(norm_unit) is None:
+            line_validation_issues.append(
+                f"Unit '{norm_unit}' is not a registered unit: correct it before adding to stock.")
+            needs_review = True
         line_suggestions = list(extraction_suggestions) + list(arith.get("suggestions") or [])
         line_suggested_rate = arith.get("suggested_rate")
         if arith_status == "MISMATCH" and pp is not None and prn is not None:
@@ -844,6 +854,12 @@ def _merge_duplicate_lines(items):
         if existing is None:
             merged.append(item.model_copy())
             continue
+        if (try_normalize_unit(existing.unit) or (existing.unit or "").strip().lower()) != (
+                try_normalize_unit(item.unit) or (item.unit or "").strip().lower()):
+            raise InvoiceValidationError(
+                f"'{item.name}' appears twice with different units ({existing.unit} and {item.unit}); "
+                "correct or remove one line."
+            )
         if abs(existing.purchase_price - item.purchase_price) > 0.005:
             raise InvoiceValidationError(
                 f"'{item.name}' appears twice with different purchase prices "
@@ -916,6 +932,11 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                 product = db.query(Product).filter(Product.shop_id == shop_id, Product.name.ilike(item.name.strip())).first()
             resolved.append((item, product))
 
+        # Every line needs a registered unit: a missing or unknown unit is sent back for review, never
+        # assumed to be pcs (raised before anything is written)
+        for item, _ in resolved:
+            validate_unit_text(item.unit, what=f"Unit for '{item.name}'")
+
         missing_sp = [item.name for item, product in resolved if product is None and item.selling_price is None]
         if missing_sp:
             raise InvoiceValidationError("Selling price is required for new products: " + ", ".join(missing_sp))
@@ -933,14 +954,16 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
         restocked = created = 0
         saved_products: List[Product] = []
         for item, product in resolved:
-            qty = int(item.quantity)
+            qty = _dec(item.quantity)  # as printed, in the line's unit (fractions only for kg, g, L, ml)
             mrp_source = (item.mrp_source or "MANUAL") if item.mrp is not None else None
             # A printed free line carries a rate of 0.00: it is recorded on the purchase as printed, but
             # it never becomes the product's cost (no economic zero cost is assigned to free units)
             free_line = bool(item.is_free_item)
             if product is not None:
                 product.is_active = True
-                product.current_stock = (product.current_stock or 0) + qty
+                # Converted into the product's stock unit when compatible (250 g into kg -> 0.25); an
+                # incompatible unit is refused. Atomic increase in this transaction (rolled back on error).
+                add_stock(db, product, to_stock_quantity(qty, item.unit, product))
                 if not free_line:
                     product.purchase_price = item.purchase_price
                 if item.selling_price is not None:
@@ -954,8 +977,8 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                     # unknown cost (explicit NULL; the column default would otherwise store 0.0)
                     purchase_price=sa_null() if free_line else item.purchase_price,
                     selling_price=item.selling_price,
-                    current_stock=qty,
-                    unit=item.unit or "pcs",
+                    current_stock=float(qty),
+                    unit=item.unit.strip(),
                     reorder_level=10,
                     is_active=True,
                 )
@@ -973,10 +996,10 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
             line_amount_d = _line_amount_dec(item.line_amount, qty, item.purchase_price, item.paid_quantity)
             line_amount = float(line_amount_d)
             total_amount += line_amount_d
-            total_units += qty
+            total_units += float(qty)
             if free_line or (item.free_quantity or 0) > 0:
                 promotional_lines.append({
-                    "name": item.name.strip(), "received_quantity": qty,
+                    "name": item.name.strip(), "received_quantity": float(qty),
                     "paid_quantity": 0.0 if free_line else item.paid_quantity,
                     "free_quantity": float(qty) if free_line else item.free_quantity,
                     "is_free_item": free_line, "purchase_price": item.purchase_price, "line_amount": line_amount,
@@ -984,7 +1007,7 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
             db.add(PurchaseItem(
                 purchase_id=db_purchase.id,
                 product_id=product.id,
-                quantity=qty,
+                quantity=float(qty),  # as printed, in the line's unit (matches the printed rate)
                 purchase_price=item.purchase_price,
                 line_amount=line_amount,
                 mrp=item.mrp,
@@ -1010,7 +1033,7 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                         user_id=shop.owner_id,
                         shop_id=shop_id,
                         title=f"Invoice Processed{inv_display}",
-                        message=f"Successfully added {total_units} units across {len(items)} items to inventory. Total batch: ₹{_keep_printed_precision(_dec(db_purchase.total_amount)):,}.",
+                        message=f"Successfully added {format_quantity(total_units)} units across {len(items)} items to inventory. Total batch: ₹{_keep_printed_precision(_dec(db_purchase.total_amount)):,}.",
                         category="system",
                         priority="medium",
                         deep_link="/inventory",

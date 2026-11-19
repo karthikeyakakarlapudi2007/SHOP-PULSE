@@ -10,6 +10,7 @@ from schemas.dashboard import DashboardResponse, TopProductResponse
 from schemas.product import ProductResponse
 from schemas.sale import SaleResponse
 from services.money import round_currency, sum_decimal, to_number
+from services.stock import quantity_number
 
 def get_dashboard_data(db: Session, shop_id: UUID) -> DashboardResponse:
     now = datetime.now(timezone.utc)
@@ -55,7 +56,7 @@ def get_dashboard_data(db: Session, shop_id: UUID) -> DashboardResponse:
         )
         .scalar()
     )
-    items_sold_today = int(items_sold_today_val or 0)
+    items_sold_today = quantity_number(items_sold_today_val)
 
     # 5. Top products by quantity sold
     top_products_raw = (
@@ -84,7 +85,7 @@ def get_dashboard_data(db: Session, shop_id: UUID) -> DashboardResponse:
             shop_id=p.shop_id,
             created_at=p.created_at,
             updated_at=p.updated_at,
-            total_sold=int(total_sold or 0)
+            total_sold=quantity_number(total_sold)
         )
         for p, total_sold in top_products_raw
     ]

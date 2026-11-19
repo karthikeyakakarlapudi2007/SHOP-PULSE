@@ -63,11 +63,11 @@ def run_api(monkeypatch, items: List[ExtractedInvoiceItem], custom: Optional[dic
     return inv._extract_invoice_with_new_pipeline(b"x", "t.png", _NoProducts(), uuid.uuid4())
 
 
-def item(name="Tata Salt 1kg", qty=None, rate=None, amount=None, **kw) -> ExtractedInvoiceItem:
+def item(name="Tata Salt 1kg", qty=None, rate=None, amount=None, unit="pcs", **kw) -> ExtractedInvoiceItem:
     d = lambda v: Decimal(str(v)) if v is not None else None  # noqa: E731
     return ExtractedInvoiceItem(item_id=f"i_{uuid.uuid4().hex[:6]}", raw_product_name=name,
                                 normalized_product_name=name, quantity=d(qty), purchase_price=d(rate),
-                                printed_amount=d(amount), validation_status="VERIFIED", ocr_confidence=95.0, **kw)
+                                printed_amount=d(amount), validation_status="VERIFIED", ocr_confidence=95.0, unit=unit, **kw)
 
 
 # --------------------------------------------------------------------------------------- R1
@@ -686,7 +686,9 @@ def test_end_to_end_generic_gst_invoice(monkeypatch):
     assert (biscuit.quantity, biscuit.purchase_price, biscuit.invoice_mrp) == (24.0, 8.10, 10.00)
     assert (biscuit.cgst_amount, biscuit.sgst_amount, biscuit.scheme_discount) == (17.28, 17.28, 2.40)
     assert (biscuit.taxable_amount, biscuit.net_amount) == (192.00, 226.56)
-    assert biscuit.needs_review is False and biscuit.is_verified is True
+    # the generic invoice prints no unit column: the only review reason is the missing unit (Phase 4)
+    assert biscuit.is_verified is True and biscuit.unit is None
+    assert [v for v in biscuit.validation_issues if "Unit not printed" not in v] == [] and biscuit.needs_review is True
 
     ketchup = by["TOMATO KETCHUP"]  # 1 case x 24 per case: calculated, flagged
     assert ketchup.quantity == 24.0 and ketchup.derived_fields == ["quantity"] and ketchup.needs_review is True

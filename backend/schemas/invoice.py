@@ -1,6 +1,7 @@
 from typing import Optional, List, Any, Dict, Literal
 from uuid import UUID
 from datetime import datetime
+from services.unit_registry import UNITS, try_normalize_unit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from schemas.product import ProductResponse
 
@@ -166,8 +167,8 @@ class InvoiceExtractResponse(BaseModel):
 class InvoiceConfirmItem(BaseModel):
     name: str = Field(..., min_length=1, description="Product name")
     category: Optional[str] = Field("Groceries", description="Product category")
-    quantity: float = Field(..., gt=0, description="Quantity to restock in whole stock units (> 0)")
-    unit: str = Field("pcs", description="Packaging unit")
+    quantity: float = Field(..., gt=0, description="Quantity received (> 0); fractional only for kg, g, L, ml")
+    unit: Optional[str] = Field(None, description="Unit of the quantity; required (a missing unit is never assumed to be pcs)")
     purchase_price: float = Field(..., ge=0, description="Unit purchase price; must be confirmed, never assumed")
     selling_price: Optional[float] = Field(None, ge=0, description="Selling price; required for new products")
     mrp: Optional[float] = Field(None, gt=0, description="Maximum retail price (MRP)")
@@ -202,17 +203,25 @@ class InvoiceConfirmItem(BaseModel):
                     data["name"] = data["product_name"]
         return data
 
-    @field_validator("quantity", "paid_quantity", "free_quantity")
-    @classmethod
-    def whole_units(cls, v: Optional[float]) -> Optional[float]:
-        # Stock is tracked in whole units. A fractional quantity (2.5 kg) is rejected, never rounded:
-        # the whole request fails validation, so no stock is posted for the invoice.
-        if v is None:
-            return v
-        if abs(v - round(v)) > 1e-9:
-            raise ValueError(f"quantity {v:g} is not a whole number: fractional stock quantities are not currently "
-                             "supported (stock is tracked in whole units). Correct the quantity before adding to stock.")
-        return float(round(v))
+    @model_validator(mode="after")
+    def quantities_suit_the_unit(self) -> "InvoiceConfirmItem":
+        """Fractions (up to 3 decimals) only for kg, g, L and ml; every other registered unit needs whole
+        numbers. A fractional quantity is rejected, never rounded, so no stock is posted for the invoice.
+        A missing or unregistered unit is reported by the confirm service (it needs review)."""
+        unit_id = try_normalize_unit(self.unit) if self.unit else None
+        if unit_id is None:
+            return self
+        definition = UNITS[unit_id]
+        for value in (self.quantity, self.paid_quantity, self.free_quantity):
+            if value is None:
+                continue
+            if not definition.allows_fraction and abs(value - round(value)) > 1e-9:
+                raise ValueError(f"quantity {value:g} is not a whole number: fractional stock quantities are not "
+                                 f"currently supported for {definition.label} (only kg, g, L and ml). "
+                                 "Correct the quantity before adding to stock.")
+            if definition.allows_fraction and abs(value * 1000 - round(value * 1000)) > 1e-6:
+                raise ValueError(f"quantity {value:g} {definition.label} has more than 3 decimal places.")
+        return self
 
 
 _MONTHS = {m: i for i, m in enumerate(

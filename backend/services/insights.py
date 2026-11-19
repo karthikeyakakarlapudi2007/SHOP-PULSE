@@ -9,6 +9,7 @@ from db.models.sale import Sale
 from db.models.sale_item import SaleItem
 from db.models.product import Product
 from services.money import quantize_half_up, round_currency, sale_line_amount, sum_decimal, to_decimal, to_number
+from services.stock import quantity_number
 from schemas.insights import (
     SalesOverviewResponse,
     ProductSalesPerformanceItem,
@@ -176,7 +177,7 @@ def get_sales_insights(
         .group_by(Product.id)
         .all()
     )
-    prev_qty_map: Dict[UUID, int] = {r[0]: int(r[1] or 0) for r in prev_items_raw}
+    prev_qty_map: Dict[UUID, Any] = {r[0]: quantity_number(r[1]) for r in prev_items_raw}
 
     sold_products_list: List[ProductSalesPerformanceItem] = []
     active_sold_ids = set()
@@ -214,7 +215,7 @@ def get_sales_insights(
                 product_id=pid,
                 product_name=pname,
                 category=pcat or "Other",
-                quantity_sold=int(qty or 0),
+                quantity_sold=quantity_number(qty),
                 revenue=to_number(rev),
                 unit=punit or "pcs",
                 previous_quantity_sold=prev_q,
@@ -348,8 +349,8 @@ def get_inventory_insights(db: Session, shop_id: UUID) -> InventoryInsightsRespo
     needs_attention_cnt = 0
 
     for p in products:
-        stock = int(p.current_stock or 0)
-        reorder = int(p.reorder_level) if (p.reorder_level is not None) else 0
+        stock = quantity_number(p.current_stock)  # fractional stock (2.5 kg) is never truncated
+        reorder = quantity_number(p.reorder_level) if (p.reorder_level is not None) else 0
         has_threshold = p.reorder_level is not None and p.reorder_level > 0
 
         # Status & Action Classification
@@ -362,7 +363,7 @@ def get_inventory_insights(db: Session, shop_id: UUID) -> InventoryInsightsRespo
         elif has_threshold and stock <= reorder:
             status = "LOW STOCK"
             urgency = "high"
-            deficit = max((reorder * 2) - stock, 5)
+            deficit = quantity_number(max(to_decimal(reorder * 2) - to_decimal(stock), Decimal(5)))
             recommended_action = f"Stock is below minimum threshold ({reorder} {p.unit or 'units'}). Order at least {deficit} {p.unit or 'units'}."
             low_stock_cnt += 1
             needs_attention_cnt += 1

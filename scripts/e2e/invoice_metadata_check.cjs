@@ -4,8 +4,8 @@
  * rejected, manual entry is saved exactly, real invoice numbers are protected against duplicates and
  * invoices without a number are never flagged as duplicates.
  *
- * The test invoice has a loose-weight line (Toor Dal 2.5 kg). Stock is tracked in whole units and that
- * line is never rounded (P0), so it is deselected before each confirmation; the header checks are unchanged.
+ * The test invoice has a loose-weight line (Toor Dal Loose 2.5 kg, extracted as "Dal Loose"). Phase 4: kg accepts fractions, so the line
+ * stays selected and is confirmed as 2.5 kg (never rounded); the header checks are unchanged.
  *
  * Run through the isolated test launcher (test backend, test database, dedicated ports):
  *   node scripts/e2e/run.cjs invoice_metadata_check
@@ -25,24 +25,23 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 }, deviceScaleFactor: 1 })).newPage();
   let confirmCalls = 0;
-  let looseLinesDeselected = 0;
-  page.on('request', (r) => { if (r.url().includes('/invoices/confirm')) confirmCalls++; });
-  await page.goto(HARNESS);
-  await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
+  let blockedLines = 0;
+  const looseSent = [];
+  page.on('request', (r) => {
+    if (!r.url().includes('/invoices/confirm')) return;
+    confirmCalls++;
+    const loose = (JSON.parse(r.postData() || '{}').items || []).find((i) => /dal loose/i.test(i.name));
+    looseSent.push(loose ? `${loose.quantity} ${loose.unit}` : 'missing');
+  });
+  await page.addInitScript((t) => localStorage.setItem('shoppulse_token', t), tok);  // token present before any page script (no 401 race)
   async function extract(file) {
     await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', file);
     await page.click('button:has-text("Extract Line Items")');
     await page.waitForSelector('text=Extracted Grocery Line Items', { timeout: 120000 });
-    // Deselect lines with a fractional quantity (whole-unit stock only; checked separately)
-    for (const row of await page.locator('tbody tr').all()) {
-      const qty = row.locator('input[type=number][step="1"]');
-      if ((await qty.count()) && !Number.isInteger(Number(await qty.inputValue()))) {
-        await row.locator('input[type=checkbox]').uncheck();
-        looseLinesDeselected++;
-      }
-    }
+    // Every printed unit is registered and the 2.5 kg line suits its unit: nothing needs correcting
+    blockedLines += (await page.locator('[data-testid="unit-warning"]').count()) + (await page.locator('text=Whole units only').count());
   }
   const val = (label) => page.locator(`input[aria-label="${label}"]`).inputValue();
 
@@ -95,7 +94,10 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   check('extracted details shown normally', s1 === 'SRI LAKSHMI WHOLESALE TRADERS' && n1 === 'INV-00427' && d1 === '08/10/2026', JSON.stringify([s1, n1, d1]));
   check('no "Not detected" hint for extracted details', (await page.locator('text=Not detected – enter manually').count()) === 0);
   await page.screenshot({ path: `${SP}/meta_3_detected.png` });
-  check('loose-weight line was present and deselected before each confirmation', looseLinesDeselected >= 5, `${looseLinesDeselected}`);
+  check('no unit or quantity corrections needed on the printed invoice', blockedLines === 0, `${blockedLines}`);
+  check('loose-weight line confirmed as 2.5 kg every time (never rounded)', looseSent.length >= 4 && looseSent.every((q) => /^2\.5 kg$/i.test(q)), JSON.stringify(looseSent));
+  const toor = (await fetch(`${API}/products?limit=100`, { headers: { Authorization: `Bearer ${tok}` } }).then((r) => r.json())).items.filter((p) => /dal loose/i.test(p.name));
+  check('loose-weight stock is 3 x 2.5 = 7.5 kg (the duplicate added nothing)', toor.length === 1 && toor[0].current_stock === 7.5, JSON.stringify(toor.map((p) => [p.name, p.current_stock, p.unit])));
   await browser.close();
   console.log(`\n${results.filter(Boolean).length}/${results.length} checks passed`);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });

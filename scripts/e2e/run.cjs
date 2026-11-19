@@ -39,6 +39,7 @@ const CHECKS = {
   review_promotions_precision_check: null,
   fractional_quantity_block_check: null,
   unit_registry_check: null,
+  invoice_units_fraction_check: null,
 };
 
 const log = (msg) => console.log(`[e2e] ${msg}`);

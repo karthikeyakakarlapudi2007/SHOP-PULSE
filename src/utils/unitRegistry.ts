@@ -18,6 +18,8 @@ export interface UnitIndex {
   get(raw: string | null | undefined): UnitDefinition | null;
   areCompatible(a: string, b: string): boolean;
   allowsFraction(raw: string): boolean | null;
+  /** Decimal places allowed for fractional units (registry max_fraction_digits). */
+  maxFractionDigits: number;
   units: UnitDefinition[];
 }
 
@@ -41,6 +43,7 @@ export function createUnitIndex(registry: UnitRegistry): UnitIndex {
       return Boolean(ua && ub && ua.family === ub.family);
     },
     allowsFraction: (raw) => get(raw)?.allows_fraction ?? null,
+    maxFractionDigits: registry.max_fraction_digits,
     units: registry.units,
   };
 }

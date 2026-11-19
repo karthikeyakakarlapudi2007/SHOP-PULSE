@@ -131,14 +131,14 @@ def test_save_item_missing_required_fields_fails():
     headers, _ = create_auth_shop("missing_fields")
     # Empty name
     bad_payload1 = {
-        "items": [{"name": "", "quantity": 10, "purchase_price": 50.0, "selling_price": 60.0}]
+        "items": [{"unit": "pcs", "name": "", "quantity": 10, "purchase_price": 50.0, "selling_price": 60.0}]
     }
     res1 = client.post("/api/v1/invoices/confirm", json=bad_payload1, headers=headers)
     assert res1.status_code == 422
 
     # Zero / negative quantity
     bad_payload2 = {
-        "items": [{"name": "Item A", "quantity": 0, "purchase_price": 50.0, "selling_price": 60.0}]
+        "items": [{"unit": "pcs", "name": "Item A", "quantity": 0, "purchase_price": 50.0, "selling_price": 60.0}]
     }
     res2 = client.post("/api/v1/invoices/confirm", json=bad_payload2, headers=headers)
     assert res2.status_code == 422
@@ -161,7 +161,7 @@ def test_save_existing_product_restocks_without_duplicate():
         "invoice_number": "HUL-4455",
         "items": [
             {
-                "product_name": "Surf Excel Matic 2kg",
+                "unit": "pcs", "product_name": "Surf Excel Matic 2kg",
                 "quantity": 20,
                 "purchase_price": 325.0,
                 "selling_price": 385.0
@@ -280,7 +280,7 @@ def test_delete_product_with_history_archives_safely():
 # 9. Saving without authentication fails
 def test_saving_without_auth_fails():
     res = client.post("/api/v1/invoices/confirm", json={
-        "items": [{"name": "No Auth", "quantity": 1, "purchase_price": 10.0}]
+        "items": [{"unit": "pcs", "name": "No Auth", "quantity": 1, "purchase_price": 10.0}]
     })
     assert res.status_code == 401
 
@@ -290,8 +290,8 @@ def test_confirm_atomic_rollback_on_failure():
     # Item 1 is valid, item 2 has no selling price for a brand-new product
     payload = {
         "items": [
-            {"product_name": "Valid Item 1", "quantity": 5, "purchase_price": 100.0, "selling_price": 120.0},
-            {"product_name": "Brand New Item 2", "quantity": 5, "purchase_price": 100.0, "selling_price": None}
+            {"unit": "pcs", "product_name": "Valid Item 1", "quantity": 5, "purchase_price": 100.0, "selling_price": 120.0},
+            {"unit": "pcs", "product_name": "Brand New Item 2", "quantity": 5, "purchase_price": 100.0, "selling_price": None}
         ]
     }
     res = client.post("/api/v1/invoices/confirm", json=payload, headers=headers)
@@ -307,7 +307,7 @@ def test_inventory_list_reflects_changes_accurately():
     headers, _ = create_auth_shop("refresh_flow")
     # Save invoice item
     client.post("/api/v1/invoices/confirm", json={
-        "items": [{"name": "Item A", "quantity": 10, "purchase_price": 50.0, "selling_price": 60.0}]
+        "items": [{"unit": "pcs", "name": "Item A", "quantity": 10, "purchase_price": 50.0, "selling_price": 60.0}]
     }, headers=headers)
 
     # 11. Refresh / list
@@ -327,7 +327,7 @@ def test_prevent_duplicate_invoice_confirmation():
     payload = {
         "supplier_name": "Unique Supplier Ltd",
         "invoice_number": "INV-DUP-777",
-        "items": [{"name": "Item X", "quantity": 10, "purchase_price": 20.0, "selling_price": 25.0}]
+        "items": [{"unit": "pcs", "name": "Item X", "quantity": 10, "purchase_price": 20.0, "selling_price": 25.0}]
     }
     res1 = client.post("/api/v1/invoices/confirm", json=payload, headers=headers)
     assert res1.status_code == 201

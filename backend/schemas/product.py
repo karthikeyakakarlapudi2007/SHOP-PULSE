@@ -2,6 +2,7 @@ from typing import Optional, List, Literal
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, computed_field
+from schemas.quantity import Quantity
 
 MrpSource = Literal["INVOICE", "API", "MANUAL", "STORE"]
 
@@ -11,8 +12,8 @@ class ProductBase(BaseModel):
     selling_price: float = Field(..., ge=0, description="Selling price (must be >= 0)")
     purchase_price: Optional[float] = Field(0.0, ge=0, description="Purchase price (must be >= 0)")
     mrp: Optional[float] = Field(None, ge=0, description="Maximum retail price (must be >= 0)")
-    current_stock: int = Field(0, ge=0, description="Current stock quantity (must be >= 0)")
-    reorder_level: Optional[int] = Field(0, ge=0, description="Reorder level (must be >= 0)")
+    current_stock: Quantity = Field(0, ge=0, description="Current stock in the product unit (>= 0; up to 3 decimals for kg, g, L, ml)")
+    reorder_level: Optional[Quantity] = Field(0, ge=0, description="Reorder level in the product unit (>= 0)")
     unit: Optional[str] = Field("pcs", description="Unit of measurement")
     supplier_id: Optional[UUID] = Field(None, description="Supplier ID")
     sku: Optional[str] = Field(None, description="SKU or Barcode")
@@ -28,8 +29,8 @@ class ProductUpdate(BaseModel):
     purchase_price: Optional[float] = Field(None, ge=0)
     mrp: Optional[float] = Field(None, ge=0)
     mrp_source: Optional[MrpSource] = None
-    current_stock: Optional[int] = Field(None, ge=0)
-    reorder_level: Optional[int] = Field(None, ge=0)
+    current_stock: Optional[Quantity] = Field(None, ge=0)
+    reorder_level: Optional[Quantity] = Field(None, ge=0)
     unit: Optional[str] = None
     supplier_id: Optional[UUID] = None
     sku: Optional[str] = None

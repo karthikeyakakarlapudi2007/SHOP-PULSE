@@ -129,3 +129,42 @@ Audit: `DECIMAL_AUDIT.md`. Implementation and limitations: `DECIMAL_IMPLEMENTATI
 | Browser checks (launcher) | 25/25, 12/12, 6/6, 17/17, 18/18, 16/16 |
 | OCR dataset re-run | zero differences vs workstream 1 |
 | `backend/shoppulse.db` | SHA-256, size and modification time unchanged; no schema, model or migration file changed; historical records not rewritten (covered by a test) |
+
+## 2026-11-19 – Workstream 4 committed (`8acf29c`), then fractional inventory and atomic stock updates (uncommitted)
+
+Report: `FRACTIONAL_INVENTORY.md`.
+
+| Area | Files |
+|---|---|
+| New | `backend/services/stock.py` (unit-aware quantities, atomic updates), `backend/schemas/quantity.py`, `backend/tests/test_fractional_inventory.py` (31) |
+| Schemas | `product.py`, `sale.py`, `purchase.py` (optional `unit`), `invoice.py` (unit required by the confirm service; fraction rule unit-aware), `voice.py`, `insights.py`, `dashboard.py`, `search.py` |
+| Services | `product.py`, `sale.py`, `purchase.py`, `invoice.py`, `inventory_matcher.py`, `insights.py`, `notification.py`, `dashboard.py`, `unit_registry.py` (+ bar, sachet, roll, strip, tray, tube) |
+| Routes | `api/routes/products.py` (validation errors → 400) |
+| Tests updated to the approved rules | `test_inventory_crud_and_ocr_saving.py`, `test_invoice_flow_e2e.py`, `test_invoices.py`, `test_invoices_phase9.py`, `test_ocr_reliability_r1_r10.py`, `test_phase3a_confirm_precision_promotions.py`, `test_phase3a_followup.py`, `test_unit_registry.py`; frontend fixture `src/tests/fixtures/unit_registry.json`; `scripts/e2e/fractional_quantity_block_check.cjs` |
+
+| Verification | Result |
+|---|---|
+| Backend full suite | **886 passed, 7 skipped, 0 failed** |
+| Vitest, TypeScript, lint, build | 111 passed (15 files); pass; exit 0 (same 12 pre-existing warning files); pass |
+| Browser checks (launcher) | 25/25, 12/12, 6/6, 17/17, 18/18, 16/16 |
+| Concurrency | 2 concurrent sales: no lost update, never negative (tests) |
+| `backend/shoppulse.db` | SHA-256 `63c44cad…`, 303,104 bytes, modification time unchanged; no schema, model or migration file changed |
+
+## 2026-11-19 – Phase 1 finalisation: invoice review units and fractional quantities
+
+Approved requirements: a missing invoice unit is never defaulted; the user selects a registered unit; confirmation is blocked while a unit is missing or invalid; fractions on the review screen follow the canonical registry. Details: `FRACTIONAL_INVENTORY.md`.
+
+| Area | Files |
+|---|---|
+| Review screen | `src/pages/InvoiceScanner.tsx`: registry unit select, missing / unregistered unit warning (needs review), `unit-block` banner, unit-aware fraction block and quantity step, payload without the `'pcs'` default |
+| Helpers | `src/utils/invoiceReliability.ts` (`unitProblem`, `unitProblemText`, `unitBlockNotice`, `quantityProblem`, `fractionalUnitList`, `fractionalQuantityNotice`, all taking the registry index); `src/utils/unitRegistry.ts` (`maxFractionDigits`) |
+| Tests | new `src/tests/invoiceUnitsFraction.test.ts` (14); `src/tests/invoiceReliability.test.ts` (P0 tests updated) |
+| Browser checks | new `scripts/e2e/invoice_units_fraction_check.cjs` (36 checks, in the launcher); `fractional_quantity_block_check` (2.5 box), `invoice_metadata_check` (2.5 kg confirmed); token set by `addInitScript` in every check (401 race on `GET /units`) |
+
+| Verification | Result |
+|---|---|
+| Backend full suite | **886 passed, 7 skipped, 0 failed** (no backend code changed in the finalisation) |
+| Vitest | **124 passed (16 files)** |
+| TypeScript, lint, build | pass; exit 0 (warnings only in the pre-existing files, none in changed files); pass |
+| Browser checks (launcher) | mobile 25/25, metadata 14/14, direct upload 6/6, promotions 17/17, fractional block 18/18, unit registry 16/16, invoice units and fractions 36/36 |
+| `backend/shoppulse.db` | SHA-256 `63c44cad…`, 303,104 bytes, modification time unchanged; no migration |

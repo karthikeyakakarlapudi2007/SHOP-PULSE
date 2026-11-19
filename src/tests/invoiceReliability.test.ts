@@ -10,7 +10,6 @@ import {
   calculatedFieldLabels,
   componentSummary,
   formatMoney,
-  fractionalQuantityNotice,
   hasFractionalQuantity,
   hasFreeUnits,
   isCalculated,
@@ -163,7 +162,7 @@ describe('free-unit confirmation (source)', () => {
   });
 });
 
-describe('P0: fractional quantities are never rounded into stock', () => {
+describe('P0: quantities are never rounded into stock', () => {
   it('detects fractional quantity, paid or free units; whole numbers are unaffected', () => {
     expect(hasFractionalQuantity({ quantity: 2.5 })).toBe(true);
     expect(hasFractionalQuantity({ quantity: 0.75 })).toBe(true);
@@ -174,22 +173,12 @@ describe('P0: fractional quantities are never rounded into stock', () => {
     expect(hasFractionalQuantity({ quantity: null })).toBe(false);
   });
 
-  it('explains the block and names the line with its extracted quantity', () => {
-    const n = fractionalQuantityNotice([
-      { product_name: 'Sugar Loose', quantity: 2.5, unit: 'kg' },
-      { product_name: 'Salt 1KG', quantity: 20, unit: 'pcs' },
-    ]);
-    expect(n).toContain('Fractional stock quantities are not currently supported');
-    expect(n).toContain('Nothing has been added to stock');
-    expect(n).toContain('Sugar Loose (2.5 kg)');
-    expect(n).not.toContain('Salt');
-    expect(fractionalQuantityNotice([{ product_name: 'Salt', quantity: 20 }])).toBeNull();
-  });
-
-  it('the confirm payload no longer rounds the quantity', () => {
+  it('the confirm payload never rounds the quantity and checks it against the unit', () => {
     const src = readFileSync(resolve(__dirname, '../pages/InvoiceScanner.tsx'), 'utf8');
     expect(src).not.toMatch(/Math\.round\(Number\(i\.quantity\)\)/);
-    expect(src).toMatch(/selectedItems\.some\(hasFractionalQuantity\)/);
+    expect(src).not.toMatch(/Math\.trunc|parseInt\(/);
+    expect(src).toMatch(/quantity: Number\(i\.quantity\)/);
+    expect(src).toMatch(/quantityProblem\(i, unitIndex\)/);
   });
 });
 

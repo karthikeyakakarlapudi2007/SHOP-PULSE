@@ -29,9 +29,8 @@ async function openApp(ctx, tok, init) {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => check('no uncaught page errors', false, e.message));
   if (init) await page.addInitScript(init);
+  await page.addInitScript((t) => localStorage.setItem('shoppulse_token', t), tok);  // token present before any page script (no 401 race)
   await page.goto(APP);
-  await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
-  await page.reload();
   await page.waitForSelector('text=Open camera');
   return page;
 }

@@ -20,8 +20,7 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 }, deviceScaleFactor: 1 })).newPage();
   const assessCalls = [];
   page.on('request', (r) => { if (r.url().includes('/document-prep/assess')) assessCalls.push(r.url()); });
-  await page.goto(HARNESS);
-  await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
+  await page.addInitScript((t) => localStorage.setItem('shoppulse_token', t), tok);  // token present before any page script (no 401 race)
   async function extract(file) {
     await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');

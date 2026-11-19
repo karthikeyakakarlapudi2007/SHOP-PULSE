@@ -30,12 +30,17 @@ import {
   photoWarning,
   promoBreakdown,
   promoPayload,
+  quantityProblem,
   reconciliationNotice,
   round3,
+  unitBlockNotice,
+  unitProblem,
+  unitProblemText,
   type PhotoWarning,
   type TotalReconciliation,
 } from '../utils/invoiceReliability';
 import { DocumentPrepWorkflow } from '../components/invoice-capture/DocumentPrepWorkflow';
+import { useUnitRegistry } from '../hooks/useUnitRegistry';
 import {
   META_LABELS,
   confirmHeaderPayload,
@@ -123,8 +128,12 @@ export const InvoiceScanner: React.FC = () => {
   const [directPhotoWarning, setDirectPhotoWarning] = useState<PhotoWarning | null>(null);
   // Lines with free / promotional units awaiting the user's confirmation before stock is posted
   const [freeUnitsToConfirm, setFreeUnitsToConfirm] = useState<string[]>([]);
-  // Confirm was blocked because a selected line has a fractional quantity (never rounded)
+  // Confirm was blocked because a selected line's quantity does not suit its unit (never rounded)
   const [fractionalBlocked, setFractionalBlocked] = useState(false);
+  // Confirm was blocked because a selected line's unit is missing or not registered (never assumed)
+  const [unitBlocked, setUnitBlocked] = useState(false);
+  // Canonical unit registry (GET /api/v1/units): the only source of units and fraction rules
+  const { index: unitIndex, status: unitStatus } = useUnitRegistry();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -178,7 +187,8 @@ export const InvoiceScanner: React.FC = () => {
       product_name: item.product_name || item.raw_description || 'Grocery Item',
       category: item.category || 'Grocery',
       quantity: typeof item.quantity === 'number' ? item.quantity : null,
-      unit: item.unit || 'unit',
+      // As extracted; a missing unit stays empty for the user to select (never defaulted to pcs)
+      unit: typeof item.unit === 'string' ? item.unit.trim() : '',
       purchase_price: typeof item.purchase_price === 'number' ? item.purchase_price : (item.rate ?? null),
       selling_price: typeof item.selling_price === 'number' ? item.selling_price : null,
       mrp: typeof item.mrp === 'number' ? item.mrp : null,
@@ -208,6 +218,7 @@ export const InvoiceScanner: React.FC = () => {
     setMissingAtConfirm([]);
     setFreeUnitsToConfirm([]);
     setFractionalBlocked(false);
+    setUnitBlocked(false);
     setExtractedData({
       id: data.id,
       // Only what OCR found; missing details stay empty for the user to fill in
@@ -398,14 +409,19 @@ export const InvoiceScanner: React.FC = () => {
       return;
     }
 
-    // Stock is tracked in whole units: a fractional quantity (2.5 kg) is never rounded. Nothing is posted
+    // Every line needs a registered unit (a missing one is never assumed), and fractions are accepted only
+    // for units the registry marks as fractional (kg, g, L, ml). Nothing is rounded and nothing is posted
     // for the invoice until the user corrects or deselects the line.
-    if (selectedItems.some(hasFractionalQuantity)) {
+    const unitIssue = unitBlockNotice(selectedItems, unitIndex) !== null;
+    const quantityIssue = selectedItems.some((i) => quantityProblem(i, unitIndex) !== null);
+    if (unitIssue || quantityIssue) {
       setMissingAtConfirm([]);
       setFreeUnitsToConfirm([]);
-      setFractionalBlocked(true);
+      setUnitBlocked(unitIssue);
+      setFractionalBlocked(quantityIssue);
       return;
     }
+    setUnitBlocked(false);
     setFractionalBlocked(false);
 
     const dateProblem = invoiceDateError(extractedData.invoice_date);
@@ -459,9 +475,10 @@ export const InvoiceScanner: React.FC = () => {
             name: i.product_name.trim(),
             product_name: i.product_name.trim(),
             category: i.category || 'Groceries',
-            // Whole units only (checked above); never rounded
+            // Checked against the unit above; sent as entered, never rounded or truncated
             quantity: Number(i.quantity),
-            unit: i.unit?.trim() || 'pcs',
+            // A registered unit (checked above), as printed or as selected by the user
+            unit: i.unit.trim(),
             purchase_price: purchasePrice,
             selling_price: sellingPrice,
             mrp: typeof i.mrp === 'number' && i.mrp > 0 ? i.mrp : undefined,
@@ -554,6 +571,7 @@ export const InvoiceScanner: React.FC = () => {
     setMissingAtConfirm([]);
     setFreeUnitsToConfirm([]);
     setFractionalBlocked(false);
+    setUnitBlocked(false);
   };
 
   const metaField = (field: InvoiceMetaField, placeholder: string, extraError?: string | null) => {
@@ -586,12 +604,15 @@ export const InvoiceScanner: React.FC = () => {
     );
   };
 
-  // Shown after a blocked confirm while a selected line still has a fractional quantity; disappears
-  // once the user corrects or deselects it
-  const fractionalNotice =
-    fractionalBlocked && extractedData
-      ? fractionalQuantityNotice(extractedData.items.filter((i) => selectedItemIds.has(i.id)))
-      : null;
+  // Shown after a blocked confirm while a selected line still has a quantity that does not suit its unit,
+  // or a missing / unregistered unit; each disappears once the user corrects or deselects the line
+  const selectedForNotice = extractedData ? extractedData.items.filter((i) => selectedItemIds.has(i.id)) : [];
+  const fractionalNotice = fractionalBlocked ? fractionalQuantityNotice(selectedForNotice, unitIndex) : null;
+  const unitNotice = !unitBlocked
+    ? null
+    : !unitIndex && unitStatus === 'loading'
+    ? 'The unit list is still loading, so the units cannot be checked yet. Nothing has been added to stock. Try again in a moment.'
+    : unitBlockNotice(selectedForNotice, unitIndex);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -917,6 +938,13 @@ export const InvoiceScanner: React.FC = () => {
             </div>
           )}
 
+          {unitNotice && (
+            <div role="alert" data-testid="unit-block" className="flex items-start gap-3 p-4 rounded-xl bg-[#FDF1EF] border border-[#EF806D]/50 text-[#9A3B2B] text-xs sm:text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1 min-w-0 break-words">{unitNotice}</span>
+            </div>
+          )}
+
           {fractionalNotice && (
             <div role="alert" data-testid="fractional-quantity-block" className="flex items-start gap-3 p-4 rounded-xl bg-[#FDF1EF] border border-[#EF806D]/50 text-[#9A3B2B] text-xs sm:text-sm">
               <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />
@@ -1064,10 +1092,17 @@ export const InvoiceScanner: React.FC = () => {
                   {extractedData.items.map((item, idx) => {
                     const isSelected = selectedItemIds.has(item.id);
                     const isNameInvalid = !item.product_name || !item.product_name.trim();
-                    const isQtyFractional = hasFractionalQuantity(item);
-                    const isQtyInvalid = item.quantity === null || item.quantity === undefined || item.quantity <= 0 || isQtyFractional;
+                    const unitIssue = unitIndex ? unitProblem(item.unit, unitIndex) : null;
+                    const canonicalUnit = unitIndex?.normalize(item.unit) ?? null;
+                    const fractionAllowed = canonicalUnit ? unitIndex?.allowsFraction(canonicalUnit) === true : false;
+                    const qtyProblem = quantityProblem(item, unitIndex);
+                    const isQtyInvalid = item.quantity === null || item.quantity === undefined || item.quantity <= 0 || qtyProblem !== null;
+                    const rowNeedsReview = item.needs_review || unitIssue !== null;
+                    // A fractional reading stays visible once the user has changed the quantity
                     const extractedFractional =
-                      typeof item.extracted_quantity === 'number' && hasFractionalQuantity({ quantity: item.extracted_quantity });
+                      typeof item.extracted_quantity === 'number' &&
+                      hasFractionalQuantity({ quantity: item.extracted_quantity }) &&
+                      item.quantity !== item.extracted_quantity;
                     const isPriceInvalid =
                       item.purchase_price === null ||
                       item.purchase_price === undefined ||
@@ -1079,7 +1114,7 @@ export const InvoiceScanner: React.FC = () => {
                         className={`transition-colors ${
                           !isSelected
                             ? 'opacity-60 bg-gray-50/50'
-                            : item.needs_review
+                            : rowNeedsReview
                             ? 'bg-[#FBF4E7]/30 hover:bg-[#FBF4E7]/50'
                             : 'hover:bg-[#FAF8F2]/60'
                         }`}
@@ -1168,8 +1203,9 @@ export const InvoiceScanner: React.FC = () => {
                         <td className="py-3 px-3">
                           <input
                             type="number"
-                            step="1"
-                            min="1"
+                            step={fractionAllowed ? '0.001' : '1'}
+                            min={fractionAllowed ? '0.001' : '1'}
+                            aria-label={`Quantity for ${item.product_name}`}
                             value={item.quantity ?? ''}
                             onChange={(e) => handleUpdateItem(item.id, 'quantity', parseFloat(e.target.value) || null)}
                             className={`w-full px-2 py-1 rounded-md border text-xs font-semibold focus:outline-none ${
@@ -1180,7 +1216,11 @@ export const InvoiceScanner: React.FC = () => {
                           />
                           {isQtyInvalid && (
                             <span className="text-[10px] text-[#EF806D] font-bold block px-1 mt-0.5">
-                              {isQtyFractional ? 'Whole units only' : 'Qty > 0'}
+                              {qtyProblem === 'whole_only'
+                                ? 'Whole units only'
+                                : qtyProblem === 'too_many_decimals'
+                                ? `Max ${unitIndex?.maxFractionDigits ?? 3} decimals`
+                                : 'Qty > 0'}
                             </span>
                           )}
                           {extractedFractional && (
@@ -1196,12 +1236,46 @@ export const InvoiceScanner: React.FC = () => {
                           )}
                         </td>
                         <td className="py-3 px-3">
-                          <input
-                            type="text"
-                            value={item.unit}
+                          {/* Registered units only (canonical registry); a missing or unknown unit must be selected */}
+                          <select
+                            value={canonicalUnit ?? (item.unit.trim() ? '__unregistered' : '')}
                             onChange={(e) => handleUpdateItem(item.id, 'unit', e.target.value)}
-                            className="w-full px-2 py-1 rounded-md border border-transparent hover:border-[#DDE9DF] focus:border-[#153D32] focus:bg-white focus:outline-none text-[#5E6C64]"
-                          />
+                            disabled={!unitIndex}
+                            aria-label={`Unit for ${item.product_name}`}
+                            aria-invalid={unitIssue !== null || undefined}
+                            data-testid="unit-select"
+                            className={`w-full min-w-[4.5rem] px-1.5 py-1 rounded-md border text-xs font-semibold focus:outline-none ${
+                              unitIssue
+                                ? 'border-[#EF806D] bg-[#FDF1EF] text-[#B4483A]'
+                                : 'border-[#DDE9DF] bg-white focus:border-[#153D32] text-[#5E6C64]'
+                            }`}
+                          >
+                            {!canonicalUnit && !item.unit.trim() && (
+                              <option value="" disabled>
+                                Select unit
+                              </option>
+                            )}
+                            {!canonicalUnit && item.unit.trim() && (
+                              <option value="__unregistered" disabled>
+                                {item.unit.trim()} (not registered)
+                              </option>
+                            )}
+                            {(unitIndex?.units ?? []).map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.label}
+                              </option>
+                            ))}
+                          </select>
+                          {unitIssue && (
+                            <span data-testid="unit-warning" role="status" className="text-[10px] text-[#B4483A] font-bold block px-1 mt-0.5">
+                              Needs review: {unitProblemText(item.unit, unitIssue)}
+                            </span>
+                          )}
+                          {!unitIndex && (
+                            <span className="text-[10px] text-[#8A6420] font-semibold block px-1 mt-0.5">
+                              {unitStatus === 'error' ? 'Unit list unavailable: reload to check units' : 'Loading units…'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3">
                           <div className="relative">
