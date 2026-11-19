@@ -7,13 +7,12 @@
  * The test invoice has a loose-weight line (Toor Dal 2.5 kg). Stock is tracked in whole units and that
  * line is never rounded (P0), so it is deselected before each confirmation; the header checks are unchanged.
  *
- * Run (backend on :8000 with a throwaway DATABASE_URL, Vite on :5173):
- *   backend/.venv/bin/python scripts/e2e/prepare_metadata_assets.py /tmp/meta-e2e
- *   node scripts/e2e/invoice_metadata_check.cjs /tmp/meta-e2e
+ * Run through the isolated test launcher (test backend, test database, dedicated ports):
+ *   node scripts/e2e/run.cjs invoice_metadata_check
  */
 const { chromium } = require('playwright');
 const SP = process.argv[2];
-const API = 'http://127.0.0.1:8000/api/v1';
+const { API, HARNESS } = require('./e2e_env.cjs').e2eTarget();
 const results = [];
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' — ' + d : ''}`); };
 (async () => {
@@ -28,10 +27,10 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   let confirmCalls = 0;
   let looseLinesDeselected = 0;
   page.on('request', (r) => { if (r.url().includes('/invoices/confirm')) confirmCalls++; });
-  await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
+  await page.goto(HARNESS);
   await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
   async function extract(file) {
-    await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
+    await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', file);
     await page.click('button:has-text("Extract Line Items")');

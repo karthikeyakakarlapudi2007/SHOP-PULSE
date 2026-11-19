@@ -2,13 +2,12 @@
  * R10 browser check: a photo sent straight to OCR ("Upload PDF or file") gets the same quality
  * warning and retake advice as the camera flow; a clear photo and a PDF get none.
  *
- * Run (backend on :8000 with a throwaway DATABASE_URL, Vite on :5173):
- *   backend/.venv/bin/python scripts/e2e/prepare_warning_assets.py /tmp/warn-e2e
- *   node scripts/e2e/direct_upload_warning_check.cjs /tmp/warn-e2e
+ * Run through the isolated test launcher (test backend, test database, dedicated ports):
+ *   node scripts/e2e/run.cjs direct_upload_warning_check
  */
 const { chromium } = require('playwright');
 const SP = process.argv[2];
-const API = process.env.API_URL || 'http://127.0.0.1:8000/api/v1';
+const { API, HARNESS } = require('./e2e_env.cjs').e2eTarget();
 const results = [];
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' — ' + d : ''}`); };
 (async () => {
@@ -21,10 +20,10 @@ const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' 
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 }, deviceScaleFactor: 1 })).newPage();
   const assessCalls = [];
   page.on('request', (r) => { if (r.url().includes('/document-prep/assess')) assessCalls.push(r.url()); });
-  await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
+  await page.goto(HARNESS);
   await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
   async function extract(file) {
-    await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
+    await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', file);
     await page.click('button:has-text("Extract Line Items")');

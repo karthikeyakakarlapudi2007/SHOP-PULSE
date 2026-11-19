@@ -6,13 +6,13 @@
  *
  * The extraction response is fixed (page.route); confirmation goes to the real backend. Generic test values.
  *
- * Run (backend on :8000 with a throwaway DATABASE_URL, Vite on :5173):
- *   node scripts/e2e/fractional_quantity_block_check.cjs /tmp/fractional-e2e
+ * Run through the isolated test launcher (test backend, test database, dedicated ports):
+ *   node scripts/e2e/run.cjs fractional_quantity_block_check
  */
 const { chromium, devices } = require('playwright');
 const fs = require('fs');
 const SP = process.argv[2] || '.';
-const API = process.env.API_URL || 'http://127.0.0.1:8000/api/v1';
+const { API, HARNESS } = require('./e2e_env.cjs').e2eTarget();
 const results = [];
 const check = (n, ok, d = '') => { results.push(ok); console.log(`${ok ? 'PASS' : 'FAIL'}  ${n}${d ? ' — ' + d : ''}`); };
 
@@ -46,9 +46,9 @@ const extraction = (label) => ({
     const confirmBodies = [];
     page.on('request', (r) => { if (r.url().includes('/invoices/confirm')) confirmBodies.push(JSON.parse(r.postData() || '{}')); });
     await page.route('**/api/v1/invoices/extract', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(extraction(label)) }));
-    await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
+    await page.goto(HARNESS);
     await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
-    await page.goto('http://127.0.0.1:5173/scripts/e2e/harness/index.html');
+    await page.goto(HARNESS);
     await page.click('[role=tab]:has-text("Upload PDF or file")');
     await page.setInputFiles('input[type=file]:not([multiple]):not([capture])', { name: 'bill.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 e2e') });
     await page.click('button:has-text("Extract Line Items")');
