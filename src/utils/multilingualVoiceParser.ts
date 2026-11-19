@@ -906,19 +906,35 @@ export function parseMultilingualVoiceBill(
         continue;
       }
 
+      // A unit other than the product's needs the backend's exact conversion (500 g of a kg product is
+      // 0.5 kg): this offline preview never guesses it, the line is shown for correction instead
+      const productUnit = UNIT_NORMALIZATION_MAP[(matchedProduct.unit || '').trim().toLowerCase()] ?? null;
+      const isMeasure = (u: CanonicalUnit | null) => u === 'kg' || u === 'g' || u === 'L' || u === 'ml';
+      // Count / package words ("2 packets" of a product counted in packs) mean the product's own unit
+      if (detectedUnit !== null && detectedUnit !== productUnit && (isMeasure(detectedUnit) || isMeasure(productUnit))) {
+        unmatchedItems.push({
+          queried_name: cleanName,
+          quantity,
+          reason: `Said in ${detectedUnit}, but ${matchedProduct.name} is sold in ${matchedProduct.unit || 'its own unit'}: check the quantity`,
+        });
+        continue;
+      }
+
       // Single clear match
       const catalogPrice = matchedProduct.sellingPrice ?? matchedProduct.price ?? 0;
-      // If a spoken total price was explicitly stated in speech (e.g. "₹120"), use it directly
+      // A spoken total is the line total; the exact unit price reproduces it (100 for 3 -> 33.333..., never 99.99)
       const lineTotal = spokenPrice !== null ? spokenPrice : Math.round(catalogPrice * quantity * 100) / 100;
-      const unitPrice = spokenPrice !== null ? Math.round((spokenPrice / quantity) * 100) / 100 : catalogPrice;
+      const unitPriceExact = spokenPrice !== null ? spokenPrice / quantity : catalogPrice;
 
       matchedItems.push({
         product_id: matchedProduct.id,
         name: matchedProduct.name,
         quantity,
-        unit_price: unitPrice,
+        unit_price: Math.round(unitPriceExact * 1000) / 1000,
+        unit_price_exact: unitPriceExact,
+        price_source: spokenPrice !== null ? 'spoken' : 'catalogue',
         total_price: lineTotal,
-        unit: detectedUnit !== null ? detectedUnit : matchedProduct.unit || 'pcs',
+        unit: matchedProduct.unit || 'pcs',
         current_stock: matchedProduct.stock ?? 10,
         is_out_of_stock: (matchedProduct.stock ?? 0) <= 0,
         is_insufficient_stock: quantity > (matchedProduct.stock ?? 0),

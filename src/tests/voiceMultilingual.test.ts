@@ -25,6 +25,13 @@ import {
 import { parseMultilingualVoiceBill } from '../utils/multilingualVoiceParser';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 
+// Loose rice is sold by the kg. The mock catalogue's rice is a 5 kg bag (stocked in bags): "2 kg rice" of a
+// bag product cannot be sold without a pack-size conversion and is refused (Phase 4 unit rules), so the
+// spoken-kg recognition below is checked against a kg-stocked rice.
+const VOICE_CATALOG = INITIAL_PRODUCTS.map((p) =>
+  p.name.startsWith('Basmati Rice') ? { ...p, name: 'Basmati Rice (loose)', unit: 'kg' } : p,
+);
+
 function assert(condition: boolean, message: string) {
   if (!condition) {
     console.error(`❌ ASSERTION FAILED: ${message}`);
@@ -60,7 +67,7 @@ describe('Voice Multilingual Unit Tests', () => {
 
   it('extracts Telugu to English speech correctly', () => {
     const teluguText = 'రెండు కిలోల బియ్యం నూట ఇరవై రూపాయలు';
-    const teluguResult = parseMultilingualVoiceBill(teluguText, INITIAL_PRODUCTS, 'telugu');
+    const teluguResult = parseMultilingualVoiceBill(teluguText, VOICE_CATALOG, 'telugu');
 
     assert(teluguResult.matched_items.length === 1, 'Matched 1 item from Telugu speech');
     const teluguItem = teluguResult.matched_items[0];
@@ -78,7 +85,7 @@ describe('Voice Multilingual Unit Tests', () => {
 
   it('extracts Hindi to English and supports Telugu display localization', () => {
     const hindiText = 'दो किलो चावल एक सौ बीस रुपये';
-    const hindiResult = parseMultilingualVoiceBill(hindiText, INITIAL_PRODUCTS, 'hindi');
+    const hindiResult = parseMultilingualVoiceBill(hindiText, VOICE_CATALOG, 'hindi');
 
     assert(hindiResult.matched_items.length === 1, 'Matched 1 item from Hindi speech');
     const hindiItem = hindiResult.matched_items[0];
@@ -100,7 +107,7 @@ describe('Voice Multilingual Unit Tests', () => {
 
   it('parses English to English speech accurately', () => {
     const englishText = '2 Tata Salt, 3 Parle-G and 1 Aashirvaad Atta';
-    const englishResult = parseMultilingualVoiceBill(englishText, INITIAL_PRODUCTS, 'english');
+    const englishResult = parseMultilingualVoiceBill(englishText, VOICE_CATALOG, 'english');
 
     assert(englishResult.matched_items.length >= 2, `English items parsed (matched: ${englishResult.matched_items.length})`);
     const tataSalt = englishResult.matched_items.find(i => i.name.toLowerCase().includes('tata salt'));

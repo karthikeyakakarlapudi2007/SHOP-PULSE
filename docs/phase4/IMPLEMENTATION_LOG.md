@@ -168,3 +168,13 @@ Approved requirements: a missing invoice unit is never defaulted; the user selec
 | TypeScript, lint, build | pass; exit 0 (warnings only in the pre-existing files, none in changed files); pass |
 | Browser checks (launcher) | mobile 25/25, metadata 14/14, direct upload 6/6, promotions 17/17, fractional block 18/18, unit registry 16/16, invoice units and fractions 36/36 |
 | `backend/shoppulse.db` | SHA-256 `63c44cad…`, 303,104 bytes, modification time unchanged; no migration |
+
+## 2026-11-19 – Voice-to-Bill: spoken prices and units through cart and sale (uncommitted)
+
+Details: `VOICE_TO_BILL.md`.
+
+| Area | Files |
+|---|---|
+| Backend | `services/voice_parser.py`, `services/inventory_matcher.py`, `schemas/voice.py` (additive `price_source`, `spoken_quantity`, ambiguous `spoken_price` / `options`); new `tests/test_voice_pricing.py` |
+| Frontend | `src/utils/cartPricing.ts`, `src/utils/voiceBill.ts` (new), `src/components/VoiceBillModal.tsx`, `src/pages/Sales.tsx`, `src/utils/multilingualVoiceParser.ts`, `src/types/sale.ts`, `src/api/voice.ts`; new `src/tests/voicePricing.test.ts`; 3 voice tests use a kg-stocked rice |
+| Browser | new `scripts/e2e/harness/sales.{html,tsx}`, `scripts/e2e/voice_bill_price_check.cjs` (in the launcher) |

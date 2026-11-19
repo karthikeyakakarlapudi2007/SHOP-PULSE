@@ -35,6 +35,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useSales } from '../hooks/useSales';
 import { getSaleById } from '../services/salesService';
 import { describeError } from '../utils/errorHandler';
+import { cartLineKey, cartLineTotal, cartTotal, cartUnitPrice, displayUnitPrice, mergeIntoCart, round3 } from '../utils/cartPricing';
 import { useDialog } from '../hooks/useDialog';
 import { usePrintRequest } from '../hooks/usePrint';
 import { PrintPortal } from '../components/PrintPortal';
@@ -135,23 +136,11 @@ export const Sales: React.FC<SalesProps> = ({
   // ---------------------------------------------------------------------------
   // Voice-to-Bill Cart Integration (Phase 8)
   // ---------------------------------------------------------------------------
-  const handleVoiceItemsConfirmed = (items: Array<{ product: Product; quantity: number }>) => {
+  const handleVoiceItemsConfirmed = (items: CartItem[]) => {
     setSaleError(null);
-    setCart(prev => {
-      const updated = [...prev];
-      for (const item of items) {
-        const existingIdx = updated.findIndex(c => c.product.id === item.product.id);
-        if (existingIdx >= 0) {
-          updated[existingIdx] = {
-            ...updated[existingIdx],
-            quantity: updated[existingIdx].quantity + item.quantity
-          };
-        } else {
-          updated.push({ product: item.product, quantity: item.quantity });
-        }
-      }
-      return updated;
-    });
+    // Spoken prices stay with their lines (never re-priced from the catalogue); same product at the same
+    // price is merged, a different price stays a separate line
+    setCart(prev => mergeIntoCart(prev, items));
 
     // Smooth scroll to bill section
     setTimeout(() => {
@@ -159,7 +148,7 @@ export const Sales: React.FC<SalesProps> = ({
     }, 150);
   };
 
-  const handleVoiceDirectCheckout = (items: Array<{ product: Product; quantity: number }>) => {
+  const handleVoiceDirectCheckout = (items: CartItem[]) => {
     handleVoiceItemsConfirmed(items);
   };
 
@@ -199,38 +188,28 @@ export const Sales: React.FC<SalesProps> = ({
   // ---------------------------------------------------------------------------
   const addToCart = (product: Product) => {
     setSaleError(null);
-    const existing = cart.find(item => item.product.id === product.id);
-    if (existing) {
-      setCart(cart.map(item => 
-        item.product.id === product.id 
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      setCart([...cart, { product, quantity: 1 }]);
-    }
+    // Catalogue-priced line of this product (a spoken-price line of the same product is left as it is)
+    setCart(mergeIntoCart(cart, [{ product, quantity: 1 }]));
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (lineKey: string, delta: number) => {
     setSaleError(null);
     setCart(cart.map(item => {
-      if (item.product.id === productId) {
-        const newQty = item.quantity + delta;
+      if (cartLineKey(item) === lineKey) {
+        const newQty = round3(item.quantity + delta);
         return newQty > 0 ? { ...item, quantity: newQty } : null;
       }
       return item;
     }).filter(Boolean) as CartItem[]);
   };
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = (lineKey: string) => {
     setSaleError(null);
-    setCart(cart.filter(item => item.product.id !== productId));
+    setCart(cart.filter(item => cartLineKey(item) !== lineKey));
   };
 
-  const totalAmount = cart.reduce(
-    (sum, item) => sum + (item.product.sellingPrice ?? item.product.price) * item.quantity, 
-    0
-  );
+  // Exact sum of the rounded lines (each line at its own agreed or catalogue price): the total the sale saves
+  const totalAmount = cartTotal(cart);
 
   const totalItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -250,7 +229,8 @@ export const Sales: React.FC<SalesProps> = ({
           productId: item.product.id,
           name: item.product.name,
           quantity: item.quantity,
-          price: item.product.sellingPrice ?? item.product.price,
+          // The line's agreed price (spoken / corrected) or the catalogue price: what the bill showed
+          price: cartUnitPrice(item),
           unit: item.product.unit
         })),
         paymentMethod: paymentMethod as PaymentMethod,
@@ -545,7 +525,9 @@ export const Sales: React.FC<SalesProps> = ({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {filteredProducts.map((prod) => {
-                  const inCart = cart.find(item => item.product.id === prod.id);
+                  // All lines of this product (catalogue and spoken-price lines)
+                  const inCartQty = round3(cart.filter(item => item.product.id === prod.id).reduce((n, item) => n + item.quantity, 0));
+                  const inCart = inCartQty > 0 ? { quantity: inCartQty } : undefined;
                   return (
                     <div
                       key={prod.id}
@@ -628,21 +610,27 @@ export const Sales: React.FC<SalesProps> = ({
                 {/* Cart Items List */}
                 <div className="divide-y divide-[#E3E5DE] max-h-[280px] overflow-y-auto my-2 pr-1">
                   {cart.map((item) => (
-                    <div key={item.product.id} className="py-2.5 flex items-center justify-between gap-2">
+                    <div key={cartLineKey(item)} data-testid="cart-line" className="py-2.5 flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-[#202923] text-xs sm:text-sm truncate">
                           {item.product.name}
                         </p>
                         <p className="text-xs text-[#69736C] mt-0.5 font-medium">
-                          ₹{item.product.price} × {item.quantity} = <span className="text-[#202923] font-bold">₹{item.product.price * item.quantity}</span>
+                          ₹{displayUnitPrice(item)} × {item.quantity} = <span data-testid="cart-line-total" className="text-[#202923] font-bold">₹{cartLineTotal(item).toFixed(2)}</span>
                         </p>
+                        {(item.priceSource || item.spokenQuantity) && (
+                          <p className="text-[10px] text-[#2F6F4F] font-semibold mt-0.5">
+                            {item.priceSource === 'spoken' ? 'Spoken price kept' : item.priceSource === 'edited' ? 'Corrected price' : ''}
+                            {item.spokenQuantity ? `${item.priceSource ? ' · ' : ''}said ${item.spokenQuantity}` : ''}
+                          </p>
+                        )}
                       </div>
 
                       {/* Quantity Stepper [-] Qty [+] */}
                       <div className="flex items-center gap-1 shrink-0 bg-[#F7F5EF] p-1 rounded-lg">
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.product.id, -1)}
+                          onClick={() => updateQuantity(cartLineKey(item), -1)}
                           aria-label={`Decrease quantity of ${item.product.name}`}
                           className="w-7 h-7 rounded-md bg-white border border-[#E3E5DE] text-[#202923] flex items-center justify-center font-bold active:scale-90 cursor-pointer min-h-[28px] min-w-[28px]"
                         >
@@ -653,7 +641,7 @@ export const Sales: React.FC<SalesProps> = ({
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.product.id, 1)}
+                          onClick={() => updateQuantity(cartLineKey(item), 1)}
                           aria-label={`Increase quantity of ${item.product.name}`}
                           className="w-7 h-7 rounded-md bg-white border border-[#E3E5DE] text-[#202923] flex items-center justify-center font-bold active:scale-90 cursor-pointer min-h-[28px] min-w-[28px]"
                         >
@@ -661,7 +649,7 @@ export const Sales: React.FC<SalesProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeFromCart(item.product.id)}
+                          onClick={() => removeFromCart(cartLineKey(item))}
                           aria-label={`Remove ${item.product.name} from bill`}
                           className="p-1.5 text-[#69736C] hover:text-[#B93838] ml-0.5 cursor-pointer min-h-[28px] min-w-[28px] flex items-center justify-center"
                         >
@@ -717,7 +705,7 @@ export const Sales: React.FC<SalesProps> = ({
                       {t('sales.total', { count: totalItemCount })}
                     </span>
                     <span className="text-2xl font-black text-[#202923]">
-                      ₹{totalAmount}
+                      ₹{totalAmount.toFixed(2)}
                     </span>
                   </div>
 
@@ -730,7 +718,7 @@ export const Sales: React.FC<SalesProps> = ({
                     onClick={handleCompleteSale}
                     icon={<CheckCircle2 className="w-5 h-5" />}
                   >
-                    {isProcessing ? 'Processing Sale...' : t('sales.completeSale', { total: `₹${totalAmount}` })}
+                    {isProcessing ? 'Processing Sale...' : t('sales.completeSale', { total: `₹${totalAmount.toFixed(2)}` })}
                   </Button>
                 </div>
               </Card>
@@ -750,7 +738,7 @@ export const Sales: React.FC<SalesProps> = ({
                     {totalItemCount} {totalItemCount === 1 ? 'item' : 'items'} in bill
                   </p>
                   <p className="text-sm font-extrabold text-white leading-tight">
-                    ₹{totalAmount}
+                    ₹{totalAmount.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -1172,7 +1160,7 @@ export const Sales: React.FC<SalesProps> = ({
       <ConfirmDialog
         isOpen={showClearConfirm}
         title="Clear current bill?"
-        message={`Are you sure you want to remove all ${totalItemCount} item${totalItemCount === 1 ? '' : 's'} (₹${totalAmount}) from this bill?`}
+        message={`Are you sure you want to remove all ${totalItemCount} item${totalItemCount === 1 ? '' : 's'} (₹${totalAmount.toFixed(2)}) from this bill?`}
         warning="This will clear the current customer bill. Items are not lost from your store stock and can be added again."
         confirmLabel="Clear bill"
         tone="danger"

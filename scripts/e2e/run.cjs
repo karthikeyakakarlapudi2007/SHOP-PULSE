@@ -40,6 +40,7 @@ const CHECKS = {
   fractional_quantity_block_check: null,
   unit_registry_check: null,
   invoice_units_fraction_check: null,
+  voice_bill_price_check: null,
 };
 
 const log = (msg) => console.log(`[e2e] ${msg}`);

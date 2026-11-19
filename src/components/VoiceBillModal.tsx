@@ -17,7 +17,9 @@ import {
 } from 'lucide-react';
 import { Button } from './Button';
 import { useDialog } from '../hooks/useDialog';
-import type { Product } from '../types';
+import type { CartItem, Product } from '../types';
+import { lineTotal, lineTotalPaise, round3 } from '../utils/cartPricing';
+import { voiceLineToCartItem, withEditedLineTotal } from '../utils/voiceBill';
 import {
   voiceApi,
   type MatchedVoiceItem,
@@ -42,8 +44,9 @@ interface VoiceBillModalProps {
   isOpen: boolean;
   onClose: () => void;
   products: Product[];
-  onConfirmToCart: (items: Array<{ product: Product; quantity: number }>) => void;
-  onDirectCheckout?: (items: Array<{ product: Product; quantity: number }>) => void;
+  /** Cart lines keep the spoken (or corrected) unit price; the catalogue price applies only when none was said. */
+  onConfirmToCart: (items: CartItem[]) => void;
+  onDirectCheckout?: (items: CartItem[]) => void;
 }
 
 type VoiceButtonState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'SUCCESS' | 'ERROR';
@@ -211,10 +214,11 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
   const [unmatchedItems, setUnmatchedItems] = useState<UnmatchedVoiceItem[]>([]);
 
   // Computed subtotal and total
-  const subtotal = useMemo(() => {
-    const sum = matchedItems.reduce((acc, item) => acc + item.total_price, 0);
-    return Math.round(sum * 100) / 100;
-  }, [matchedItems]);
+  // Sum of the rounded lines in paise (exact; the same total the sale saves)
+  const subtotal = useMemo(
+    () => Number(matchedItems.reduce((acc, item) => acc + lineTotalPaise(1, item.total_price), 0n)) / 100,
+    [matchedItems],
+  );
   const total = subtotal;
 
   // Dev Simulation panel
@@ -400,10 +404,20 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
         apiResponse: `HTTP 200 (matched: ${response.matched_items?.length || 0}, ambiguous: ${response.ambiguous_items?.length || 0}, unmatched: ${response.unmatched_items?.length || 0})`
       }));
 
-      if (
-        response &&
-        (response.matched_items?.length > 0 || response.ambiguous_items?.length > 0)
-      ) {
+      // The backend result is authoritative (exact units and prices): it replaces the instant preview even
+      // when it matched nothing, so an unchecked preview line can never be billed
+      if (response) {
+        const nothingFound =
+          !(response.matched_items?.length || response.ambiguous_items?.length || response.unmatched_items?.length);
+        if (nothingFound) {
+          setMatchedItems([]);
+          setAmbiguousItems([]);
+          setUnmatchedItems([]);
+          setErrorMessage("Could not detect items. Please try speaking item name and quantity clearly.");
+          setButtonState('ERROR');
+          setTimeout(() => setButtonState('IDLE'), 3000);
+          return;
+        }
         setTranscript(response.transcript || textToProcess);
         setEditedTranscript(response.transcript || textToProcess);
         setMatchedItems(response.matched_items);
@@ -705,20 +719,27 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
   // ---------------------------------------------------------------------------
   const handleResolveAmbiguity = (ambiguousIndex: number, candidate: VoiceProductCandidate) => {
     const amb = ambiguousItems[ambiguousIndex];
-    const unitPrice = candidate.selling_price;
-    const lineTotal = Math.round(unitPrice * amb.quantity * 100) / 100;
-
-    const newMatchedItem: MatchedVoiceItem = {
+    // The backend prepares each candidate's line (unit converted, spoken price kept); use it as is
+    const prepared = amb.options?.find((o) => o.product_id === candidate.id);
+    if (amb.options && !prepared) {
+      setErrorMessage(`${candidate.name} cannot be sold as said (check the unit or quantity). Choose another product or correct the request.`);
+      return;
+    }
+    const spokenTotal = typeof amb.spoken_price === 'number' && amb.spoken_price > 0 ? amb.spoken_price : null;
+    const unitPrice = spokenTotal !== null ? spokenTotal / amb.quantity : candidate.selling_price;
+    const newMatchedItem: MatchedVoiceItem = prepared ?? {
       product_id: candidate.id,
       name: candidate.name,
       quantity: amb.quantity,
-      unit_price: unitPrice,
-      total_price: lineTotal,
+      unit_price: Math.round(unitPrice * 1000) / 1000,
+      unit_price_exact: unitPrice,
+      total_price: spokenTotal ?? lineTotal(amb.quantity, candidate.selling_price),
       unit: candidate.unit,
       current_stock: candidate.current_stock,
       is_out_of_stock: candidate.current_stock <= 0,
       is_insufficient_stock: amb.quantity > candidate.current_stock,
       available_stock: Math.max(0, candidate.current_stock),
+      price_source: spokenTotal !== null ? 'spoken' : 'catalogue',
     };
 
     setMatchedItems(prev => [...prev, newMatchedItem]);
@@ -732,9 +753,10 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
     setMatchedItems(prev => {
       return prev.map((item, idx) => {
         if (idx === index) {
-          const newQty = item.quantity + delta;
+          const newQty = round3(item.quantity + delta);
           if (newQty <= 0) return null;
-          const newTotal = Math.round(item.unit_price * newQty * 100) / 100;
+          // Same unit price (spoken prices are per unit), exact line total
+          const newTotal = lineTotal(newQty, item.unit_price_exact ?? item.unit_price);
           return {
             ...item,
             quantity: newQty,
@@ -745,6 +767,13 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
         return item;
       }).filter(Boolean) as MatchedVoiceItem[];
     });
+  };
+
+  /** Manual correction of a line's total before saving: the unit price follows; nothing else changes. */
+  const handleEditLineTotal = (index: number, value: string) => {
+    const total = Number(value);
+    if (value.trim() === '' || !Number.isFinite(total) || total < 0) return;
+    setMatchedItems(prev => prev.map((item, idx) => (idx === index ? withEditedLineTotal(item, total) : item)));
   };
 
   const handleRemoveMatchedItem = (index: number) => {
@@ -763,20 +792,29 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
       setErrorMessage("No recognized items to add. Please record or select products first.");
       return;
     }
+    if (isProcessing) {
+      setErrorMessage("Still checking the items and prices. Please wait a moment.");
+      return;
+    }
 
-    // Map matched items strictly to existing Product objects from inventory
-    const cartItemsToAdd: Array<{ product: Product; quantity: number }> = [];
+    // Map matched items strictly to existing Product objects from inventory. A spoken or corrected
+    // price travels with the line; it is never replaced by the catalogue selling price.
+    const cartItemsToAdd: CartItem[] = [];
+    const notMapped: string[] = [];
 
     for (const item of matchedItems) {
       const prod = products.find(p => p.id === item.product_id) ||
                    products.find(p => p.name.toLowerCase() === item.name.toLowerCase());
       if (prod) {
-        cartItemsToAdd.push({ product: prod, quantity: item.quantity });
+        cartItemsToAdd.push(voiceLineToCartItem(item, prod));
+      } else {
+        notMapped.push(item.name);
       }
     }
 
-    if (cartItemsToAdd.length === 0) {
-      setErrorMessage("Matched items could not be mapped to catalog inventory. Please check stock.");
+    // Never add part of a bill silently: every recognised line must reach the cart
+    if (notMapped.length > 0) {
+      setErrorMessage(`These items could not be found in the current inventory: ${notMapped.join(', ')}. Remove them or refresh the product list.`);
       return;
     }
 
@@ -1228,6 +1266,14 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
                         <span className="text-xs text-slate-500 font-semibold">
                           ₹{item.unit_price} / {getLocalizedUnit(item.unit, displayLanguage)}
                         </span>
+                        {item.price_source && item.price_source !== 'catalogue' && (
+                          <span data-testid="voice-price-source" className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                            {item.price_source === 'spoken' ? 'Spoken price' : 'Edited price'}
+                          </span>
+                        )}
+                        {item.spoken_quantity && (
+                          <span className="text-[10px] font-semibold text-slate-500">said {item.spoken_quantity}</span>
+                        )}
                         {item.is_insufficient_stock && (
                           <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-md">
                             Only {item.available_stock} in stock
@@ -1266,9 +1312,21 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
 
                     {/* Total Price & Delete */}
                     <div className="text-right shrink-0 min-w-[70px]">
-                      <p className="text-xs sm:text-sm font-black text-emerald-700">
-                        ₹{item.total_price}
-                      </p>
+                      <label className="inline-flex items-center gap-0.5 text-xs sm:text-sm font-black text-emerald-700">
+                        ₹
+                        <input
+                          key={`${idx}-${item.total_price}`}
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          defaultValue={item.total_price}
+                          onBlur={(e) => handleEditLineTotal(idx, e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          aria-label={`Line total for ${item.name}`}
+                          className="w-16 text-right bg-transparent border-b border-dashed border-emerald-300 focus:outline-none focus:border-emerald-700"
+                        />
+                      </label>
                       <button
                         type="button"
                         onClick={() => handleRemoveMatchedItem(idx)}
@@ -1500,7 +1558,7 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
             <Button
               variant="secondary"
               size="md"
-              disabled={matchedItems.length === 0}
+              disabled={matchedItems.length === 0 || isProcessing}
               onClick={() => handleConfirmBill(false)}
               className="sm:flex-initial rounded-lg text-xs font-bold cursor-pointer min-h-[44px]"
               icon={<ShoppingCart className="w-4 h-4" />}
@@ -1511,7 +1569,7 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
             <Button
               variant="primary"
               size="md"
-              disabled={matchedItems.length === 0}
+              disabled={matchedItems.length === 0 || isProcessing}
               onClick={() => handleConfirmBill(true)}
               className="sm:flex-initial rounded-lg text-xs font-bold cursor-pointer min-h-[44px]"
               icon={<CheckCircle2 className="w-4 h-4" />}
