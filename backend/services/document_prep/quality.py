@@ -248,7 +248,7 @@ def assess_quality(
     elif un > 0.18:
         add("shadow", 1, "Lighting is a little uneven.", True)
 
-    if metrics["edges_cut"] >= 1:
+    if metrics["edges_cut"] >= 1 or (geometry or {}).get("cut_off"):
         add("cut_off", 3, "Part of the invoice seems to be outside the photo. Please retake with the whole page visible.", False)
 
     if geometry:

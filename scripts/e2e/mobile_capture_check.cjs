@@ -7,15 +7,13 @@
  * NOT a substitute for a physical Android device: the Capacitor WebView, real camera hardware,
  * Android permission dialogs and the native camera intent are not exercised here.
  *
- * Run (backend on :8000 with a throwaway DATABASE_URL, Vite on :5173):
- *   backend/.venv/bin/python scripts/e2e/prepare_mobile_assets.py /tmp/mobile-e2e
- *   node scripts/e2e/mobile_capture_check.cjs /tmp/mobile-e2e
+ * Run through the isolated test launcher (test backend, test database, dedicated ports):
+ *   node scripts/e2e/run.cjs mobile_capture_check
  */
 const { chromium, devices } = require('playwright');
 const fs = require('fs');
 const SP = process.argv[2]; // directory with assets from prepare_mobile_assets.py; screenshots are written here
-const APP = process.env.APP_URL || 'http://127.0.0.1:5173/scripts/e2e/harness/index.html';
-const API = process.env.API_URL || 'http://127.0.0.1:8000/api/v1';
+const { API, HARNESS: APP } = require('./e2e_env.cjs').e2eTarget();
 const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`); };
 const j = (r) => r.json();
@@ -31,9 +29,8 @@ async function openApp(ctx, tok, init) {
   const page = await ctx.newPage();
   page.on('pageerror', (e) => check('no uncaught page errors', false, e.message));
   if (init) await page.addInitScript(init);
+  await page.addInitScript((t) => localStorage.setItem('shoppulse_token', t), tok);  // token present before any page script (no 401 race)
   await page.goto(APP);
-  await page.evaluate((t) => localStorage.setItem('shoppulse_token', t), tok);
-  await page.reload();
   await page.waitForSelector('text=Open camera');
   return page;
 }

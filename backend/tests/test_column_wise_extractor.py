@@ -196,10 +196,11 @@ def test_pack_size_vs_billing_quantity_distinction(extractor, standard_schema):
     assert rec.pack_size.unit.upper() == "KG"
 
 
-def test_faint_ocr_decimal_dot_repair(extractor, standard_schema):
+def test_faint_ocr_decimal_dot_is_suggested_not_applied(extractor, standard_schema):
     """
-    Verifies that if OCR missed faint decimal in 1.0 (read as 10) or 2.0 (read as 20)
-    and line total equals (qty/10)*rate, the quantity is repaired.
+    If OCR may have missed a faint decimal in 1.0 (read as 10) and the line total equals
+    (qty/10)*rate, the printed reading is KEPT and the alternative is only suggested for review
+    (Phase 3A: financial values are never corrected silently).
     """
     row = TableRow(
         row_index=4,
@@ -217,9 +218,10 @@ def test_faint_ocr_decimal_dot_repair(extractor, standard_schema):
 
     rec = extractor.extract_row(row, standard_schema)
     assert rec is not None
-    # Repaired from 10 to 1.0
-    assert rec.quantity == Decimal("1.000")
-    assert any("Repaired faint decimal" in w for w in rec.warnings)
+    assert rec.quantity == Decimal("10.000")  # printed value kept
+    assert any("may be 1" in sug for sug in rec.suggestions)
+    assert rec.review_reasons
+    assert rec.quantity_details["suggested_quantity"] == Decimal("1")
 
 
 def test_missing_mrp_remains_none(extractor, standard_schema):

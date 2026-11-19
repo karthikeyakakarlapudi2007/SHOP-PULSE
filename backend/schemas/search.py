@@ -2,6 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
+from schemas.quantity import Quantity
 
 
 class ProductSearchHit(BaseModel):
@@ -10,7 +11,7 @@ class ProductSearchHit(BaseModel):
     category: Optional[str] = None
     sku: Optional[str] = None
     unit: Optional[str] = None
-    current_stock: int
+    current_stock: Quantity
     selling_price: float
 
     model_config = ConfigDict(from_attributes=True)

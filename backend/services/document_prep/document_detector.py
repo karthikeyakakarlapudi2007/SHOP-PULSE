@@ -45,6 +45,12 @@ class DocumentDetection:
     aspect_method: Optional[str] = None
     reasons: List[str] = field(default_factory=list)
     candidates_considered: int = 0
+    # R8: an outline with 1-3 corners on the photo frame is bounded by the frame, not by the paper,
+    # so it is not used for reshaping; with text running into that frame edge the page is cut off.
+    outline_reliable: bool = True
+    corners_on_frame: int = 0
+    cut_off: bool = False
+    cut_off_edges: List[str] = field(default_factory=list)
 
 
 def order_corners(pts: np.ndarray) -> np.ndarray:
@@ -393,7 +399,24 @@ def detect_document(
         aspect_method=ratio_method,
         candidates_considered=len(cands),
     )
-    if support < 0.55:
+    on_frame = _corners_on_frame(q, sw, sh, border_tol)
+    det.corners_on_frame = len(on_frame)
+    if 1 <= len(on_frame) <= 3 and text_small is not None:
+        # Evidence of a cropped page: text INSIDE the outline running into the frame edge that the
+        # outline touches. A page corner that merely touches the frame is not rejected.
+        page_region = np.zeros((sh, sw), np.uint8)
+        cv2.fillConvexPoly(page_region, q.astype(np.int32), 255)
+        lightness = lab_small[:, :, 0]
+        paper_l = float(np.percentile(lightness[page_region > 0], 85)) if np.count_nonzero(page_region) else 0.0
+        det.cut_off_edges = [
+            e for e in _edges_with_text(cv2.bitwise_and(text_small, page_region), on_frame, sw, sh)
+            if _edge_is_paper(lightness, page_region, e, paper_l)]
+        det.cut_off = bool(det.cut_off_edges)
+        det.outline_reliable = not det.cut_off
+    if det.cut_off:
+        reasons.append("Part of the page, with text on it, is outside the photo. The photo was not reshaped; "
+                       "please retake it with the whole page visible.")
+    elif support < 0.55:
         reasons.append("The page outline is not clear enough to correct perspective safely.")
     elif outside > config.max_text_outside_quad_fraction:
         reasons.append("Some text lies outside the detected outline; it was not cropped.")
@@ -405,6 +428,49 @@ def detect_document(
         reasons.append("Part of the page edge is outside the photo.")
     det.reasons = reasons
     return det
+
+
+def _corners_on_frame(q: np.ndarray, w: int, h: int, tol: float) -> List[str]:
+    """Frame edges (left / top / right / bottom) touched by outline corners, one entry per corner."""
+    edges: List[str] = []
+    for x, y in np.asarray(q, dtype=np.float64).reshape(4, 2):
+        touched = [name for name, hit in (("left", x <= tol), ("top", y <= tol),
+                                          ("right", x >= w - 1 - tol), ("bottom", y >= h - 1 - tol)) if hit]
+        if touched:
+            edges.append(touched[0] if len(touched) == 1 else "+".join(touched))
+    return edges
+
+
+def _edges_with_text(text_mask: Optional[np.ndarray], corner_edges: List[str], w: int, h: int) -> List[str]:
+    """Frame edges (among those the outline touches) that text marks run into."""
+    if text_mask is None:
+        return []
+    sides = sorted({e for ce in corner_edges for e in ce.split("+")})
+    n, _, stats, _ = cv2.connectedComponentsWithStats((text_mask > 0).astype(np.uint8), connectivity=8)
+    st = stats[1:]
+    st = st[st[:, 4] >= 2]
+    strip = max(2, int(0.01 * max(w, h)))
+    touching = {
+        "left": st[:, 0] <= strip,
+        "top": st[:, 1] <= strip,
+        "right": st[:, 0] + st[:, 2] >= w - strip,
+        "bottom": st[:, 1] + st[:, 3] >= h - strip,
+    }
+    return [s for s in sides if int(touching[s].sum()) >= 3]
+
+
+def _edge_is_paper(lightness: np.ndarray, region: np.ndarray, edge: str, paper_l: float) -> bool:
+    """The page area along a frame edge is paper-coloured (not table / carpet / background).
+
+    Paper in shade stays well above 0.6 of the paper level (measured 0.68-0.87 on cut-off pages,
+    including real phone photos with a shadowed edge); a textured background inside a wrong outline
+    measured 0.37."""
+    h, w = lightness.shape[:2]
+    strip = max(3, int(0.015 * max(w, h)))
+    sl = {"left": (slice(None), slice(0, strip)), "right": (slice(None), slice(w - strip, w)),
+          "top": (slice(0, strip), slice(None)), "bottom": (slice(h - strip, h), slice(None))}[edge]
+    px = lightness[sl][region[sl] > 0]
+    return px.size > 0 and float(np.median(px)) >= 0.6 * paper_l
 
 
 def warp_document(img: np.ndarray, det: DocumentDetection, scale: float = 1.0) -> np.ndarray:

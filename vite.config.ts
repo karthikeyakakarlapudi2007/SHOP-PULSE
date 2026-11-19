@@ -4,6 +4,14 @@ import tailwindcss from '@tailwindcss/vite'
 import http from 'node:http'
 import { startBackend } from './scripts/start-backend.js'
 
+// Backend the /api proxy forwards to. Browser tests (scripts/e2e/run.cjs) point it at their own
+// test backend; normal development keeps http://127.0.0.1:8000.
+const API_TARGET = process.env.SHOPPULSE_API_TARGET || 'http://127.0.0.1:8000'
+// In test runs Vite never starts a backend of its own: an auto-started backend would use the
+// default development database (backend/shoppulse.db). Vitest loads this config too (it sets VITEST).
+const TEST_MODE = ['1', 'true', 'yes'].includes((process.env.SHOPPULSE_TEST_MODE || '').toLowerCase())
+  || Boolean(process.env.VITEST)
+
 function autoBackendPlugin(): Plugin {
   let backendProc: any = null;
 
@@ -68,7 +76,7 @@ function autoBackendPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), autoBackendPlugin()],
+  plugins: [react(), tailwindcss(), ...(TEST_MODE ? [] : [autoBackendPlugin()])],
   optimizeDeps: {
     include: ['react', 'react-dom', 'lucide-react'],
   },
@@ -87,12 +95,12 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: API_TARGET,
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.error('[Shelfora Vite Proxy] Error proxying to backend (http://127.0.0.1:8000):', err.message);
+            console.error(`[Shelfora Vite Proxy] Error proxying to backend (${API_TARGET}):`, err.message);
           });
         },
       },

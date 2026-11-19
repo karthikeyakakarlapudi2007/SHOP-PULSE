@@ -39,7 +39,10 @@ def create_product(
     Create a new product for the authenticated user's shop.
     """
     user_shop = get_user_shop_or_raise(db, current_user)
-    return product_service.create_product(db, product_in=product_in, shop_id=user_shop.id)
+    try:
+        return product_service.create_product(db, product_in=product_in, shop_id=user_shop.id)
+    except ValueError as e:  # unit / stock validation (e.g. 2.5 pcs, unknown unit)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.get("", response_model=PaginatedProductResponse)
 @router.get("/", response_model=PaginatedProductResponse, include_in_schema=False)
@@ -152,7 +155,10 @@ def update_product(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this product.",
         )
-    return product_service.update_product(db, db_product=product, product_in=product_in)
+    try:
+        return product_service.update_product(db, db_product=product, product_in=product_in)
+    except ValueError as e:  # unit / stock validation
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(

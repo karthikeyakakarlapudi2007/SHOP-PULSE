@@ -1,0 +1,14 @@
+# Real invoice photographs contain supplier and customer details. They are NOT committed by
+# default; keep them on the machine that runs the validation. Remove these lines only for
+# photographs that are fully anonymized and that you are allowed to share.
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.heif
+*.webp
+*.tif
+*.tiff
+*.bmp
+manifest.json
+results/

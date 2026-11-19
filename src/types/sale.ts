@@ -42,6 +42,12 @@ export type SaleLineItem = SaleItem;
 export interface CartItem {
   product: Product;
   quantity: number;
+  /** Agreed price per unit for this line (spoken in Voice-to-Bill or corrected by the user). When absent the
+   * catalogue selling price applies. A spoken price is never replaced by the catalogue price. */
+  unitPrice?: number;
+  priceSource?: 'spoken' | 'edited';
+  /** What was said when it differs from the stock quantity (e.g. "500 g" sold as 0.5 kg). */
+  spokenQuantity?: string;
 }
 
 /**

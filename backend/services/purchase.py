@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional, List, Tuple
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -7,6 +8,8 @@ from db.models.purchase_item import PurchaseItem
 from db.models.product import Product
 from db.models.supplier import Supplier
 from schemas.purchase import PurchaseCreate
+from services.money import keep_printed_precision, to_decimal, to_number
+from services.stock import add_stock, to_stock_quantity
 
 def create_purchase(db: Session, purchase_in: PurchaseCreate, shop_id: UUID) -> Purchase:
     try:
@@ -18,38 +21,40 @@ def create_purchase(db: Session, purchase_in: PurchaseCreate, shop_id: UUID) -> 
 
         # Validate products before mutating any stock
         products_to_update = []
-        total_amount = 0.0
+        total_amount = Decimal("0")
 
         for item in purchase_in.items:
             product = db.query(Product).filter(Product.id == item.product_id).first()
             if not product or product.shop_id != shop_id:
                 raise ValueError(f"Product {item.product_id} not found or does not belong to your shop.")
             
-            item_total = item.quantity * item.purchase_price
-            total_amount += item_total
-            products_to_update.append((product, item))
+            # Quantity in the product's stock unit (fractions only for kg, g, L, ml; 250 g into kg -> 0.25)
+            qty = to_stock_quantity(item.quantity, item.unit, product)
+            # Decimal, no intermediate rounding; the price is per stock unit; totals keep up to 3 dp
+            total_amount += qty * to_decimal(item.purchase_price)
+            products_to_update.append((product, item, qty))
 
         # Create Purchase Header
         db_purchase = Purchase(
             shop_id=shop_id,
             supplier_id=purchase_in.supplier_id,
-            total_amount=total_amount,
+            total_amount=to_number(keep_printed_precision(total_amount)),
         )
         db.add(db_purchase)
         db.flush()  # Obtain db_purchase.id
 
         # Create Purchase Items & Update Inventory
-        for product, item in products_to_update:
+        for product, item, qty in products_to_update:
             db_item = PurchaseItem(
                 purchase_id=db_purchase.id,
                 product_id=product.id,
-                quantity=item.quantity,
+                quantity=float(qty),
                 purchase_price=item.purchase_price,
             )
             db.add(db_item)
 
-            # Increase product inventory and update purchase price
-            product.current_stock += item.quantity
+            # Atomic stock increase in the same transaction; then the purchase price
+            add_stock(db, product, qty)
             product.purchase_price = item.purchase_price
             db.add(product)
 

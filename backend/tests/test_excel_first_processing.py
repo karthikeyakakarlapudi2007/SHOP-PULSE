@@ -216,7 +216,7 @@ def test_scenario_c_numeric_cell_types(generator, sample_invoice):
 
     assert rate_cell.data_type == "n"
     assert rate_cell.value == 2760.00
-    assert rate_cell.number_format == "#,##0.00"
+    assert rate_cell.number_format == "#,##0.00#"  # 2 decimals; a printed 3rd decimal stays visible
 
     assert mrp_cell.data_type == "n"
     assert mrp_cell.value == 3200.00

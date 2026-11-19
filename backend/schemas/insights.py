@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
+from schemas.quantity import Quantity
 
 class SalesOverviewResponse(BaseModel):
     total_sales: float
@@ -21,10 +22,10 @@ class ProductSalesPerformanceItem(BaseModel):
     product_id: UUID
     product_name: str
     category: Optional[str] = None
-    quantity_sold: int
+    quantity_sold: Quantity
     revenue: float
     unit: Optional[str] = "pcs"
-    previous_quantity_sold: Optional[int] = 0
+    previous_quantity_sold: Optional[Quantity] = 0
     growth_rate: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -72,8 +73,8 @@ class InventoryInsightItem(BaseModel):
     product_id: UUID
     product_name: str
     category: Optional[str] = None
-    current_stock: int
-    minimum_stock_threshold: int
+    current_stock: Quantity
+    minimum_stock_threshold: Quantity
     unit: Optional[str] = "pcs"
     status: str  # "IN STOCK", "LOW STOCK", "OUT OF STOCK", "OVERSTOCKED", "NEEDS ATTENTION"
     recommended_action: str

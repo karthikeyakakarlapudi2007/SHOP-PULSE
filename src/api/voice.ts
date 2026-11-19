@@ -27,12 +27,22 @@ export interface MatchedVoiceItem {
   is_out_of_stock: boolean;
   is_insufficient_stock: boolean;
   available_stock: number;
+  /** Exact unit price for the sale (quantity x this, rounded to paise, equals total_price). */
+  unit_price_exact?: number | null;
+  /** 'spoken': the price came from the speech and must be kept; 'catalogue': the selling price. */
+  price_source?: 'spoken' | 'catalogue' | 'edited';
+  /** What was said when it differs from the stock quantity (e.g. "500 g" sold as 0.5 kg). */
+  spoken_quantity?: string | null;
 }
 
 export interface AmbiguousVoiceItem {
   queried_name: string;
   quantity: number;
   candidates: VoiceProductCandidate[];
+  /** Spoken line total, kept when a candidate is chosen. */
+  spoken_price?: number | null;
+  /** Ready sale line per candidate (unit converted, spoken price kept). */
+  options?: MatchedVoiceItem[];
 }
 
 export interface UnmatchedVoiceItem {

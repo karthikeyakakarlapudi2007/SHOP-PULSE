@@ -1,12 +1,13 @@
 from typing import List, Optional, Union
 from uuid import UUID
 from pydantic import BaseModel, Field
+from schemas.quantity import Quantity
 
 class VoiceProductCandidate(BaseModel):
     id: str
     name: str
     selling_price: float
-    current_stock: int
+    current_stock: Quantity
     unit: str
     category: Optional[str] = None
     sku: Optional[str] = None
@@ -15,18 +16,28 @@ class MatchedVoiceItem(BaseModel):
     product_id: str
     name: str
     quantity: Union[int, float] = Field(..., gt=0)
-    unit_price: float
+    unit_price: float = Field(..., description="Unit price for display (up to 3 decimals)")
+    unit_price_exact: Optional[float] = Field(
+        None, description="Precise unit price to send with the sale: quantity x this, rounded to paise, equals total_price")
     total_price: float
     unit: str
-    current_stock: int
+    current_stock: Quantity
     is_out_of_stock: bool = False
     is_insufficient_stock: bool = False
-    available_stock: int
+    available_stock: Quantity
+    # 'spoken': the price came from the speech (kept through cart and sale); 'catalogue': selling price
+    price_source: str = "catalogue"
+    # What was said when it differs from the stock quantity/unit (e.g. "500 g" sold as 0.5 kg)
+    spoken_quantity: Optional[str] = None
 
 class AmbiguousVoiceItem(BaseModel):
     queried_name: str
     quantity: Union[int, float] = Field(..., gt=0)
     candidates: List[VoiceProductCandidate]
+    # Spoken line total, if any, so choosing a candidate keeps the spoken price
+    spoken_price: Optional[float] = None
+    # The ready line for each candidate the item can be sold as (unit converted, spoken price kept)
+    options: List[MatchedVoiceItem] = Field(default_factory=list)
 
 class UnmatchedVoiceItem(BaseModel):
     queried_name: str

@@ -23,6 +23,15 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+def assert_needs_review_only_for_missing_units(data):
+    """Phase 4: an invoice that prints no unit column needs review for that reason only (a missing unit is
+    never assumed to be pcs); every other check on the lines still has to pass."""
+    assert data["status"] == "needs_review"
+    for line in data["items"]:
+        assert line["unit"] is None and line["needs_review"] is True
+        assert any("Unit not printed" in v for v in line["validation_issues"]), line["validation_issues"]
+
 def override_get_db():
     db = TestingSessionLocal()
     try:
@@ -95,7 +104,7 @@ def test_extract_invoice_with_table_format():
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "success"
+    assert_needs_review_only_for_missing_units(data)
     assert "Metro Cash & Carry" in data["supplier_name"]
     assert len(data["items"]) >= 3
 
@@ -105,7 +114,7 @@ def test_extract_invoice_with_table_format():
     assert tata_item["purchase_price"] == 22.0
     assert tata_item["line_total"] == 528.0
     assert tata_item["matched_product_id"] == prod_id
-    assert len(tata_item["validation_issues"]) == 0
+    assert [v for v in tata_item["validation_issues"] if "Unit not printed" not in v] == []  # only the missing unit
 
 def test_extract_invoice_arithmetic_validation_flag():
     headers, _, _ = get_auth_setup("math_user@example.com")
@@ -405,7 +414,7 @@ def test_extract_invoice_from_image_ocr():
     )
     assert res.status_code == 200, f"Error: {res.text}"
     data = res.json()
-    assert data["status"] == "success"
+    assert_needs_review_only_for_missing_units(data)
     assert data["engine_used"] == "backend_ocr_pipeline"
     assert data["diagnostics"]["document_type"] == "image"
     assert len(data["items"]) == 1
@@ -603,7 +612,7 @@ def test_extract_invoice_uncompressed_pdf():
     )
     assert res.status_code == 200, f"Error: {res.text}"
     data = res.json()
-    assert data["status"] == "success"
+    assert_needs_review_only_for_missing_units(data)
     assert data["engine_used"] == "backend_pdf_direct"
     assert data["diagnostics"]["document_type"] == "pdf"
     assert len(data["items"]) == 2
@@ -645,7 +654,7 @@ def test_extract_invoice_compressed_flatedecode_pdf():
     )
     assert res.status_code == 200, f"Error: {res.text}"
     data = res.json()
-    assert data["status"] == "success"
+    assert_needs_review_only_for_missing_units(data)
     assert data["engine_used"] == "backend_pdf_direct"
     assert len(data["items"]) == 2
 

@@ -314,7 +314,7 @@ def test_confirm_saves_mrp_source_and_blocks_duplicate_invoice():
 def test_restock_without_mrp_keeps_existing_mrp():
     headers = auth("flow_keep_mrp@example.com")
     salt = create_product(headers, mrp=28.0)
-    res = confirm(headers, [{"name": "Tata Salt 1kg", "quantity": 5, "purchase_price": 21.0,
+    res = confirm(headers, [{"unit": "pcs", "name": "Tata Salt 1kg", "quantity": 5, "purchase_price": 21.0,
                              "matched_product_id": salt["id"]}], invoice_number="X-1")
     assert res.status_code == 201, res.text
     p = get_product(headers, salt["id"])
@@ -326,8 +326,8 @@ def test_new_product_without_selling_price_is_rejected_atomically():
     headers = auth("flow_no_sp@example.com")
     salt = create_product(headers)
     res = confirm(headers, [
-        {"name": "Tata Salt 1kg", "quantity": 5, "purchase_price": 21.0, "matched_product_id": salt["id"]},
-        {"name": "Brand New Snack", "quantity": 5, "purchase_price": 10.0},
+        {"unit": "pcs", "name": "Tata Salt 1kg", "quantity": 5, "purchase_price": 21.0, "matched_product_id": salt["id"]},
+        {"unit": "pcs", "name": "Brand New Snack", "quantity": 5, "purchase_price": 10.0},
     ], invoice_number="X-2")
     assert res.status_code == 400
     assert "Selling price is required" in res.json()["detail"]
@@ -338,9 +338,9 @@ def test_new_product_without_selling_price_is_rejected_atomically():
 
 def test_confirm_requires_purchase_price_and_whole_quantities():
     headers = auth("flow_validation@example.com")
-    missing_price = confirm(headers, [{"name": "Rice", "quantity": 2, "selling_price": 60.0}], invoice_number="X-3")
+    missing_price = confirm(headers, [{"unit": "pcs", "name": "Rice", "quantity": 2, "selling_price": 60.0}], invoice_number="X-3")
     assert missing_price.status_code == 422
-    fractional = confirm(headers, [{"name": "Rice", "quantity": 2.5, "purchase_price": 50.0, "selling_price": 60.0}],
+    fractional = confirm(headers, [{"unit": "pcs", "name": "Rice", "quantity": 2.5, "purchase_price": 50.0, "selling_price": 60.0}],
                          invoice_number="X-4")
     assert fractional.status_code == 422
 
@@ -349,8 +349,8 @@ def test_duplicate_lines_are_merged_into_one_stock_movement():
     headers = auth("flow_merge@example.com")
     salt = create_product(headers)
     res = confirm(headers, [
-        {"name": "Tata Salt 1kg", "quantity": 10, "purchase_price": 22.0, "line_amount": 220.0},
-        {"name": "tata salt 1 KG", "quantity": 5, "purchase_price": 22.0, "line_amount": 110.0},
+        {"unit": "pcs", "name": "Tata Salt 1kg", "quantity": 10, "purchase_price": 22.0, "line_amount": 220.0},
+        {"unit": "pcs", "name": "tata salt 1 KG", "quantity": 5, "purchase_price": 22.0, "line_amount": 110.0},
     ], invoice_number="X-5")
     assert res.status_code == 201, res.text
     assert res.json()["items_restocked"] == 1

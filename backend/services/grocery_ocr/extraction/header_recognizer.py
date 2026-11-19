@@ -24,13 +24,14 @@ HEADER_SEMANTIC_PATTERNS: Dict[ColumnRoleType, List[str]] = {
         "hsn/sac", "hsn code", "hsn", "sac", "hsn sac", "sac code"
     ],
     "qty": [
-        "billed qty", "quantity", "unit qty", "qnty", "qty.", "qty", "nos", "pcs", "packets"
+        "qtysold", "qty sold", "billed qty", "quantity", "unit qty", "qnty", "qty.", "qty", "nos", "pcs", "packets"
     ],
     "unit": [
         "unit of measure", "unit", "uom", "pack", "pkg", "packaging", "u.o.m"
     ],
     "rate": [
-        "purchase rate", "unit price", "unit rate", "basic rate", "buy rate", "price", "rate",
+        "purchase rate", "unit price", "unit rate", "basic rate", "base rate", "basic.rt", "netrate", "net rate",
+        "buy rate", "price", "rate",
         "reel", "rale", "tate", "rafe"
     ],
     "purchase_price": [
@@ -45,13 +46,13 @@ HEADER_SEMANTIC_PATTERNS: Dict[ColumnRoleType, List[str]] = {
         "maximum retail price", "max retail price", "m.r.p.", "mrp", "m.r.p"
     ],
     "discount": [
-        "discount amount", "discount", "disc", "disc.", "less", "rebate", "concession"
+        "rs disc", "sch disc", "discount amount", "discount", "disc", "disc.", "less", "rebate", "concession"
     ],
     "discount_pct": [
         "discount %", "disc %", "disc. %", "less %", "disc pct"
     ],
     "tax_amount": [
-        "tax amount", "tax amt", "tax", "gst amount", "cgst amt", "sgst amt", "igst amt",
+        "tax amount", "tax amt", "tax", "gst amount", "cgst amt", "sgst amt", "igst amt", "s/utgst amt", "utgst amt",
         "total tax", "vat amount", "vat amt"
     ],
     "gst_rate": [
@@ -62,12 +63,16 @@ HEADER_SEMANTIC_PATTERNS: Dict[ColumnRoleType, List[str]] = {
     ],
     "total": [
         "net amount", "total amount", "line total", "net amt", "tot amt", "value",
-        "total value", "amount", "total"
+        "total value", "amount", "total", "totamount", "netamount"
     ],
+    "cases": ["cases", "case", "cs", "ctn", "ctns", "cartons"],
+    "units_per_case": ["upc", "units per case", "unit per case", "units/case", "pcs/case", "case size"],
 }
 
 # Canonical normalized label display strings
 CANONICAL_HEADER_LABELS: Dict[ColumnRoleType, str] = {
+    "cases": "CASES",
+    "units_per_case": "UNITS_PER_CASE",
     "serial": "SERIAL",
     "product": "PRODUCT",
     "hsn": "HSN",

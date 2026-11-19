@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "cases": {
+    "inv01": {
+      "provenance": {
+        "source": "real_photo",
+        "device": "phone make and model",
+        "captured_on": "YYYY-MM-DD",
+        "captured_by": "role, e.g. shop owner (no names)",
+        "anonymized": true
+      },
+      "files": ["inv01_p1.jpg"],
+      "conditions": ["clear", "rotated_0", "straight"],
+      "layout": "short description, e.g. 'wholesale bill, bordered table, 8 columns'",
+      "language": "en",
+      "header": {
+        "supplier_name": "exactly as printed, or null if not printed",
+        "invoice_number": "exactly as printed, or null",
+        "invoice_date": "exactly as printed (e.g. 08/10/2026), or null"
+      },
+      "items": [
+        {
+          "product_name": "exactly as printed",
+          "quantity": 4,
+          "unit": "bag",
+          "purchase_price": 245.0,
+          "mrp": 289.0,
+          "discount": null,
+          "tax_amount": null,
+          "printed_amount": 980.0,
+          "ambiguous": []
+        }
+      ],
+      "ground_truth_text": null,
+      "critical_tokens": [],
+      "notes": "anything a reviewer should know (smudges, handwritten corrections, unreadable cells)"
+    }
+  }
+}

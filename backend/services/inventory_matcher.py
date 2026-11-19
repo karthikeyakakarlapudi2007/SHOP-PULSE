@@ -1,3 +1,4 @@
+from decimal import Decimal
 import re
 from typing import List, Tuple, Any, Optional
 from uuid import UUID
@@ -8,7 +9,15 @@ from schemas.voice import (
     AmbiguousVoiceItem,
     UnmatchedVoiceItem,
 )
-from services.voice_parser import ExtractedItem
+from services.voice_parser import ExtractedItem, canonical_voice_unit
+from services.money import bill_total, quantize_half_up, round_currency, round_price, sale_line_amount, to_decimal, to_number
+from services.stock import format_quantity, quantity_number, to_stock_quantity
+from services.unit_registry import FAMILIES, UNITS, UnitError, convert_quantity, try_normalize_unit
+
+
+class VoiceItemError(ValueError):
+    """A spoken line that cannot be sold as said (incompatible unit, fraction of a whole-number unit, ...).
+    It is reported as unmatched with this reason; nothing is guessed."""
 
 def normalize_text_for_search(text: str) -> str:
     """Removes punctuation and lowercases text for fuzzy token search while preserving Indic scripts."""
@@ -88,7 +97,7 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
             id=str(p.id),
             name=p.name,
             selling_price=float(p.selling_price if hasattr(p, "selling_price") else getattr(p, "price", 0.0)),
-            current_stock=int(p.current_stock if hasattr(p, "current_stock") else getattr(p, "stock", 0)),
+            current_stock=quantity_number(p.current_stock if hasattr(p, "current_stock") else getattr(p, "stock", 0)),
             unit=str(p.unit or "pcs"),
             category=getattr(p, "category", None),
             sku=getattr(p, "sku", None),
@@ -97,34 +106,105 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
         id=str(p["id"]),
         name=p["name"],
         selling_price=float(p.get("selling_price", p.get("price", 0.0))),
-        current_stock=int(p.get("current_stock", p.get("stock", 0))),
+        current_stock=quantity_number(p.get("current_stock", p.get("stock", 0))),
         unit=str(p.get("unit", "pcs")),
         category=p.get("category"),
         sku=p.get("sku"),
     )
 
+# Precision of the exact unit price derived from a spoken total (so quantity x price reproduces the total)
+_EXACT_UNIT_PRICE = Decimal("0.0000000001")
+
+
+def _kind(unit_id: str) -> str:
+    return FAMILIES[UNITS[unit_id].family].kind
+
+
+def _colloquial(spoken: Optional[str], target: Optional[str]) -> bool:
+    """Spoken count/package word for a product counted in another count/package unit ("3 tea packets" of a
+    product stocked in pcs): one spoken item is one product unit. Measures (kg, g, L, ml) always convert."""
+    return bool(spoken and target and spoken != target and UNITS[spoken].family != UNITS[target].family
+                and _kind(spoken) != "measure" and _kind(target) != "measure")
+
+
+def _spoken_unit(item: ExtractedItem) -> Optional[str]:
+    return canonical_voice_unit(getattr(item, "unit", None))
+
+
+def _stock_quantity(prod: VoiceProductCandidate, item: ExtractedItem) -> Decimal:
+    """Spoken quantity in the product's stock unit: 500 g of a kg product -> 0.5. Incompatible units
+    (L for a kg product) and fractions of whole-number units are refused, never guessed."""
+    spoken = _spoken_unit(item)
+    product_unit = try_normalize_unit(prod.unit) if prod.unit else None
+    given = spoken
+    if spoken and product_unit is None:
+        given = spoken if _kind(spoken) == "measure" else None
+    elif _colloquial(spoken, product_unit):
+        given = None
+    try:
+        return to_stock_quantity(item.quantity, given, prod)
+    except ValueError as exc:
+        raise VoiceItemError(str(exc)) from None
+
+
+def _quantity_for_price(item: ExtractedItem, prod: VoiceProductCandidate) -> Decimal:
+    """Quantity in the unit a spoken unit price is per ("45 rupees per kg" for 500 g -> 0.5)."""
+    qty = to_decimal(item.quantity)
+    spoken = _spoken_unit(item) or (try_normalize_unit(prod.unit) if prod.unit else None)
+    per = canonical_voice_unit(getattr(item, "price_unit", None))
+    if per is None or spoken is None or per == spoken or _colloquial(spoken, per):
+        return qty  # "each": per spoken unit
+    try:
+        return convert_quantity(qty, spoken, per)
+    except UnitError as exc:
+        raise VoiceItemError(f"'{prod.name}': the price is per {UNITS[per].label}, but {exc}") from None
+
+
 def make_matched_item(prod: VoiceProductCandidate, item: ExtractedItem) -> MatchedVoiceItem:
-    if getattr(item, "spoken_price", None) is not None and item.spoken_price > 0:
-        line_total = round(float(item.spoken_price), 2)
-        unit_price = round(line_total / float(item.quantity), 2) if item.quantity > 0 else line_total
+    """The sale line for a spoken item. A spoken price always wins over the catalogue price.
+
+    Raises VoiceItemError when the line cannot be sold as said."""
+    qty = _stock_quantity(prod, item)
+    spoken_total = to_decimal(getattr(item, "spoken_price", None))
+    spoken_unit_price = to_decimal(getattr(item, "spoken_unit_price", None))
+    if spoken_total is not None and spoken_total > 0:
+        # The spoken amount is the line total. The exact unit price is kept for the sale, the 3-dp one is
+        # for display: ₹100 for 3 -> 33.333 shown, 33.3333333333 x 3 -> ₹100.00 recorded (never ₹99.99).
+        line = round_currency(spoken_total)
+        source = "spoken"
+    elif spoken_unit_price is not None and spoken_unit_price > 0:
+        # "100 rupees each" / "45 rupees per kg": the line is quantity (in the priced unit) x that price
+        line = sale_line_amount(_quantity_for_price(item, prod), spoken_unit_price)
+        source = "spoken"
     else:
-        unit_price = prod.selling_price
-        line_total = round(unit_price * float(item.quantity), 2)
+        line = None
+        source = "catalogue"
+    if line is not None:
+        exact = quantize_half_up(line / qty, _EXACT_UNIT_PRICE)
+        shown = round_price(exact)
+    else:
+        exact = shown = to_decimal(prod.selling_price) or Decimal("0")
+        line = sale_line_amount(qty, exact)
 
-    unit = getattr(item, "unit", None) or prod.unit
-
+    spoken = _spoken_unit(item)
+    said = f"{format_quantity(item.quantity)} {UNITS[spoken].label}" if spoken else None
+    stocked = f"{format_quantity(qty)} {prod.unit}"
     return MatchedVoiceItem(
         product_id=prod.id,
         name=prod.name,
-        quantity=item.quantity,
-        unit_price=unit_price,
-        total_price=line_total,
-        unit=unit,
+        quantity=quantity_number(qty),
+        unit_price=to_number(shown),
+        unit_price_exact=to_number(exact),
+        total_price=to_number(line),
+        unit=prod.unit,
         current_stock=prod.current_stock,
         is_out_of_stock=prod.current_stock <= 0,
-        is_insufficient_stock=float(item.quantity) > prod.current_stock,
+        is_insufficient_stock=float(qty) > prod.current_stock,
         available_stock=max(0, prod.current_stock),
+        price_source=source,
+        spoken_quantity=said if said and said != stocked else None,
     )
+
 
 def match_items_to_inventory(
     extracted_items: List[ExtractedItem],
@@ -139,6 +219,27 @@ def match_items_to_inventory(
     matched_items: List[MatchedVoiceItem] = []
     ambiguous_items: List[AmbiguousVoiceItem] = []
     unmatched_items: List[UnmatchedVoiceItem] = []
+
+    def add_match(prod: VoiceProductCandidate, item: ExtractedItem) -> None:
+        try:
+            matched_items.append(make_matched_item(prod, item))
+        except VoiceItemError as exc:
+            # Cannot be sold as said: shown for correction, never turned into a different sale
+            unmatched_items.append(UnmatchedVoiceItem(queried_name=item.name, quantity=item.quantity, reason=str(exc)))
+
+    def add_ambiguous(item: ExtractedItem, cands: List[VoiceProductCandidate]) -> None:
+        options = []
+        for cand in cands:
+            try:
+                options.append(make_matched_item(cand, item))
+            except VoiceItemError:
+                pass  # this candidate cannot be sold as said; the others stay selectable
+        spoken = to_decimal(getattr(item, "spoken_price", None))
+        ambiguous_items.append(AmbiguousVoiceItem(
+            queried_name=item.name, quantity=item.quantity, candidates=cands,
+            spoken_price=to_number(round_currency(spoken)) if spoken is not None and spoken > 0 else None,
+            options=options,
+        ))
 
     weights = ["1kg", "500g", "200g", "5kg", "100g", "400g", "1l", "2l"]
 
@@ -169,20 +270,14 @@ def match_items_to_inventory(
                         if weight_match:
                             alias_matched_prod = weight_match
                             break
-                    ambiguous_items.append(
-                        AmbiguousVoiceItem(
-                            queried_name=item.name,
-                            quantity=item.quantity,
-                            candidates=c_matches,
-                        )
-                    )
+                    add_ambiguous(item, c_matches)
                     alias_matched_prod = "AMBIGUOUS"
                     break
 
         if alias_matched_prod == "AMBIGUOUS":
             continue
         elif alias_matched_prod:
-            matched_items.append(make_matched_item(alias_matched_prod, item))
+            add_match(alias_matched_prod, item)
             continue
 
         # 1. Check for exact full-name match (case-insensitive)
@@ -192,7 +287,7 @@ def match_items_to_inventory(
         ]
 
         if len(exact_matches) == 1:
-            matched_items.append(make_matched_item(exact_matches[0], item))
+            add_match(exact_matches[0], item)
             continue
 
         # 2. Token containment search
@@ -212,16 +307,10 @@ def match_items_to_inventory(
                 all_token_matches = variant_filtered
 
         if len(all_token_matches) == 1:
-            matched_items.append(make_matched_item(all_token_matches[0], item))
+            add_match(all_token_matches[0], item)
             continue
         elif len(all_token_matches) > 1:
-            ambiguous_items.append(
-                AmbiguousVoiceItem(
-                    queried_name=item.name,
-                    quantity=item.quantity,
-                    candidates=all_token_matches,
-                )
-            )
+            add_ambiguous(item, all_token_matches)
             continue
 
         # 3. Partial overlap search (at least significant brand token matches)
@@ -246,15 +335,9 @@ def match_items_to_inventory(
                     best_candidates = variant_filtered
 
             if len(best_candidates) == 1:
-                matched_items.append(make_matched_item(best_candidates[0], item))
+                add_match(best_candidates[0], item)
             elif len(best_candidates) > 1:
-                ambiguous_items.append(
-                    AmbiguousVoiceItem(
-                        queried_name=item.name,
-                        quantity=item.quantity,
-                        candidates=best_candidates,
-                    )
-                )
+                add_ambiguous(item, best_candidates)
             else:
                 unmatched_items.append(
                     UnmatchedVoiceItem(
@@ -272,8 +355,9 @@ def match_items_to_inventory(
                 )
             )
 
-    subtotal = round(sum(m.total_price for m in matched_items), 2)
-    tax = 0.0  # ShopPulse standard GST calculation default
-    total = round(subtotal + tax, 2)
+    # Bill = sum of the rounded lines (Decimal); no GST is calculated for voice bills
+    subtotal_d = bill_total(to_decimal(m.total_price) for m in matched_items)
+    tax_d = Decimal("0")
+    subtotal, tax, total = to_number(subtotal_d), to_number(tax_d), to_number(round_currency(subtotal_d + tax_d))
 
     return matched_items, ambiguous_items, unmatched_items, subtotal, tax, total

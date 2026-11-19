@@ -14,18 +14,12 @@ extraction pipeline (unchanged), and measured against ground truth:
 Two sources of cases:
 
 1. Real photographs (preferred):
-       python tests/real_world_validation.py --photos /path/to/folder
-   The folder holds the photos and a manifest.json:
-       {
-         "case_id": {
-           "files": ["page1.jpg", "page2.heic"],          # in page order
-           "condition": "sideways / low light / ...",      # free text, for the report
-           "items": [{"product_name": "Tata Salt 1kg", "quantity": 20, "purchase_price": 22.0,
-                      "printed_amount": 440.0}, ...],
-           "ground_truth_text": "optional full transcript for CER/WER",
-           "critical_tokens": ["optional", "extra", "tokens"]
-         }
-       }
+       python tests/real_world_validation.py --photos ../validation/real_invoices --check   # manifest only
+       python tests/real_world_validation.py --photos ../validation/real_invoices --md OUT.md --json OUT.json
+   The folder holds the photos and a manifest.json (schema in tests/validation_scoring.py; template
+   and capture requirements in validation/real_invoices/). Every case declares its provenance;
+   results are reported per provenance category (actual photographs, scans, screenshots,
+   fixtures, simulated) and never combined into one number.
 
 2. Simulated camera captures (default when no folder is given): the repository's real invoice
    layouts (tests/fixtures/ground_truth) photographed by a physical camera model - pinhole
@@ -60,13 +54,20 @@ from services.document_prep.loader import load_image  # noqa: E402
 from services.document_prep.ocr_scoring import (  # noqa: E402
     bag_of_words_recall,
     character_error_rate,
-    normalize_text,
     run_pipeline_ocr,
     word_error_rate,
 )
 from services.document_prep.pdf_builder import build_pdf  # noqa: E402
 from services.grocery_ocr.engines.ocr_engine import TesseractOCREngine  # noqa: E402
 from services.grocery_ocr.pipeline.invoice_pipeline import InvoicePipeline  # noqa: E402
+from validation_scoring import (  # noqa: E402
+    SOURCES,
+    merge_field_counts,
+    read_manifest,
+    score_header,
+    score_items,
+    validate_manifest,
+)
 
 FIXTURES = HERE / "fixtures" / "ground_truth"
 
@@ -81,6 +82,11 @@ class Case:
     ground_truth_text: Optional[str] = None
     extra_tokens: List[str] = field(default_factory=list)
     simulated: bool = True
+    source: str = "simulated"  # provenance category; results are never merged across categories
+    header: Optional[dict] = None  # expected supplier / invoice number / date (null = not printed)
+    language: str = "en"
+    conditions: List[str] = field(default_factory=list)
+    filenames: List[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -156,6 +162,11 @@ SIM_LAYOUTS = [
 SIM_CONDITIONS = ["sideways", "upside_down", "low_light", "shadow", "perspective", "tilted", "blurry", "small_text"]
 
 
+def _fixture_header(entry: dict) -> dict:
+    """Header values recorded in the fixture ground truth (fields it does not record are omitted)."""
+    return {k: entry[k] for k in ("supplier_name", "invoice_number", "invoice_date") if k in entry}
+
+
 def simulated_cases(layouts: Sequence[str] = SIM_LAYOUTS, conditions: Sequence[str] = SIM_CONDITIONS) -> List[Case]:
     gt = json.loads((FIXTURES / "ground_truth.json").read_text(encoding="utf-8"))
     cases: List[Case] = []
@@ -163,7 +174,7 @@ def simulated_cases(layouts: Sequence[str] = SIM_LAYOUTS, conditions: Sequence[s
         page = cv2.imread(str(FIXTURES / "invoices" / gt[key]["filename"]), cv2.IMREAD_COLOR)
         for ci, cond in enumerate(conditions):
             cases.append(Case(f"{key}__{cond}", key, cond, [photograph(page, cond, 1000 + li * 37 + ci)],
-                              gt[key]["items"]))
+                              gt[key]["items"], header=_fixture_header(gt[key])))
     # Multi-page: two different invoices photographed as one document, second page sideways
     p1 = cv2.imread(str(FIXTURES / "invoices" / gt["TC24_dairy_and_staples"]["filename"]), cv2.IMREAD_COLOR)
     p2 = cv2.imread(str(FIXTURES / "invoices" / gt["TC29_flours_and_pulses"]["filename"]), cv2.IMREAD_COLOR)
@@ -173,23 +184,39 @@ def simulated_cases(layouts: Sequence[str] = SIM_LAYOUTS, conditions: Sequence[s
     return cases
 
 
-def real_photo_cases(folder: Path) -> List[Case]:
-    manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+def load_photo_folder(folder: Path) -> Tuple[List["Case"], List[str]]:
+    """Read and validate <folder>/manifest.json. Returns (cases, problems)."""
+    mf = folder / "manifest.json"
+    if not mf.is_file():
+        return [], [f"{mf} not found (copy validation/real_invoices/manifest.template.json and fill it in)"]
+    raw = json.loads(mf.read_text(encoding="utf-8"))
+    problems = validate_manifest(raw, folder)
     cases = []
-    for cid, entry in manifest.items():
-        cases.append(Case(cid, entry.get("layout", "real"), entry.get("condition", "real photo"),
-                          [(folder / f).read_bytes() for f in entry["files"]], entry["items"],
-                          entry.get("ground_truth_text"), entry.get("critical_tokens", []), simulated=False))
+    for cid, entry in read_manifest(raw).items():
+        prov = entry.get("provenance") or {}
+        files = entry.get("files") or []
+        if any(not (folder / f).is_file() for f in files):
+            continue
+        cases.append(Case(
+            cid, entry.get("layout", "unspecified"), ", ".join(entry.get("conditions") or []) or entry.get("condition", ""),
+            [(folder / f).read_bytes() for f in files], entry.get("items") or [],
+            entry.get("ground_truth_text"), entry.get("critical_tokens", []),
+            simulated=prov.get("source") == "simulated", source=prov.get("source", "unknown"),
+            header=entry.get("header"), language=entry.get("language", "en"),
+            conditions=list(entry.get("conditions") or []), filenames=list(files)))
+    return cases, problems
+
+
+def real_photo_cases(folder: Path) -> List["Case"]:
+    cases, problems = load_photo_folder(folder)
+    if problems:
+        raise SystemExit("Manifest problems - fix them before running:\n  " + "\n  ".join(problems))
     return cases
 
 
 # --------------------------------------------------------------------------------------
 # Metrics
 # --------------------------------------------------------------------------------------
-
-
-def _norm_name(s: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
 def _fmt(v: float) -> str:
@@ -221,175 +248,271 @@ def name_word_recall(items: List[dict], text: str) -> float:
     return bag_of_words_recall(ref, text)
 
 
-def score_items(extracted, truth: List[dict]) -> Dict[str, int]:
-    got = [(_norm_name(i.normalized_product_name or i.raw_product_name), i.quantity, i.purchase_price, i.printed_amount)
-           for i in extracted]
-    out = {"lines": len(truth), "all_fields": 0, "name": 0, "quantity": 0, "rate": 0, "amount": 0}
-    used = set()
-    for t in truth:
-        tn = _norm_name(t["product_name"])
-        best = None
-        for idx, (name, q, p, a) in enumerate(got):
-            if idx in used or not name or not (tn in name or name in tn):
-                continue
-            best = idx
-            break
-        if best is None:
-            continue
-        used.add(best)
-        _, q, p, a = got[best]
-        q_ok = q is not None and abs(float(q) - float(t["quantity"])) < 1e-6
-        p_ok = p is not None and abs(float(p) - float(t["purchase_price"])) < 0.011
-        a_ok = t.get("printed_amount") is None or (a is not None and abs(float(a) - float(t["printed_amount"])) < 0.011)
-        out["name"] += 1
-        out["quantity"] += int(q_ok)
-        out["rate"] += int(p_ok)
-        out["amount"] += int(a_ok)
-        out["all_fields"] += int(q_ok and p_ok and a_ok)
+def _item_dicts(items) -> List[dict]:
+    out = []
+    for i in items:
+        out.append({
+            "product_name": i.normalized_product_name or i.raw_product_name,
+            "quantity": float(i.quantity) if i.quantity is not None else None,
+            "unit": i.unit,
+            "purchase_price": float(i.purchase_price) if i.purchase_price is not None else None,
+            "mrp": float(i.mrp) if i.mrp is not None else None,
+            "printed_amount": float(i.printed_amount) if i.printed_amount is not None else None,
+        })
     return out
 
 
-# --------------------------------------------------------------------------------------
-# Runner
-# --------------------------------------------------------------------------------------
+def _extract(pipeline: InvoicePipeline, data: bytes, name: str) -> Tuple[List[dict], dict, float, Optional[str]]:
+    t = time.perf_counter()
+    try:
+        res = pipeline.process(data, name)
+        header = {"supplier_name": res.supplier_name, "invoice_number": res.invoice_number,
+                  "invoice_date": res.invoice_date}
+        return _item_dicts(res.items), header, time.perf_counter() - t, None
+    except Exception as exc:  # recorded as a failed extraction, never hidden
+        return [], {}, time.perf_counter() - t, f"{type(exc).__name__}: {exc}"
+
+
+def _peak_memory_mb() -> Dict[str, float]:
+    try:
+        import resource
+
+        own = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+        kids = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024.0
+        return {"python_peak_mb": round(own, 1), "ocr_worker_peak_mb": round(kids, 1)}
+    except Exception:
+        return {}
 
 
 def run_case(case: Case, pipeline: InvoicePipeline) -> dict:
-    # Baseline: what /invoices/extract receives today (one photo; several photos cannot be sent
-    # as one invoice today, so each page is read on its own and the results are combined).
-    base_text, base_items = [], []
+    """Original photos vs prepared pages, read by the same existing extraction pipeline.
+
+    Today a single photo is uploaded as-is; several photos cannot be sent as one invoice, so for
+    multi-page cases each original page is extracted on its own and the line items combined.
+    """
+    base_text, base_items, base_header, base_errors = [], [], {}, []
     prep_text, prep_imgs, prep_meta = [], [], []
-    t_prep = 0.0
+    t_base = t_prep = 0.0
     for i, data in enumerate(case.pages):
         photo = cv2.cvtColor(load_image(data, f"p{i}.jpg").rgb, cv2.COLOR_RGB2BGR)
         base_text.append(run_pipeline_ocr(photo).text)
-        try:
-            base_items += pipeline.process(data, f"photo{i}.jpg").items
-        except Exception:
-            pass
+        items, header, secs, err = _extract(pipeline, data, case.filenames[i] if i < len(case.filenames) else f"photo{i}.jpg")
+        t_base += secs
+        base_items += items
+        if i == 0:
+            base_header = header
+        if err:
+            base_errors.append(err)
         t = time.perf_counter()
         prepared = prepare_page(data, f"photo{i}.jpg")
-        t_prep += time.perf_counter() - t
+        page_secs = time.perf_counter() - t
+        t_prep += page_secs
         variant = prepared.variants[prepared.recommended_variant]
         prep_imgs.append(variant)
         prep_text.append(run_pipeline_ocr(variant).text)
         md = prepared.metadata
         prep_meta.append({
             "rotation_cw": md["orientation"]["auto_rotation_cw"],
+            "orientation_confidence": md["orientation"]["confidence"],
             "skew_deg": md["orientation"]["skew_deg"],
             "perspective": md["document"]["perspective_corrected"],
             "quality": f"{md['quality_before']['grade']} -> {md['quality_after']['grade']}",
             "variant": prepared.recommended_variant,
+            "enhancement": [st["name"] for st in md["enhancement"].get("steps", [])][1:],
             "retake": md["retake_recommended"],
+            "prep_seconds": round(page_secs, 2),
         })
-    try:
-        prep_items = pipeline.process(build_pdf(prep_imgs).data, "scan.pdf").items
-    except Exception:
-        prep_items = []
+    pdf = build_pdf(prep_imgs)
+    prep_items, prep_header, t_prep_extract, prep_error = _extract(pipeline, pdf.data, "scan.pdf")
     btxt, ptxt = "\n\n".join(base_text), "\n\n".join(prep_text)
     tokens = critical_tokens(case.items, case.extra_tokens)
     row = {
-        "case": case.case_id, "layout": case.layout, "condition": case.condition, "simulated": case.simulated,
-        "pages": prep_meta, "prep_seconds": round(t_prep, 1),
+        "case": case.case_id, "source": case.source, "layout": case.layout, "condition": case.condition,
+        "conditions": case.conditions, "language": case.language, "simulated": case.simulated,
+        "page_count": len(case.pages), "pages": prep_meta,
+        "timing_s": {"original_extraction": round(t_base, 2), "preparation": round(t_prep, 2),
+                     "prepared_extraction": round(t_prep_extract, 2)},
+        "pdf": {"bytes": len(pdf.data), "pages": [vars(p) for p in pdf.pages]},
+        "memory": _peak_memory_mb(),
         "baseline": {"critical_recall": round(token_recall(tokens, btxt), 4),
                      "name_word_recall": round(name_word_recall(case.items, btxt), 4),
-                     "items": score_items(base_items, case.items)},
+                     "items": score_items(base_items, case.items),
+                     "header": score_header(base_header, case.header),
+                     "errors": base_errors},
         "prepared": {"critical_recall": round(token_recall(tokens, ptxt), 4),
                      "name_word_recall": round(name_word_recall(case.items, ptxt), 4),
-                     "items": score_items(prep_items, case.items)},
+                     "items": score_items(prep_items, case.items),
+                     "header": score_header(prep_header, case.header),
+                     "errors": [prep_error] if prep_error else []},
     }
     if case.ground_truth_text:
         for side, txt in (("baseline", btxt), ("prepared", ptxt)):
             row[side]["cer"] = round(character_error_rate(case.ground_truth_text, txt), 4)
             row[side]["wer"] = round(word_error_rate(case.ground_truth_text, txt), 4)
+    row["prepared_worse"] = row["prepared"]["items"]["fully_correct"] < row["baseline"]["items"]["fully_correct"]
     return row
 
 
 def summarize(rows: List[dict]) -> dict:
-    def tot(side, key):
-        return sum(r[side]["items"][key] for r in rows)
+    """Totals per provenance category (never one combined number across categories)."""
+    out: Dict[str, dict] = {}
+    for source in sorted({r["source"] for r in rows}):
+        rs = [r for r in rows if r["source"] == source]
 
-    by_cond: Dict[str, dict] = {}
-    for r in rows:
-        c = r["condition"]
-        d = by_cond.setdefault(c, {"cases": 0, "lines": 0, "base": 0, "prep": 0, "base_crit": [], "prep_crit": []})
-        d["cases"] += 1
-        d["lines"] += r["baseline"]["items"]["lines"]
-        d["base"] += r["baseline"]["items"]["all_fields"]
-        d["prep"] += r["prepared"]["items"]["all_fields"]
-        d["base_crit"].append(r["baseline"]["critical_recall"])
-        d["prep_crit"].append(r["prepared"]["critical_recall"])
-    worse = [r["case"] for r in rows if r["prepared"]["items"]["all_fields"] < r["baseline"]["items"]["all_fields"]]
-    return {
-        "cases": len(rows),
-        "lines": tot("baseline", "lines"),
-        "baseline_all_fields": tot("baseline", "all_fields"),
-        "prepared_all_fields": tot("prepared", "all_fields"),
-        "fields": {k: (tot("baseline", k), tot("prepared", k)) for k in ("name", "quantity", "rate", "amount")},
-        "by_condition": {c: {"cases": d["cases"], "lines": d["lines"], "baseline_correct": d["base"],
-                             "prepared_correct": d["prep"],
-                             "baseline_critical_recall": round(float(np.mean(d["base_crit"])), 3),
-                             "prepared_critical_recall": round(float(np.mean(d["prep_crit"])), 3)}
-                         for c, d in by_cond.items()},
-        "cases_worse_after_preparation": worse,
-    }
+        def tot(side, key):
+            return sum(r[side]["items"][key] for r in rs)
+
+        def header_counts(side):
+            counts: Dict[str, Dict[str, int]] = {}
+            for r in rs:
+                for f, v in r[side]["header"].items():
+                    counts.setdefault(f, {}).setdefault(v, 0)
+                    counts[f][v] += 1
+            return counts
+
+        def mean(side, key):
+            vals = [r[side][key] for r in rs if key in r[side]]
+            return round(float(np.mean(vals)), 4) if vals else None
+
+        by_cond: Dict[str, dict] = {}
+        for r in rs:
+            for c in (r["conditions"] or [r["condition"]]):
+                d = by_cond.setdefault(c, {"cases": 0, "lines": 0, "baseline_correct": 0, "prepared_correct": 0})
+                d["cases"] += 1
+                d["lines"] += r["baseline"]["items"]["lines"]
+                d["baseline_correct"] += r["baseline"]["items"]["fully_correct"]
+                d["prepared_correct"] += r["prepared"]["items"]["fully_correct"]
+        out[source] = {
+            "label": SOURCES.get(source, source),
+            "cases": len(rs),
+            "pages": sum(r["page_count"] for r in rs),
+            "layouts": len({r["layout"] for r in rs}),
+            "languages": sorted({r["language"] for r in rs}),
+            "lines": tot("baseline", "lines"),
+            "fully_correct": {"baseline": tot("baseline", "fully_correct"), "prepared": tot("prepared", "fully_correct")},
+            "partially_correct": {"baseline": tot("baseline", "partially_correct"),
+                                  "prepared": tot("prepared", "partially_correct")},
+            "fields": {"baseline": merge_field_counts(r["baseline"]["items"] for r in rs),
+                       "prepared": merge_field_counts(r["prepared"]["items"] for r in rs)},
+            "header": {"baseline": header_counts("baseline"), "prepared": header_counts("prepared")},
+            "cer": {"baseline": mean("baseline", "cer"), "prepared": mean("prepared", "cer")},
+            "wer": {"baseline": mean("baseline", "wer"), "prepared": mean("prepared", "wer")},
+            "critical_recall": {"baseline": mean("baseline", "critical_recall"),
+                                "prepared": mean("prepared", "critical_recall")},
+            "decimal_corruption": {"baseline": sum(len(r["baseline"]["items"]["decimal_corruption"]) for r in rs),
+                                   "prepared": sum(len(r["prepared"]["items"]["decimal_corruption"]) for r in rs)},
+            "prepared_worse_cases": [r["case"] for r in rs if r["prepared_worse"]],
+            "retake_recommended": sum(1 for r in rs if any(p["retake"] for p in r["pages"])),
+            "timing_s_per_page": {
+                "preparation_median": round(float(np.median([p["prep_seconds"] for r in rs for p in r["pages"]])), 2),
+                "preparation_max": round(float(np.max([p["prep_seconds"] for r in rs for p in r["pages"]])), 2),
+            },
+            "pdf_bytes_per_page_median": int(np.median([r["pdf"]["bytes"] / r["page_count"] for r in rs])),
+            "by_condition": by_cond,
+        }
+    return out
+
+
+def _pct(n: int, d: int) -> str:
+    return f"{n}/{d} ({100.0 * n / d:.0f}%)" if d else "n/a"
 
 
 def to_markdown(rows: List[dict], summary: dict, simulated: bool) -> str:
-    lines = []
-    if simulated:
-        lines.append("> **Simulated camera captures** of the repository's invoice layouts (not real photographs). "
-                     "See `tests/real_world_validation.py` for the camera model; run it with `--photos` on real photos.\n")
-    lines.append(f"Cases: {summary['cases']} · line items: {summary['lines']} · "
-                 f"fully correct lines (name+qty+rate+amount): **{summary['baseline_all_fields']} → "
-                 f"{summary['prepared_all_fields']}**\n")
-    f = summary["fields"]
-    lines.append("| Field | Correct today | Correct with preparation |\n|---|---|---|")
-    for k, (b, p) in f.items():
-        lines.append(f"| {k} | {b} | {p} |")
-    lines.append("\n| Condition | Cases | Lines | Correct today | Correct with preparation | Critical-token recall today → prepared |")
-    lines.append("|---|---|---|---|---|---|")
-    for c, d in summary["by_condition"].items():
-        lines.append(f"| {c} | {d['cases']} | {d['lines']} | {d['baseline_correct']} | {d['prepared_correct']} | "
-                     f"{d['baseline_critical_recall']:.3f} → {d['prepared_critical_recall']:.3f} |")
-    lines.append("\n| Case | Rotation applied | Quality | Version | Lines correct today → prepared | Critical tokens today → prepared |")
-    lines.append("|---|---|---|---|---|---|")
-    for r in rows:
-        rot = ", ".join(str(p["rotation_cw"]) for p in r["pages"])
-        q = ", ".join(p["quality"] for p in r["pages"])
-        v = ", ".join(p["variant"] for p in r["pages"])
-        b, p = r["baseline"], r["prepared"]
-        lines.append(f"| {r['case']} | {rot} | {q} | {v} | {b['items']['all_fields']}/{b['items']['lines']} → "
-                     f"{p['items']['all_fields']}/{p['items']['lines']} | {b['critical_recall']:.2f} → {p['critical_recall']:.2f} |")
-    if summary["cases_worse_after_preparation"]:
-        lines.append("\nCases with fewer correct lines after preparation: " + ", ".join(summary["cases_worse_after_preparation"]))
+    lines: List[str] = []
+    for source, s in summary.items():
+        lines.append(f"## {s['label']} ({source})\n")
+        if source != "real_photo":
+            lines.append(f"> Not real-world evidence: {s['label'].lower()} results are reported separately and must not "
+                         "be combined with actual-photograph results.\n")
+        lines.append(f"Cases {s['cases']} · pages {s['pages']} · layouts {s['layouts']} · languages "
+                     f"{', '.join(s['languages'])} · line items {s['lines']}\n")
+        lines.append("| Measure | Original photo | Prepared page |\n|---|---|---|")
+        lines.append(f"| Fully correct lines (name+qty+rate+amount) | {_pct(s['fully_correct']['baseline'], s['lines'])} | "
+                     f"{_pct(s['fully_correct']['prepared'], s['lines'])} |")
+        lines.append(f"| Partially correct lines | {s['partially_correct']['baseline']} | {s['partially_correct']['prepared']} |")
+        for f in ("product_name", "quantity", "unit", "purchase_price", "mrp", "printed_amount"):
+            b, p = s["fields"]["baseline"].get(f), s["fields"]["prepared"].get(f)
+            if b and b["evaluated"]:
+                lines.append(f"| {f} correct | {_pct(b['correct'], b['evaluated'])} | {_pct(p['correct'], p['evaluated'])} |")
+            if b and (b["invented"] or p["invented"]):
+                lines.append(f"| {f} INVENTED (not printed) | {b['invented']} | {p['invented']} |")
+        for f in ("supplier_name", "invoice_number", "invoice_date"):
+            b, p = s["header"]["baseline"].get(f, {}), s["header"]["prepared"].get(f, {})
+            if set(b) - {"not_recorded"}:
+                fmt = lambda d: ", ".join(f"{k} {v}" for k, v in sorted(d.items()))  # noqa: E731
+                lines.append(f"| {f} | {fmt(b)} | {fmt(p)} |")
+        for key, label in (("cer", "CER (lower is better)"), ("wer", "WER (lower is better)"),
+                           ("critical_recall", "Critical-token recall")):
+            if s[key]["baseline"] is not None:
+                lines.append(f"| {label} | {s[key]['baseline']:.3f} | {s[key]['prepared']:.3f} |")
+        lines.append(f"| Decimal-point corruptions (e.g. 58.75 -> 58575) | {s['decimal_corruption']['baseline']} | "
+                     f"{s['decimal_corruption']['prepared']} |")
+        lines.append(f"\nPreparation time per page: median {s['timing_s_per_page']['preparation_median']} s, "
+                     f"max {s['timing_s_per_page']['preparation_max']} s · median PDF size per page "
+                     f"{s['pdf_bytes_per_page_median'] / 1e6:.2f} MB · retake advised on {s['retake_recommended']} case(s)\n")
+        if s["prepared_worse_cases"]:
+            lines.append("Cases with fewer fully correct lines after preparation (the 'read original photos' fallback "
+                         "would give the original result): " + ", ".join(s["prepared_worse_cases"]) + "\n")
+        lines.append("| Condition | Cases | Lines | Correct original | Correct prepared |\n|---|---|---|---|---|")
+        for c, d in sorted(s["by_condition"].items()):
+            lines.append(f"| {c} | {d['cases']} | {d['lines']} | {d['baseline_correct']} | {d['prepared_correct']} |")
+        lines.append("")
+        lines.append("| Case | Pages | Rotation | Quality | Version | Full lines orig -> prep | Critical tokens | Decimal issues |")
+        lines.append("|---|---|---|---|---|---|---|---|")
+        for r in [r for r in rows if r["source"] == source]:
+            b, p = r["baseline"], r["prepared"]
+            lines.append(
+                f"| {r['case']} | {r['page_count']} | {', '.join(str(x['rotation_cw']) for x in r['pages'])} | "
+                f"{', '.join(x['quality'] for x in r['pages'])} | {', '.join(x['variant'] for x in r['pages'])} | "
+                f"{b['items']['fully_correct']}/{b['items']['lines']} -> {p['items']['fully_correct']}/{p['items']['lines']} | "
+                f"{b['critical_recall']:.2f} -> {p['critical_recall']:.2f} | "
+                f"{len(b['items']['decimal_corruption'])} -> {len(p['items']['decimal_corruption'])} |")
+        lines.append("")
     return "\n".join(lines) + "\n"
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--photos", type=Path)
+    ap.add_argument("--photos", type=Path, help="folder with photos and manifest.json")
+    ap.add_argument("--check", action="store_true", help="only validate the manifest and images (no OCR)")
     ap.add_argument("--md")
     ap.add_argument("--json")
     ap.add_argument("--layouts", nargs="*")
     args = ap.parse_args()
-    if args.photos:
-        cases = real_photo_cases(args.photos)
-    else:
-        cases = simulated_cases(args.layouts or SIM_LAYOUTS)
+    if args.check:
+        if not args.photos:
+            raise SystemExit("--check needs --photos DIR")
+        cases, problems = load_photo_folder(args.photos)
+        for c in cases:
+            for i, data in enumerate(c.pages):
+                try:
+                    load_image(data, c.filenames[i])
+                except Exception as exc:
+                    problems.append(f"{c.case_id}: page {i + 1} cannot be read ({exc})")
+        by_source: Dict[str, int] = {}
+        for c in cases:
+            by_source[c.source] = by_source.get(c.source, 0) + 1
+        print(f"cases readable: {len(cases)} {by_source} · pages {sum(len(c.pages) for c in cases)} · "
+              f"line items {sum(len(c.items) for c in cases)}")
+        print("problems:\n  " + "\n  ".join(problems) if problems else "manifest OK")
+        raise SystemExit(1 if problems else 0)
+    cases = real_photo_cases(args.photos) if args.photos else simulated_cases(args.layouts or SIM_LAYOUTS)
     pipeline = InvoicePipeline(ocr_engine=TesseractOCREngine())
     rows = []
     for case in cases:
         row = run_case(case, pipeline)
         rows.append(row)
         b, p = row["baseline"], row["prepared"]
-        print(f"{row['case']:52s} lines {b['items']['all_fields']}/{b['items']['lines']} -> {p['items']['all_fields']}/"
-              f"{p['items']['lines']} | critical {b['critical_recall']:.2f} -> {p['critical_recall']:.2f} | "
-              f"rot {[x['rotation_cw'] for x in row['pages']]} | {row['prep_seconds']}s", flush=True)
+        print(f"[{row['source']}] {row['case']:48s} full lines {b['items']['fully_correct']}/{b['items']['lines']} -> "
+              f"{p['items']['fully_correct']}/{p['items']['lines']} | critical {b['critical_recall']:.2f} -> "
+              f"{p['critical_recall']:.2f} | rot {[x['rotation_cw'] for x in row['pages']]} | "
+              f"prep {row['timing_s']['preparation']}s", flush=True)
     summary = summarize(rows)
-    print(json.dumps({k: v for k, v in summary.items() if k != "by_condition"}, indent=1))
+    print(json.dumps({k: {kk: vv for kk, vv in v.items() if kk not in ("by_condition", "fields", "header")}
+                      for k, v in summary.items()}, indent=1))
     if args.json:
-        Path(args.json).write_text(json.dumps({"summary": summary, "rows": rows}, indent=1), encoding="utf-8")
+        Path(args.json).write_text(json.dumps({"summary": summary, "rows": rows}, indent=1, default=str),
+                                   encoding="utf-8")
     if args.md:
         Path(args.md).write_text(to_markdown(rows, summary, simulated=not args.photos), encoding="utf-8")
 

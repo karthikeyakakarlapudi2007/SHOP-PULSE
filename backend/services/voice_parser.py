@@ -5,8 +5,14 @@ from pydantic import BaseModel
 class ExtractedItem(BaseModel):
     name: str
     quantity: Union[int, float] = 1
+    # Registered unit id (kg, g, L, ml, pcs, packet, ...) when a unit was spoken; None when not spoken
     unit: Optional[str] = None
+    # Spoken line total ("3 tea for 100 rupees" -> 100)
     spoken_price: Optional[float] = None
+    # Spoken price per unit ("100 rupees each", "60 rupees per kg"); price_unit is the unit it is per
+    # (None for "each": per spoken unit)
+    spoken_unit_price: Optional[float] = None
+    price_unit: Optional[str] = None
 
 # Comprehensive mapping of spoken numbers to integer digits across English and Indian languages
 NUMBER_WORDS = {
@@ -185,6 +191,28 @@ UNIT_STRING_LIST = [
     "കിലോ", "ലിറ്റർ", "പാക്കറ്റ്"
 ]
 
+# Spoken unit words in regional scripts / colloquial English, mapped to canonical registry unit ids.
+# Language vocabulary only: the units themselves (families, factors, fraction rules) come from the registry.
+REGIONAL_UNIT_IDS = {
+    **{w: "kg" for w in ["కిలో", "కిలోలు", "కిలోల", "కేజీ", "కేజీలు", "కేజీల", "किलो", "किलों", "கிலோ", "ಕಿಲೋ", "കിലോ", "কেজি"]},
+    **{w: "L" for w in ["లీటర్", "లీటర్లు", "లీటర్ల", "लीटर", "लीटरों", "லிட்டர்", "ಲೀಟರ್", "ലിറ്റർ"]},
+    **{w: "packet" for w in ["ప్యాకెట్", "ప్యాకెట్లు", "ప్యాకెట్ల", "पैकेट", "पैकेटों", "पॉकेट", "பாக்கெட்", "ಪ್ಯಾಕೆಟ್", "പാക്കറ്റ്"]},
+    **{w: "bottle" for w in ["बोतल", "బాటిల్"]},
+    "dabba": "box", "dappe": "box", "సంచులు": "bag", "basta": "bag",
+}
+
+
+def canonical_voice_unit(word: Optional[str]) -> Optional[str]:
+    """Registry unit id for a spoken unit word, or None when it is not a unit ("unit", "each", unknown).
+
+    An unrecognised word is never turned into pcs: the product's own unit applies instead."""
+    if not word or not word.strip():
+        return None
+    from services.unit_registry import try_normalize_unit  # local import keeps the parser import-light
+    w = word.strip()
+    return try_normalize_unit(w.lower()) or REGIONAL_UNIT_IDS.get(w.lower()) or REGIONAL_UNIT_IDS.get(w)
+
+
 SORTED_UNITS_PATTERN = "|".join(re.escape(u) for u in sorted(UNIT_STRING_LIST, key=lambda x: -len(x)))
 
 CURRENCY_REGEX = r"(?:రూపాయలు|రూ|రూ\.|రూపాయ|ర రూపాయలు|रुपये|रुपया|रु|रु\.|रू|रूपए|ரூபாய்|ரூ|ರೂಪಾಯಿ|രൂപ|টাকা|રૂપિયા|ਰੁਪਏ|ਟଙ୍କਾ|টকা|rupees?|rs|rs\.|inr)"
@@ -220,8 +248,11 @@ def normalize_digits_and_numbers(text: str) -> str:
     # Fractions & composites
     s = re.sub(r"\b(?:one\s+and\s+a\s+half|one\s+and\s+half|1\s+and\s+a\s+half|1\s+and\s+half)\b", " 1.5 ", s, flags=re.IGNORECASE)
     s = re.sub(r"\b(?:two\s+and\s+a\s+half|two\s+and\s+half|2\s+and\s+a\s+half|2\s+and\s+half)\b", " 2.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"\b(?:half\s+a\s+kg|half\s+kg|half\s+kilo|half\s+liter|half\s+litre|half\s+ltr)\b", " 0.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"\b(?:quarter\s+kg|quarter\s+kilo|quarter\s+liter)\b", " 0.25 ", s, flags=re.IGNORECASE)
+    # Fractions of a unit keep the unit (it decides the stock quantity, e.g. half kg of a g product)
+    s = re.sub(r"\b(?:half\s+a\s+kg|half\s+kg|half\s+kilo)\b", " 0.5 kg ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\b(?:half\s+a\s+(?:liter|litre)|half\s+liter|half\s+litre|half\s+ltr)\b", " 0.5 liter ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\b(?:quarter\s+kg|quarter\s+kilo)\b", " 0.25 kg ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\b(?:quarter\s+liter|quarter\s+litre)\b", " 0.25 liter ", s, flags=re.IGNORECASE)
     s = re.sub(r"\b(?:1\/2|½)\b", " 0.5 ", s, flags=re.IGNORECASE)
     s = re.sub(r"\b(?:1\/4|¼)\b", " 0.25 ", s, flags=re.IGNORECASE)
     s = re.sub(r"\b(?:3\/4|¾)\b", " 0.75 ", s, flags=re.IGNORECASE)
@@ -229,14 +260,19 @@ def normalize_digits_and_numbers(text: str) -> str:
     # Telugu spoken fractions
     s = re.sub(r"(?:ఒకటిన్నర)", " 1.5 ", s, flags=re.IGNORECASE)
     s = re.sub(r"(?:రెండున్నర)", " 2.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"(?:అర\s+కిలో|అర\s+కేజీ|అర\s+లీటర్)", " 0.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"(?:పావు\s+కిలో|పావు\s+కేజీ)", " 0.25 ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:అర\s+కిలో|అర\s+కేజీ)", " 0.5 కిలో ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:అర\s+లీటర్)", " 0.5 లీటర్ ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:పావు\s+కిలో|పావు\s+కేజీ)", " 0.25 కిలో ", s, flags=re.IGNORECASE)
 
     # Hindi spoken fractions
-    s = re.sub(r"(?:डेढ़\s+किलो|डेढ़|डेढ)", " 1.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"(?:ढाई\s+किलो|ढाई)", " 2.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"(?:आधा\s+किलो|आधा\s+लीटर)", " 0.5 ", s, flags=re.IGNORECASE)
-    s = re.sub(r"(?:पाव\s+किलो|पाव)", " 0.25 ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:डेढ़\s+किलो)", " 1.5 किलो ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:डेढ़|डेढ)", " 1.5 ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:ढाई\s+किलो)", " 2.5 किलो ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:ढाई)", " 2.5 ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:आधा\s+किलो)", " 0.5 किलो ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:आधा\s+लीटर)", " 0.5 लीटर ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:पाव\s+किलो)", " 0.25 किलो ", s, flags=re.IGNORECASE)
+    s = re.sub(r"(?:पाव)", " 0.25 ", s, flags=re.IGNORECASE)
 
     # Composite dozen expressions
     s = re.sub(r"\b(?:half\s+dozen|aadha\s+dozen|aadha\s+darjan|adha\s+dozen)\b", " 6 ", s, flags=re.IGNORECASE)
@@ -284,12 +320,64 @@ def normalize_digits_and_numbers(text: str) -> str:
 
     return s.strip()
 
+# Price connector words left in the product text once the price itself is removed ("tea for", "soap at")
+_PRICE_CONNECTORS = r"(?:for|at|@|each|apiece|rate|ka|ki|ke)"
+
+
+def _strip_price_connectors(text: str) -> str:
+    text = re.sub(r"\b(?:each|apiece)\b", " ", text, flags=re.IGNORECASE)
+    prev = None
+    while prev != text:
+        prev = text
+        text = re.sub(rf"\s+{_PRICE_CONNECTORS}\s*$", "", text.strip(), flags=re.IGNORECASE)
+    return text.strip()
+
+
+def _trailing_unit(text: str) -> Optional[str]:
+    """Registry unit id of a count / package word ending the product text ("tea packets" -> packet).
+
+    Measure abbreviations are not taken from the end of a name ("Parle G" is a brand, not grams)."""
+    m = re.search(rf"(?:^|\s)({SORTED_UNITS_PATTERN})$", _strip_price_connectors(text), flags=re.IGNORECASE)
+    unit = canonical_voice_unit(m.group(1)) if m else None
+    if unit is None:
+        return None
+    from services.unit_registry import FAMILIES, UNITS
+    return None if FAMILIES[UNITS[unit].family].kind == "measure" else unit
+
+
+def _extract_price(s: str) -> Tuple[str, Optional[float], Optional[float], Optional[str]]:
+    """Remove a spoken price from the clause.
+
+    Returns (remaining text, line total, unit price, unit the price is per). "100 rupees each" or
+    "45 rupees per kg" is a unit price (never taken as the line total); "100 rupees" or "for 100" is the
+    line total. Nothing is guessed when no price is spoken."""
+    cur = CURRENCY_REGEX
+    per = rf"(?:each|apiece|a\s+piece|per\s+(?:piece|item|({SORTED_UNITS_PATTERN})))(?![\wऀ-ൿ])"
+    unit_price = re.search(
+        rf"(?:(?:@|\bat)\s*)?(?:(?:{cur})\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:{cur})?)\s*{per}",
+        s, flags=re.IGNORECASE)
+    if unit_price:
+        value = float(unit_price.group(1) or unit_price.group(2))
+        price_unit = canonical_voice_unit(unit_price.group(3)) if unit_price.group(3) else None
+        rest = (s[:unit_price.start()] + " " + s[unit_price.end():]).strip()
+        return rest, None, value, price_unit
+    total = re.search(rf"(?:{cur})\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:{cur})", s, flags=re.IGNORECASE)
+    if total:
+        rest = (s[:total.start()] + " " + s[total.end():]).strip()
+        return rest, float(total.group(1) or total.group(2)), None, None
+    # "3 soap for 100": a trailing "for <amount>" is the line total when another number gives the quantity
+    for_total = re.search(r"\bfor\s+(\d+(?:\.\d+)?)\s*$", s, flags=re.IGNORECASE)
+    if for_total and re.search(r"\d", s[:for_total.start()]):
+        return s[:for_total.start()].strip(), float(for_total.group(1)), None, None
+    return s, None, None, None
+
+
 def clean_product_name(raw_name: str) -> str:
     """
     Cleans extracted product text: removes leading unit qualifiers, conversational fillers,
     and trailing plurals while strictly preserving package weights/sizes (like 1kg, 500g).
     """
-    name = raw_name.strip()
+    name = _strip_price_connectors(raw_name.strip())
     # Remove leading conversational fillers
     for pattern in CONVERSATIONAL_FILLERS:
         name = re.sub(pattern, "", name, flags=re.IGNORECASE).strip()
@@ -360,14 +448,9 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
             if not s:
                 break
 
-            # Extract spoken price if present
-            extracted_price = None
-            price_match = re.search(rf"(?:{CURRENCY_REGEX})\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:{CURRENCY_REGEX})", s, flags=re.IGNORECASE)
-            if price_match:
-                p_str = price_match.group(1) or price_match.group(2)
-                extracted_price = float(p_str)
-                s = s[:price_match.start()] + " " + s[price_match.end():]
-                s = s.strip()
+            # Extract a spoken price if present: a line total, or a unit price ("each", "per kg")
+            s, extracted_price, unit_price, price_unit = _extract_price(s)
+            price_fields = dict(spoken_price=extracted_price, spoken_unit_price=unit_price, price_unit=price_unit)
 
             # Pattern 1: Leading quantity (e.g. "2 kg rice", "2 Tata Salt", "2 Tata Salt 1kg", "0.5 kg sugar")
             lead_regex = re.compile(
@@ -379,15 +462,16 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
             if lead_match:
                 raw_qty = float(lead_match.group(1))
                 qty_val = int(raw_qty) if raw_qty.is_integer() else raw_qty
-                unit_word = lead_match.group(2)
+                # "2 kg rice" (unit before the name) or "3 tea packets" (unit after the name)
+                unit_id = canonical_voice_unit(lead_match.group(2)) or _trailing_unit(lead_match.group(3))
                 prod_text = clean_product_name(lead_match.group(3))
 
                 if prod_text:
                     items.append(ExtractedItem(
                         name=prod_text,
                         quantity=qty_val if qty_val > 0 else 1,
-                        unit=unit_word,
-                        spoken_price=extracted_price
+                        unit=unit_id,
+                        **price_fields,
                     ))
 
                 s = s[lead_match.end():].strip()
@@ -404,14 +488,14 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
                 prod_text = clean_product_name(trail_match.group(1))
                 raw_qty = float(trail_match.group(2))
                 qty_val = int(raw_qty) if raw_qty.is_integer() else raw_qty
-                unit_word = trail_match.group(3)
+                unit_id = canonical_voice_unit(trail_match.group(3))
 
                 if prod_text:
                     items.append(ExtractedItem(
                         name=prod_text,
                         quantity=qty_val if qty_val > 0 else 1,
-                        unit=unit_word,
-                        spoken_price=extracted_price
+                        unit=unit_id,
+                        **price_fields,
                     ))
 
                 s = s[trail_match.end():].strip()
@@ -424,7 +508,7 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
                     name=prod_text,
                     quantity=1,
                     unit=None,
-                    spoken_price=extracted_price
+                    **price_fields,
                 ))
             break
 

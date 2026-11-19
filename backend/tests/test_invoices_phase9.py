@@ -28,6 +28,15 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+def assert_needs_review_only_for_missing_units(data):
+    """Phase 4: an invoice that prints no unit column needs review for that reason only (a missing unit is
+    never assumed to be pcs); every other check on the lines still has to pass."""
+    assert data["status"] == "needs_review"
+    for line in data["items"]:
+        assert line["unit"] is None and line["needs_review"] is True
+        assert any("Unit not printed" in v for v in line["validation_issues"]), line["validation_issues"]
+
 def override_get_db():
     db = TestingSessionLocal()
     try:
@@ -199,7 +208,7 @@ def test_extract_invoice_text_pdf():
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "success"
+    assert_needs_review_only_for_missing_units(data)
     assert len(data["items"]) >= 1
     assert data["items"][0]["purchase_price"] == 150.0
     assert data["items"][0]["line_total"] == 1500.0
@@ -240,7 +249,7 @@ def test_extract_invoice_scanned_pdf_fallback():
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["status"] == "success"
+    assert_needs_review_only_for_missing_units(data)
     assert data["engine_used"] == "backend_pdf_ocr_scanned"
 
 # -------------------------------------------------------------

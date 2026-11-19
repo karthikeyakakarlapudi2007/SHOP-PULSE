@@ -27,7 +27,7 @@ from services import shop as shop_service
 from services.document_prep.config import default_config
 from services.document_prep.loader import ImageInputError, load_image, sniff_image_type, validate_filename
 from services.document_prep.pdf_builder import build_pdf
-from services.document_prep.pipeline import VARIANT_LABELS, PrepOptions, prepare_page
+from services.document_prep.pipeline import VARIANT_LABELS, PrepOptions, assess_capture, prepare_page
 from services.document_prep.session_store import SessionLimitError, SessionNotFound, SessionStore
 from services.grocery_ocr.exceptions import GroceryOCRError
 from services.ocr import OcrUnavailableError
@@ -180,6 +180,33 @@ def _build_session_pdf(user: User, session_id: str, source: str):
 # ---------------------------------------------------------------------------------------
 # Sessions
 # ---------------------------------------------------------------------------------------
+
+
+@router.post("/assess")
+async def assess_photo(
+    file: UploadFile = File(...),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """Photo-quality check for a directly uploaded invoice photo (no preparation, no OCR).
+
+    Returns the same grade, issues and retake advice as the camera flow, so a poor or cut-off
+    photo is reported before its extraction results are trusted."""
+    data = await _read_upload(file)
+    try:
+        display_name = validate_filename(file.filename)
+    except ImageInputError as exc:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc))
+    if sniff_image_type(data) is None:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                            detail="This file is not a supported photo. Please use JPG, PNG, HEIC, WEBP, BMP or TIFF.")
+    try:
+        return await run_in_threadpool(_run_job, lambda: assess_capture(data, display_name))
+    except ImageInputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Photo assessment failed")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"The photo could not be checked ({type(exc).__name__}).")
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)

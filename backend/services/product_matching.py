@@ -13,19 +13,15 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Generic, List, Optional, Sequence, Tuple, TypeVar
 
+from services.unit_registry import FAMILIES, UNITS, try_normalize_unit
+
 T = TypeVar("T")
 
 EXACT_NAME_SCORE = 0.97
 FUZZY_MIN_SCORE = 0.88
 AMBIGUITY_MARGIN = 0.08
 
-_UNIT_ALIASES = {
-    "kg": "kg", "kgs": "kg", "kilo": "kg", "kilogram": "kg", "kilograms": "kg",
-    "g": "g", "gm": "g", "gms": "g", "gram": "g", "grams": "g", "gr": "g",
-    "l": "l", "ltr": "l", "ltrs": "l", "litre": "l", "liter": "l", "litres": "l", "liters": "l", "lt": "l",
-    "ml": "ml", "mls": "ml",
-}
-_TO_BASE = {"kg": ("g", 1000.0), "g": ("g", 1.0), "l": ("ml", 1000.0), "ml": ("ml", 1.0)}
+# Pattern that finds a pack size in a product name; what the unit means comes from the unit registry
 _PACK_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kgs?|kilo(?:gram)?s?|gms?|grams?|gr|g|ltrs?|litres?|liters?|lt|l|mls?)\b", re.I)
 
 
@@ -48,15 +44,24 @@ def normalize_gtin(value: Optional[str]) -> Optional[str]:
     return digits.zfill(14)
 
 
+def _pack_unit(text: str) -> Optional[Tuple[str, float]]:
+    """(base unit, factor) of a mass / volume unit from the unit registry ("kg" -> ("g", 1000.0))."""
+    unit_id = try_normalize_unit(text)
+    if unit_id is None or FAMILIES[UNITS[unit_id].family].kind != "measure":
+        return None
+    unit = UNITS[unit_id]
+    return unit.base_unit, float(unit.factor)
+
+
 def extract_pack_size(text: str) -> Optional[Tuple[str, float]]:
     """'Tata Salt 1kg' -> ('g', 1000.0). Returns None when no pack size is printed."""
     m = _PACK_RE.search(text or "")
     if not m:
         return None
-    unit = _UNIT_ALIASES.get(m.group(2).lower())
-    if not unit:
+    pack = _pack_unit(m.group(2))
+    if not pack:
         return None
-    base_unit, factor = _TO_BASE[unit]
+    base_unit, factor = pack
     return base_unit, round(float(m.group(1)) * factor, 3)
 
 
@@ -66,8 +71,7 @@ def normalize_name(text: str) -> str:
     s = re.sub(r"[₹]|\brs\.?\b|\binr\b", " ", s)
 
     def _unit(m: "re.Match[str]") -> str:
-        unit = _UNIT_ALIASES.get(m.group(2).lower(), m.group(2).lower())
-        base_unit, factor = _TO_BASE.get(unit, (unit, 1.0))
+        base_unit, factor = _pack_unit(m.group(2)) or (m.group(2).lower(), 1.0)
         qty = float(m.group(1)) * factor
         return f" {qty:g}{base_unit} "
 

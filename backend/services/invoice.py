@@ -15,6 +15,7 @@ import uuid
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -42,6 +43,11 @@ from schemas.product import ProductResponse
 logger = logging.getLogger(__name__)
 
 from services.grocery_ocr.engines.ocr_engine import TesseractOCREngine
+from sqlalchemy import null as sa_null
+from services.invoice_reconciliation import reconcile_invoice_total
+from services.money import format_rupees, keep_printed_precision, quantize_half_up, to_decimal, to_number
+from services.stock import add_stock, format_quantity, to_stock_quantity, validate_unit_text
+from services.unit_registry import try_normalize_unit
 from services.grocery_ocr.pipeline.invoice_pipeline import InvoicePipeline
 
 USE_NEW_GROCERY_OCR = os.getenv("USE_NEW_GROCERY_OCR", "true").lower() in ("true", "1", "yes")
@@ -139,39 +145,52 @@ def parse_smart_price_py(tok: Optional[str], allow_zero: bool = False) -> Option
         return None
 
 
+# Decimal money helpers now live in services/money.py (shared with sales, purchases, voice and reports)
+_dec = to_decimal
+_money = quantize_half_up
+_num = to_number
+_keep_printed_precision = keep_printed_precision
+
+
 def resolve_item_arithmetic_py(
-    qty: Optional[float], rate: Optional[float], total: Optional[float], tax: Optional[float] = None
+    qty: Optional[float], rate: Optional[float], total: Optional[float], tax: Optional[float] = None,
+    discount: Optional[float] = None,
 ) -> Dict[str, Any]:
+    """Check quantity x rate - discount + tax against the printed amount (Decimal arithmetic).
+
+    Values are never changed here: a mismatch is reported with suggestions only.
+    """
     issues: List[str] = []
     suggestions: List[str] = []
     suggested_rate: Optional[float] = None
     status = "VERIFIED"
     line_total = total
     line_total_source = "INVOICE"
+    q, r, t = _dec(qty), _dec(rate), _dec(total)
+    tx, dc = _dec(tax) or Decimal("0"), _dec(discount) or Decimal("0")
 
-    if qty is not None and rate is not None:
-        base = qty * rate
-        expected = base + (tax or 0.0)
-        if total is None:
-            line_total = round(expected, 2)
+    if q is not None and r is not None:
+        base = q * r
+        expected = base - dc + tx
+        if t is None:
+            line_total = float(_keep_printed_precision(expected))
             line_total_source = "CALCULATED"
             status = "INSUFFICIENT_DATA"
             issues.append("Line amount not printed on invoice; calculated from quantity × rate")
-        elif abs(expected - total) > max(1.0, total * 0.01):
+        elif abs(expected - t) > max(Decimal("1.0"), t * Decimal("0.01")):
             status = "MISMATCH"
-            issues.append(f"Amount ₹{total:,.2f} does not match quantity × rate ({qty:,.2f} × ₹{rate:,.2f} = ₹{base:,.2f})")
-            if qty > 0 and abs((qty / 10.0) * rate - total) <= max(1.0, total * 0.01):
-                clean_q = int(qty / 10.0) if (qty / 10.0).is_integer() else qty / 10.0
-                suggestions.append(f"Quantity may be {clean_q} (shifted decimal)")
-            elif qty > 0 and abs((qty / 100.0) * rate - total) <= max(1.0, total * 0.01):
-                clean_q = int(qty / 100.0) if (qty / 100.0).is_integer() else qty / 100.0
-                suggestions.append(f"Quantity may be {clean_q} (shifted decimal)")
-    elif qty is not None and rate is None:
-        if total is not None and qty > 0:
-            suggested_rate = round(total / qty, 2)
+            issues.append(f"Amount ₹{t:,.2f} does not match quantity × rate ({q:,.2f} × ₹{r:,.2f} = ₹{base:,.2f})")
+            tol = max(Decimal("1.0"), t * Decimal("0.01"))
+            if q > 0 and abs((q / 10) * r - dc + tx - t) <= tol:
+                suggestions.append(f"Quantity may be {(q / 10).normalize():f} (shifted decimal)")
+            elif q > 0 and abs((q / 100) * r - dc + tx - t) <= tol:
+                suggestions.append(f"Quantity may be {(q / 100).normalize():f} (shifted decimal)")
+    elif q is not None and r is None:
+        if t is not None and q > 0:
+            suggested_rate = float(_keep_printed_precision((t + dc - tx) / q))
             status = "MISMATCH"
             issues.append("Rate could not be read; suggested from line amount ÷ quantity")
-    elif total is None and rate is not None:
+    elif t is None and r is not None:
         issues.append("Quantity not printed on invoice")
         status = "MISMATCH"
 
@@ -206,11 +225,8 @@ def suggest_misread_decimal_rate(
     if m:
         digits = m.group(1)
     else:
-        try:
-            value = float(text.replace(",", ""))
-        except ValueError:
-            return None
-        if value != int(value):
+        value = _dec(text.replace(",", ""))
+        if value is None or value != value.to_integral_value():
             return None
         digits = str(int(value))
     if len(digits) < 3:
@@ -220,13 +236,14 @@ def suggest_misread_decimal_rate(
         readings.add(digits[:i] + "." + digits[i:])  # decimal point dropped
         if i < len(digits) - 1:
             readings.add(digits[:i] + "." + digits[i + 1:])  # decimal point read as a digit
-    target = printed_amount + discount - tax
+    # Decimal throughout (no float tolerance comparisons); a match keeps up to 3 decimals
+    q, target = _dec(quantity), _dec(printed_amount) + (_dec(discount) or Decimal("0")) - (_dec(tax) or Decimal("0"))
     matches = set()
     for r in readings:
-        cand = float(r)
-        if cand > 0 and abs(quantity * cand - target) <= 0.011:
-            matches.add(round(cand, 2))
-    return matches.pop() if len(matches) == 1 else None
+        cand = Decimal(r)
+        if cand > 0 and abs(q * cand - target) <= Decimal("0.011"):
+            matches.add(_keep_printed_precision(cand))
+    return float(matches.pop()) if len(matches) == 1 else None
 
 
 def _detect_type(file_bytes: bytes, filename: str) -> str:
@@ -348,12 +365,9 @@ def extract_metadata(lines: List[str], header_text: Optional[str]) -> Dict[str, 
                 nums = re.findall(r"(?:₹|rs\.?\s*)?\d[\d,]*(?:\.\d+)?", line, re.I)
                 if nums:
                     clean_num = re.sub(r"[^\d.]", "", nums[-1])
-                    try:
-                        value = float(clean_num)
-                    except (ValueError, TypeError):
-                        value = None
+                    value = _dec(clean_num)  # Decimal from the printed text, never via float
                     if value is not None and value > 0:
-                        invoice_total, best_priority = value, priority
+                        invoice_total, best_priority = _num(_keep_printed_precision(value)), priority
                 break
 
     return {
@@ -409,45 +423,92 @@ def _extract_invoice_with_new_pipeline(
 
     items: List[CanonicalInvoiceItemSchema] = []
     for idx, it in enumerate(extracted.items):
-        q = float(it.quantity) if it.quantity is not None else None
-        pp = float(it.purchase_price) if it.purchase_price is not None else None
+        meta_x = it.metadata or {}
+        components = {k: _dec(v) for k, v in (meta_x.get("financial_components") or {}).items() if _dec(v) is not None}
+        review_reasons: List[str] = list(meta_x.get("review_reasons") or [])
+        extraction_suggestions: List[str] = list(meta_x.get("extraction_suggestions") or [])
+        qty_details: Dict[str, Any] = dict(meta_x.get("quantity_details") or {})
+        # Fields that were CALCULATED, not read from the invoice (e.g. pieces from cases x units per case)
+        derived: List[str] = list(meta_x.get("derived_fields") or [])
+        is_free_item = bool(meta_x.get("is_free_item"))
+
+        # All financial arithmetic is Decimal; floats only at the response boundary
+        q_d = _dec(it.quantity)
+        pp_d = _dec(it.purchase_price)
+        prn_d = _dec(it.printed_amount)
+        calc_d = _dec(it.calculated_amount)
+        tot_d = prn_d if prn_d is not None else calc_d
+        disc_d = _dec(it.discount) or Decimal("0")
+        tax_d = _dec(it.tax_amount) or Decimal("0")
         sp = float(it.selling_price) if it.selling_price is not None else None
         m = float(it.mrp) if it.mrp is not None else None
-        prn = float(it.printed_amount) if it.printed_amount is not None else None
-        calc = float(it.calculated_amount) if it.calculated_amount is not None else None
-        tot = prn if prn is not None else calc
-        disc = float(it.discount) if it.discount is not None else 0.0
-        tax = float(it.tax_amount) if it.tax_amount is not None else 0.0
+        # A line amount that was not identified stays empty (no "last number in the row" guess);
+        # an amount the pipeline calculated (no printed amount) is a calculated value, never "read"
+        if prn_d is None and calc_d is not None:
+            derived.append("line_total")
+            review_reasons.append("Line amount was not read from the invoice: calculated from quantity × rate.")
 
-        if tot is None and it.raw_row_text:
-            num_matches = re.findall(r"\b\d[\d,]*(?:\.\d{2})\b", it.raw_row_text)
-            if num_matches:
-                cand_tot = parse_smart_price_py(num_matches[-1])
-                if cand_tot is not None and cand_tot > 0:
-                    tot = cand_tot
-                    prn = cand_tot
-
-        if q is None and pp is not None and pp > 0 and tot is not None:
-            pre_tax = tot + disc - tax
-            cand_q = round(pre_tax / pp, 3)
-            for test_q in (round(cand_q), round(cand_q, 1), cand_q):
-                if test_q > 0 and abs(test_q * pp - pre_tax) <= max(1.5, tot * 0.01):
-                    q = float(test_q)
+        if q_d is None and pp_d is not None and pp_d > 0 and tot_d is not None:
+            pre_tax = tot_d + disc_d - tax_d
+            cand_q = pre_tax / pp_d
+            for test_q in (_money(cand_q, "1"), _money(cand_q, "0.1"), _money(cand_q, "0.001")):
+                if test_q > 0 and abs(test_q * pp_d - pre_tax) <= max(Decimal("1.5"), tot_d * Decimal("0.01")):
+                    q_d = test_q
+                    derived.append("quantity")
+                    review_reasons.append(
+                        f"Quantity was not read from the invoice: calculated as ₹{_keep_printed_precision(pre_tax)} ÷ ₹{pp_d} = "
+                        f"{test_q.normalize():f}. Please check it.")
                     break
 
-        if pp is None and q is not None and q > 0 and tot is not None:
-            pre_tax = tot + disc - tax
-            pp = round(pre_tax / q, 2)
+        if pp_d is None and q_d is not None and q_d > 0 and tot_d is not None:
+            pre_tax = tot_d + disc_d - tax_d
+            pp_d = _keep_printed_precision(pre_tax / q_d)
+            derived.append("purchase_price")
+            review_reasons.append(
+                f"Rate was not read from the invoice: calculated as ₹{_keep_printed_precision(pre_tax)} ÷ {q_d.normalize():f} = "
+                f"₹{pp_d}. Please check it.")
 
-        if tot is None and q is not None and pp is not None:
-            tot = round(q * pp - disc + tax, 2)
+        if tot_d is None and q_d is not None and pp_d is not None:
+            tot_d = _keep_printed_precision(q_d * pp_d - disc_d + tax_d)
+            if "line_total" not in derived:
+                derived.append("line_total")
+                review_reasons.append("Line amount was not read from the invoice: calculated from quantity × rate.")
 
-        verified = (it.validation_status == "VERIFIED") or (q is not None and pp is not None and tot is not None and abs(q * pp - disc + tax - tot) <= 1.5)
+        # Promotions ("10+1"): line arithmetic uses the paid units; the quantity received into stock is
+        # paid + free. A printed free line (rate 0.00) is all free units. Costs are never redistributed.
+        free_d = _dec(qty_details.get("free_quantity"))
+        paid_d: Optional[Decimal] = None
+        received_d = q_d
+        if is_free_item and q_d is not None:
+            paid_d, free_d, received_d = Decimal("0"), q_d, q_d
+        elif free_d is not None and free_d > 0 and q_d is not None:
+            paid_d, received_d = q_d, q_d + free_d
+
+        q, pp = _num(q_d), _num(pp_d)
+        prn, calc, tot = _num(prn_d), _num(calc_d), _num(tot_d)
+        disc, tax = float(disc_d), float(tax_d)
+
+        # "Verified" only when quantity, rate and amount were all READ and agree; a calculated value
+        # agrees with the arithmetic by construction and therefore proves nothing.
+        read_values_agree = (
+            q_d is not None and pp_d is not None and tot_d is not None
+            and abs(q_d * pp_d - disc_d + tax_d - tot_d) <= Decimal("1.5")
+        )
+        no_calculated_core = not ({"quantity", "purchase_price", "line_total"} & set(derived))
+        verified = no_calculated_core and ((it.validation_status == "VERIFIED") or read_values_agree)
+        if is_free_item:
+            review_reasons.append(
+                "Free item: the invoice prints a rate of ₹0.00. It is kept with its printed quantity; "
+                "no cost has been assigned. Please confirm how it should enter stock.")
         needs_review = (
             it.review_status in ("REVIEW_REQUIRED", "UNKNOWN_REVIEW", "NON_GROCERY")
             or not verified
             or pp is None
             or q is None
+            or bool(derived)
+            or bool(review_reasons)
+            or is_free_item
+            or it.validation_status in ("MISMATCH", "INVALID")
             or (it.ocr_confidence is not None and it.ocr_confidence < 85.0)
         )
 
@@ -492,24 +553,37 @@ def _extract_invoice_with_new_pipeline(
         mrp_val, mrp_src, mrp_issues, mrp_needs_review = mrp_lookup.resolve_line_mrp(m, lookup, store_mrp)
         if mrp_needs_review:
             needs_review = True
-        arith = resolve_item_arithmetic_py(q, pp, tot, tax)
+        arith = resolve_item_arithmetic_py(q, pp, tot, tax, discount=disc)
         arith_status = arith["status"] if arith["status"] != "VERIFIED" else it.validation_status
         if arith_status == "MISMATCH":
             needs_review = True
-        line_validation_issues = list(it.validation_issues or []) + list(mrp_issues or []) + list(arith.get("issues", []))
-        line_suggestions = list(arith.get("suggestions") or [])
+        line_validation_issues = (list(review_reasons) + [i for i in (it.validation_issues or []) if i not in review_reasons]
+                                  + list(mrp_issues or []) + list(arith.get("issues", [])))
+        # A missing or unregistered unit needs review: it is never assumed to be pcs
+        if not norm_unit:
+            line_validation_issues.append("Unit not printed or not read: enter the unit before adding to stock.")
+            needs_review = True
+        elif try_normalize_unit(norm_unit) is None:
+            line_validation_issues.append(
+                f"Unit '{norm_unit}' is not a registered unit: correct it before adding to stock.")
+            needs_review = True
+        line_suggestions = list(extraction_suggestions) + list(arith.get("suggestions") or [])
         line_suggested_rate = arith.get("suggested_rate")
         if arith_status == "MISMATCH" and pp is not None and prn is not None:
             raw_rate = (it.raw_cells or {}).get("rate") or (it.raw_cells or {}).get("purchase_price") or pp
             misread = suggest_misread_decimal_rate(raw_rate, q, prn, disc, tax)
-            if misread is not None and abs(misread - pp) > 0.005:
+            if misread is not None and abs(_dec(misread) - _dec(pp)) > Decimal("0.005"):
                 line_suggestions.append(
-                    f"Rate ₹{pp:,.2f} may be a misread decimal point: ₹{misread:,.2f} × {q:g} = ₹{prn:,.2f} "
+                    f"Rate {format_rupees(pp)} may be a misread decimal point: {format_rupees(misread)} × {q:g} = {format_rupees(prn)} "
                     "(printed amount). Please check the invoice and confirm."
                 )
                 line_suggested_rate = line_suggested_rate if line_suggested_rate is not None else misread
                 needs_review = True
-        line_total_source = "INVOICE" if prn is not None else arith.get("line_total_source", "UNKNOWN")
+        line_total_source = ("INVOICE" if prn is not None
+                             else "CALCULATED" if "line_total" in derived
+                             else arith.get("line_total_source", "UNKNOWN"))
+        comp_f = {k: float(v) for k, v in components.items()}
+        discount_parts = {k: v for k, v in comp_f.items() if "discount" in k}
         mrp_lookup_schema = MrpLookupSchema(**lookup.to_dict()) if lookup else MrpLookupSchema(
             status="FOUND" if mrp_val else "NOT_FOUND",
             provider="invoice",
@@ -522,7 +596,7 @@ def _extract_invoice_with_new_pipeline(
             CanonicalInvoiceItemSchema(
                 id=it.item_id,
                 product_name=it.normalized_product_name or it.raw_product_name,
-                quantity=q,
+                quantity=_num(received_d),
                 unit=norm_unit,
                 rate=pp,
                 purchase_price=pp,
@@ -559,6 +633,7 @@ def _extract_invoice_with_new_pipeline(
                 validation_issues=line_validation_issues,
                 suggestions=line_suggestions,
                 suggested_rate=line_suggested_rate,
+                suggested_quantity=_num(_dec(qty_details.get("suggested_quantity"))),
                 matched_product_id=matched_prod_id,
                 matched_product_name=matched_prod_name,
                 match_score=match_score,
@@ -580,11 +655,29 @@ def _extract_invoice_with_new_pipeline(
                 is_verified=verified,
                 user_edited=False,
                 original_values=orig,
+                derived_fields=sorted(set(derived)),
+                cgst_amount=comp_f.get("cgst_amount"),
+                sgst_amount=comp_f.get("sgst_amount"),
+                igst_amount=comp_f.get("igst_amount"),
+                scheme_discount=comp_f.get("scheme_discount"),
+                other_discount=comp_f.get("other_discount"),
+                discount_components=discount_parts,
+                net_amount=prn,
+                cases=_num(_dec(qty_details.get("cases"))),
+                units_per_case=_num(_dec(qty_details.get("units_per_case"))),
+                loose_quantity=_num(_dec(qty_details.get("loose_pieces"))),
+                free_quantity=_num(free_d) if (free_d is not None and free_d > 0) else None,
+                paid_quantity=_num(paid_d),
+                quantity_text=qty_details.get("raw_quantity"),
+                is_free_item=is_free_item,
             )
         )
 
-    tot_amt = round(sum(i.line_total for i in items if i.line_total is not None), 2)
-    tot_units = round(sum(i.quantity for i in items if i.quantity is not None), 2)
+    # Totals keep the printed precision (up to 3 decimals); no rounding to paise
+    tot_amt = _num(_keep_printed_precision(sum((_dec(i.line_total) for i in items if i.line_total is not None),
+                                               Decimal("0")))) or 0.0
+    tot_units = _num(_keep_printed_precision(sum((_dec(i.quantity) for i in items if i.quantity is not None),
+                                                 Decimal("0")))) or 0.0
     hdr_detected = len(extracted.metadata.tables_detected) > 0 and extracted.metadata.tables_detected[0].has_table
     t0 = extracted.metadata.tables_detected[0] if hdr_detected else None
 
@@ -611,6 +704,15 @@ def _extract_invoice_with_new_pipeline(
     gstin = meta.get("gstin")
     meta_total = meta.get("invoice_total")
     tot_amt_res = tot_amt if tot_amt > 0 else (meta_total or 0.0)
+
+    # C2: compare the line amounts with the printed grand total (warning only; values never changed)
+    reconciliation = reconcile_invoice_total(text_lines, [_dec(i.line_total) for i in items])
+    for idx_s, text in reconciliation.get("line_suggestions", {}).items():
+        line = items[int(idx_s)]
+        line.suggestions = list(line.suggestions) + [text]
+        line.validation_issues = list(line.validation_issues) + ["Invoice total does not match the line amounts"]
+        line.needs_review = True
+        line.confidence_level = "LOW"
 
     is_pdf = filename.lower().endswith(".pdf") or file_bytes.startswith(b"%PDF")
     is_txt = filename.lower().endswith(".txt") or filename.lower().endswith(".csv")
@@ -644,7 +746,7 @@ def _extract_invoice_with_new_pipeline(
         rows=[],
         detected_sections=["HEADER", "LINE_ITEMS"] if hdr_detected else [],
         warnings=extracted.metadata.warnings,
-        ocr_psm="3",
+        ocr_psm=str(extracted.metadata.custom_properties.get("ocr_psm_used") or "3"),
         ocr_language_data="eng+osd",
         pages_processed=extracted.metadata.page_count,
         mrp_provider="openmrp",
@@ -656,7 +758,16 @@ def _extract_invoice_with_new_pipeline(
         else None
     )
 
-    if items:
+    if items and reconciliation["status"] == "mismatch":
+        # Never rejected for a mismatch: the reviewer checks the lines
+        status_str = "needs_review"
+        reason_str = reconciliation["message"]
+    elif items and any(i.needs_review for i in items):
+        # The invoice is never reported as a success while any of its lines still needs checking
+        flagged = sum(1 for i in items if i.needs_review)
+        status_str = "needs_review"
+        reason_str = f"{flagged} of {len(items)} line{'s' if len(items) != 1 else ''} need{'s' if flagged == 1 else ''} review"
+    elif items:
         valid_items = [i for i in items if i.confidence >= 60 and i.purchase_price is not None and i.quantity is not None]
         if valid_items and (len(valid_items) / len(items)) >= 0.7:
             status_str = "success"
@@ -698,6 +809,9 @@ def _extract_invoice_with_new_pipeline(
         total_review_items=sum(1 for i in items if i.classification_status in ("GROCERY_REVIEW", "UNKNOWN_REVIEW")),
         total_excluded_items=sum(1 for i in items if i.classification_status == "NON_GROCERY"),
         pipeline_stages=extracted.metadata.pipeline_stages_completed,
+        bundle_notes=list(extracted.metadata.custom_properties.get("bundle_headers") or []),
+        printed_total=reconciliation.get("printed_total"),
+        total_reconciliation=reconciliation,
     )
 
 
@@ -720,6 +834,15 @@ def extract_invoice_from_bytes(
 # --------------------------------------------------------------------------
 
 
+def _line_amount_dec(line_amount: Optional[float], quantity: float, rate: float,
+                     paid_quantity: Optional[float] = None) -> Decimal:
+    """Printed line amount as given; otherwise paid units x rate, kept to 3 decimals (no paise rounding)."""
+    if line_amount is not None:
+        return _dec(line_amount)
+    units = paid_quantity if paid_quantity is not None else quantity
+    return _keep_printed_precision(_dec(units) * _dec(rate))
+
+
 def _merge_duplicate_lines(items):
     """Same product twice on one invoice -> one stock movement."""
     merged: List[Any] = []
@@ -731,6 +854,12 @@ def _merge_duplicate_lines(items):
         if existing is None:
             merged.append(item.model_copy())
             continue
+        if (try_normalize_unit(existing.unit) or (existing.unit or "").strip().lower()) != (
+                try_normalize_unit(item.unit) or (item.unit or "").strip().lower()):
+            raise InvoiceValidationError(
+                f"'{item.name}' appears twice with different units ({existing.unit} and {item.unit}); "
+                "correct or remove one line."
+            )
         if abs(existing.purchase_price - item.purchase_price) > 0.005:
             raise InvoiceValidationError(
                 f"'{item.name}' appears twice with different purchase prices "
@@ -738,11 +867,16 @@ def _merge_duplicate_lines(items):
             )
         old_qty = existing.quantity
         existing.quantity = old_qty + item.quantity
+        for attr in ("paid_quantity", "free_quantity"):
+            a, b = getattr(existing, attr), getattr(item, attr)
+            if a is not None or b is not None:
+                setattr(existing, attr, (a if a is not None else (old_qty if attr == "paid_quantity" else 0.0))
+                        + (b if b is not None else (item.quantity if attr == "paid_quantity" else 0.0)))
+        existing.is_free_item = bool(existing.is_free_item and item.is_free_item)
         if existing.line_amount is not None or item.line_amount is not None:
-            existing.line_amount = (
-                (existing.line_amount if existing.line_amount is not None else round(old_qty * existing.purchase_price, 2))
-                + (item.line_amount if item.line_amount is not None else round(item.quantity * item.purchase_price, 2))
-            )
+            existing.line_amount = float(_keep_printed_precision(
+                _line_amount_dec(existing.line_amount, old_qty, existing.purchase_price, existing.paid_quantity)
+                + _line_amount_dec(item.line_amount, item.quantity, item.purchase_price, item.paid_quantity)))
         for attr in ("selling_price", "mrp", "mrp_source"):
             if getattr(existing, attr) is None and getattr(item, attr) is not None:
                 setattr(existing, attr, getattr(item, attr))
@@ -798,6 +932,11 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                 product = db.query(Product).filter(Product.shop_id == shop_id, Product.name.ilike(item.name.strip())).first()
             resolved.append((item, product))
 
+        # Every line needs a registered unit: a missing or unknown unit is sent back for review, never
+        # assumed to be pcs (raised before anything is written)
+        for item, _ in resolved:
+            validate_unit_text(item.unit, what=f"Unit for '{item.name}'")
+
         missing_sp = [item.name for item, product in resolved if product is None and item.selling_price is None]
         if missing_sp:
             raise InvoiceValidationError("Selling price is required for new products: " + ", ".join(missing_sp))
@@ -809,17 +948,24 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
         db.flush()
 
         now = datetime.now(timezone.utc)
-        total_amount = 0.0
+        total_amount = Decimal("0")
         total_units = 0.0
+        promotional_lines: List[Dict[str, Any]] = []
         restocked = created = 0
         saved_products: List[Product] = []
         for item, product in resolved:
-            qty = int(item.quantity)
+            qty = _dec(item.quantity)  # as printed, in the line's unit (fractions only for kg, g, L, ml)
             mrp_source = (item.mrp_source or "MANUAL") if item.mrp is not None else None
+            # A printed free line carries a rate of 0.00: it is recorded on the purchase as printed, but
+            # it never becomes the product's cost (no economic zero cost is assigned to free units)
+            free_line = bool(item.is_free_item)
             if product is not None:
                 product.is_active = True
-                product.current_stock = (product.current_stock or 0) + qty
-                product.purchase_price = item.purchase_price
+                # Converted into the product's stock unit when compatible (250 g into kg -> 0.25); an
+                # incompatible unit is refused. Atomic increase in this transaction (rolled back on error).
+                add_stock(db, product, to_stock_quantity(qty, item.unit, product))
+                if not free_line:
+                    product.purchase_price = item.purchase_price
                 if item.selling_price is not None:
                     product.selling_price = item.selling_price
                 restocked += 1
@@ -828,10 +974,11 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                     shop_id=shop_id,
                     name=item.name.strip(),
                     category=item.category or "Groceries",
-                    purchase_price=item.purchase_price,
+                    # unknown cost (explicit NULL; the column default would otherwise store 0.0)
+                    purchase_price=sa_null() if free_line else item.purchase_price,
                     selling_price=item.selling_price,
-                    current_stock=qty,
-                    unit=item.unit or "pcs",
+                    current_stock=float(qty),
+                    unit=item.unit.strip(),
                     reorder_level=10,
                     is_active=True,
                 )
@@ -846,20 +993,28 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
             db.flush()
             saved_products.append(product)
 
-            line_amount = item.line_amount if item.line_amount is not None else round(qty * item.purchase_price, 2)
-            total_amount += line_amount
-            total_units += qty
+            line_amount_d = _line_amount_dec(item.line_amount, qty, item.purchase_price, item.paid_quantity)
+            line_amount = float(line_amount_d)
+            total_amount += line_amount_d
+            total_units += float(qty)
+            if free_line or (item.free_quantity or 0) > 0:
+                promotional_lines.append({
+                    "name": item.name.strip(), "received_quantity": float(qty),
+                    "paid_quantity": 0.0 if free_line else item.paid_quantity,
+                    "free_quantity": float(qty) if free_line else item.free_quantity,
+                    "is_free_item": free_line, "purchase_price": item.purchase_price, "line_amount": line_amount,
+                })
             db.add(PurchaseItem(
                 purchase_id=db_purchase.id,
                 product_id=product.id,
-                quantity=qty,
+                quantity=float(qty),  # as printed, in the line's unit (matches the printed rate)
                 purchase_price=item.purchase_price,
                 line_amount=line_amount,
                 mrp=item.mrp,
                 mrp_source=mrp_source,
             ))
 
-        db_purchase.total_amount = round(total_amount, 2)
+        db_purchase.total_amount = float(_keep_printed_precision(total_amount))
         db.commit()
         db.refresh(db_purchase)
 
@@ -878,7 +1033,7 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                         user_id=shop.owner_id,
                         shop_id=shop_id,
                         title=f"Invoice Processed{inv_display}",
-                        message=f"Successfully added {total_units} units across {len(items)} items to inventory. Total batch: ₹{db_purchase.total_amount:,.2f}.",
+                        message=f"Successfully added {format_quantity(total_units)} units across {len(items)} items to inventory. Total batch: ₹{_keep_printed_precision(_dec(db_purchase.total_amount)):,}.",
                         category="system",
                         priority="medium",
                         deep_link="/inventory",
@@ -902,6 +1057,7 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
             processing_status=db_purchase.processing_status or "CONFIRMED",
             review_status=db_purchase.review_status or "REVIEWED",
             saved_products=[ProductResponse.model_validate(p) for p in saved_products],
+            promotional_lines=promotional_lines,
         )
     except Exception:
         db.rollback()

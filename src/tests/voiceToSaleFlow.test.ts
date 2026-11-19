@@ -11,6 +11,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseMultilingualVoiceBill } from '../utils/multilingualVoiceParser';
 import { INITIAL_PRODUCTS } from '../data/mockData';
+
+// Loose rice is sold by the kg. The mock catalogue's rice is a 5 kg bag (stocked in bags): "2 kg rice" of a
+// bag product cannot be sold without a pack-size conversion and is refused (Phase 4 unit rules), so the
+// spoken-kg recognition below is checked against a kg-stocked rice.
+const VOICE_CATALOG = INITIAL_PRODUCTS.map((p) =>
+  p.name.startsWith('Basmati Rice') ? { ...p, name: 'Basmati Rice (loose)', unit: 'kg' } : p,
+);
 import { createSale, recordSale } from '../services/salesService';
 import { salesApi } from '../api/sales';
 import type { Product } from '../types';
@@ -74,15 +81,15 @@ describe('Voice-to-Bill to Sales Checkout Flow', () => {
 
     // 1. Spoken input in Telugu: "రెండు కిలోల బియ్యం" (2 kg Rice)
     const teluguSpoken = 'రెండు కిలోల బియ్యం';
-    const voiceResult = parseMultilingualVoiceBill(teluguSpoken, INITIAL_PRODUCTS, 'telugu');
+    const voiceResult = parseMultilingualVoiceBill(teluguSpoken, VOICE_CATALOG, 'telugu');
 
     expect(voiceResult.matched_items.length).toBeGreaterThan(0);
     const matched = voiceResult.matched_items[0];
     expect(matched.quantity).toBe(2);
 
     // 2. Map recognized voice items to Cart items (as done in VoiceBillModal)
-    const matchedProduct = INITIAL_PRODUCTS.find(p => p.id === matched.product_id) ||
-                           INITIAL_PRODUCTS.find(p => p.name.toLowerCase() === matched.name.toLowerCase());
+    const matchedProduct = VOICE_CATALOG.find(p => p.id === matched.product_id) ||
+                           VOICE_CATALOG.find(p => p.name.toLowerCase() === matched.name.toLowerCase());
     expect(matchedProduct).toBeDefined();
 
     const cart = [

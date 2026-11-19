@@ -13,6 +13,13 @@ import {
 import { parseMultilingualVoiceBill } from '../utils/multilingualVoiceParser';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 
+// Loose rice is sold by the kg. The mock catalogue's rice is a 5 kg bag (stocked in bags): "2 kg rice" of a
+// bag product cannot be sold without a pack-size conversion and is refused (Phase 4 unit rules), so the
+// spoken-kg recognition below is checked against a kg-stocked rice.
+const VOICE_CATALOG = INITIAL_PRODUCTS.map((p) =>
+  p.name.startsWith('Basmati Rice') ? { ...p, name: 'Basmati Rice (loose)', unit: 'kg' } : p,
+);
+
 function assert(condition: boolean, message: string) {
   if (!condition) {
     console.error(`❌ ASSERTION FAILED: ${message}`);
@@ -24,7 +31,10 @@ describe('Voice Integration Tests', () => {
   it('runs cross-language speech & display matrix', () => {
     // 1. English -> Telugu
     const enText = '2 kg Rice 120 rupees';
-    const enRes = parseMultilingualVoiceBill(enText, INITIAL_PRODUCTS, 'english');
+    const enRes = parseMultilingualVoiceBill(enText, VOICE_CATALOG, 'english');
+    // The same words against the 5 kg bag product: refused with a reason, never sold as 2 bags
+    const bagRes = parseMultilingualVoiceBill(enText, INITIAL_PRODUCTS, 'english');
+    assert(bagRes.matched_items.length === 0 && bagRes.unmatched_items.length === 1, 'kg of a bag product is not billed');
     assert(enRes.matched_items.length === 1, 'English -> 1 matched item');
     assert(enRes.matched_items[0].total_price === 120, 'English price extracted: 120');
     assert(getLocalizedItemName(enRes.matched_items[0].name, 'telugu') === 'బియ్యం', 'Display in Telugu: బియ్యం');
@@ -33,7 +43,7 @@ describe('Voice Integration Tests', () => {
 
     // 2. Telugu -> Hindi
     const teText = 'రెండు కిలోల బియ్యం నూట ఇరవై రూపాయలు';
-    const teRes = parseMultilingualVoiceBill(teText, INITIAL_PRODUCTS, 'telugu');
+    const teRes = parseMultilingualVoiceBill(teText, VOICE_CATALOG, 'telugu');
     assert(teRes.matched_items.length === 1, 'Telugu -> 1 matched item');
     assert(teRes.matched_items[0].quantity === 2, 'Telugu quantity: 2');
     assert(getLocalizedItemName(teRes.matched_items[0].name, 'hindi') === 'चावल', 'Display in Hindi: चावल');
@@ -42,7 +52,7 @@ describe('Voice Integration Tests', () => {
 
     // 3. Tamil -> English
     const taText = 'இரண்டு கிலோ அரிசி நூற்று இருபது ரூபாய்';
-    const taRes = parseMultilingualVoiceBill(taText, INITIAL_PRODUCTS, 'tamil');
+    const taRes = parseMultilingualVoiceBill(taText, VOICE_CATALOG, 'tamil');
     assert(taRes.matched_items.length === 1, 'Tamil -> 1 matched item');
     assert(taRes.matched_items[0].quantity === 2, 'Tamil quantity: 2');
     assert(taRes.matched_items[0].unit === 'kg', 'Tamil unit: kg');
@@ -51,14 +61,14 @@ describe('Voice Integration Tests', () => {
 
     // 4. Kannada -> English
     const knText = 'ಎರಡು ಕಿಲೋ ಅಕ್ಕಿ ನೂರ ಇಪ್ಪತ್ತು ರೂಪಾಯಿ';
-    const knRes = parseMultilingualVoiceBill(knText, INITIAL_PRODUCTS, 'kannada');
+    const knRes = parseMultilingualVoiceBill(knText, VOICE_CATALOG, 'kannada');
     assert(knRes.matched_items.length === 1, 'Kannada -> 1 matched item');
     assert(knRes.matched_items[0].quantity === 2, 'Kannada quantity: 2');
     assert(knRes.matched_items[0].total_price === 120, 'Kannada price extracted: 120');
 
     // 5. Bengali -> English
     const bnText = 'দুই কেজি চাল একশত কুড়ি টাকা';
-    const bnRes = parseMultilingualVoiceBill(bnText, INITIAL_PRODUCTS, 'bengali');
+    const bnRes = parseMultilingualVoiceBill(bnText, VOICE_CATALOG, 'bengali');
     assert(bnRes.matched_items.length === 1, 'Bengali -> 1 matched item');
     assert(bnRes.matched_items[0].quantity === 2, 'Bengali quantity: 2');
     assert(bnRes.matched_items[0].unit === 'kg', 'Bengali unit: kg');
@@ -66,7 +76,7 @@ describe('Voice Integration Tests', () => {
 
     // 6. Marathi -> Telugu
     const mrText = 'दोन किलो तांदूळ एकशे वीस रुपये';
-    const mrRes = parseMultilingualVoiceBill(mrText, INITIAL_PRODUCTS, 'marathi');
+    const mrRes = parseMultilingualVoiceBill(mrText, VOICE_CATALOG, 'marathi');
     assert(mrRes.matched_items.length === 1, 'Marathi -> 1 matched item');
     assert(mrRes.matched_items[0].quantity === 2, 'Marathi quantity: 2');
     assert(getLocalizedItemName(mrRes.matched_items[0].name, 'telugu') === 'బియ్యం', 'Display in Telugu: బియ్యం');

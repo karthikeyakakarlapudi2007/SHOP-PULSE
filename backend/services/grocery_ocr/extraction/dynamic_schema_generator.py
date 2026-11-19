@@ -29,6 +29,9 @@ from services.grocery_ocr.schemas.table import (
 
 logger = get_logger("extraction.dynamic_schema_generator")
 
+# A printed number (quantity, rate, amount): "12", "1,125.00", "₹62.988", "(10.00)". Not text.
+_NUMERIC_VALUE = re.compile(r"^[₹(]?-?\d[\d,]*(?:\.\d+)?\)?$")
+
 
 class ExpectedDataType(str, Enum):
     """Expected semantic and primitive data type for a column."""
@@ -58,6 +61,8 @@ ROLE_TO_EXPECTED_DATA_TYPE: Dict[ColumnRoleType, ExpectedDataType] = {
     "gst_rate": ExpectedDataType.PERCENTAGE,
     "taxable": ExpectedDataType.DECIMAL_CURRENCY,
     "total": ExpectedDataType.DECIMAL_CURRENCY,
+    "cases": ExpectedDataType.DECIMAL_QUANTITY,
+    "units_per_case": ExpectedDataType.DECIMAL_QUANTITY,
     "unknown": ExpectedDataType.UNKNOWN,
     "ignore": ExpectedDataType.UNKNOWN,
 }
@@ -79,6 +84,8 @@ ROLE_TO_ALIGNMENT: Dict[ColumnRoleType, Literal["left", "center", "right"]] = {
     "gst_rate": "right",
     "taxable": "right",
     "total": "right",
+    "cases": "right",
+    "units_per_case": "right",
     "unknown": "center",
     "ignore": "center",
 }
@@ -205,6 +212,7 @@ class DynamicSchemaGenerator:
                 r for r in table.rows[header_row_idx + 1 :] if not r.is_summary and not r.is_header
             ]
 
+            stacked_header_rows: List[int] = []
             # Calculate document median text height
             all_words = [w for r in table.rows for c in r.cells for w in c.words]
             heights = [w.bbox.height for w in all_words if w.bbox.height > 2.0]
@@ -212,8 +220,23 @@ class DynamicSchemaGenerator:
 
             # 2. Extract header candidates
             header_words = [w for c in header_row.cells for w in c.words]
+            # Multi-line headings ("Base / Rate", "Taxable / Amt", "QTYSOLD NETRATE TOTAMOUNT" under
+            # "SNO PRODUCT NAME"): a header-like row directly above or below joins the header
+            header_lines = [header_words]
             if header_words:
-                candidates = self.header_intelligence.extract_header_candidates([header_words], median_h)
+                for nb_idx in (header_row_idx - 1, header_row_idx + 1):
+                    if not (0 <= nb_idx < len(table.rows)) or table.rows[nb_idx].is_summary:
+                        continue
+                    nb_words = [w for c in table.rows[nb_idx].cells for w in c.words]
+                    if self._is_stacked_header_line(nb_words, header_words, median_h):
+                        if nb_idx < header_row_idx:
+                            header_lines.insert(0, nb_words)
+                        else:
+                            header_lines.append(nb_words)
+                        table.rows[nb_idx].is_header = True
+                        stacked_header_rows.append(nb_idx)
+            if header_words:
+                candidates = self.header_intelligence.extract_header_candidates(header_lines, median_h)
             else:
                 # Direct cell classification if words absent
                 candidates = []
@@ -284,6 +307,63 @@ class DynamicSchemaGenerator:
         except Exception as exc:
             logger.error("Dynamic schema generation failed: %s", exc)
             raise ColumnDetectionError(f"Dynamic schema generation failed: {exc}", details={"error": str(exc)})
+
+    @staticmethod
+    def _split_outside_value_block(split: float, region_words: List[OCRWord], next_hx0: float) -> float:
+        """Never place a column boundary through a stack of values.
+
+        With left-aligned headings over right-aligned numbers, the midpoint between two headings can
+        fall inside the right-aligned values of the left column. When the boundary cuts such a block
+        and the block ends before the next heading starts, the boundary moves into the gap after the
+        block (the values belong to the left column). Any other cut is left as it is; values lying
+        across the boundary are then flagged for review by the table reconstructor.
+
+        Only numeric values form a block: text (product names, units) is never used as evidence."""
+        values = [w for w in region_words if _NUMERIC_VALUE.match(w.text.strip())]
+        blocks: List[List[float]] = []
+        for w in sorted(values, key=lambda w: w.bbox.x0):
+            if blocks and w.bbox.x0 <= blocks[-1][1]:
+                blocks[-1][1] = max(blocks[-1][1], w.bbox.x1)
+            else:
+                blocks.append([w.bbox.x0, w.bbox.x1])
+        for b0, b1 in blocks:
+            if b0 < split < b1:
+                if b1 < next_hx0:
+                    return (b1 + next_hx0) / 2.0
+                break
+        return split
+
+    def _is_stacked_header_line(self, words: List[Any], header_words: List[Any], median_h: float) -> bool:
+        """True when `words` form the second (or first) line of a multi-line table heading.
+
+        Requirements (no layout is hard-coded): the line is vertically adjacent to the header line,
+        holds no data values (money amounts, codes, quantities), and is made of heading words -
+        at least two recognised headings, or one recognised heading plus words that sit directly
+        above / below the header words.
+        """
+        if not words or len(words) > 40:
+            return False
+        texts = [w.text.strip() for w in words if w.text.strip()]
+        if not texts:
+            return False
+        if any(re.search(r"\d[\d,]*\.\d{2,3}\b|\d{3,}", t) for t in texts):
+            return False  # data values: amounts, HSN codes, quantities
+        y0 = min(w.bbox.y0 for w in words)
+        y1 = max(w.bbox.y1 for w in words)
+        hy0 = min(w.bbox.y0 for w in header_words)
+        hy1 = max(w.bbox.y1 for w in header_words)
+        gap = max(y0 - hy1, hy0 - y1)
+        if gap > max(12.0, median_h * 1.8):
+            return False
+        recognised = sum(1 for t in texts if self.header_intelligence.classify_text(t)[0] != "unknown")
+        if recognised >= 2:
+            return True
+        if recognised == 1:
+            overlapping = sum(
+                1 for w in words
+                if any(min(w.bbox.x1, h.bbox.x1) - max(w.bbox.x0, h.bbox.x0) > 0 for h in header_words))
+            return overlapping >= max(1, len(words) // 2)
+        return False
 
     def _find_header_row_index(self, rows: List[TableRow]) -> Optional[int]:
         """Identifies row with the strongest semantic header signals."""
@@ -412,10 +492,8 @@ class DynamicSchemaGenerator:
 
                 col_c1 = (curr_hx0 + curr_hx1) / 2.0
                 col_c2 = (next_hx0 + next_hx1) / 2.0
-                if col_c1 < best_split < col_c2:
-                    split_boundaries.append(best_split)
-                else:
-                    split_boundaries.append((curr_hx1 + next_hx0) / 2.0)
+                split = best_split if col_c1 < best_split < col_c2 else (curr_hx1 + next_hx0) / 2.0
+                split_boundaries.append(self._split_outside_value_block(split, region_words, next_hx0))
             else:
                 split_boundaries.append((curr_hx1 + next_hx0) / 2.0)
 
