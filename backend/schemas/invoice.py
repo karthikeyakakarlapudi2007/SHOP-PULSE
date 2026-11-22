@@ -96,8 +96,11 @@ class CanonicalInvoiceItemSchema(BaseModel):
         None, description="Free units on the line (e.g. '10+1' -> 1; a printed free line -> its whole quantity)")
     paid_quantity: Optional[float] = Field(
         None, description="Paid units when free units are printed ('10+1' -> 10); quantity = paid + free received")
-    quantity_text: Optional[str] = Field(None, description="Quantity exactly as printed (e.g. '0/12', '2+1')")
+    quantity_text: Optional[str] = None
     is_free_item: bool = Field(False, description="Printed free / promotional line (rate 0.00); kept with its quantity")
+    price_basis_quantity: Optional[float] = Field(1.0, description="Reference quantity for which purchase_price is quoted (default 1.0)")
+    price_basis_unit: Optional[str] = Field(None, description="Canonical unit for which purchase_price is quoted (defaults to item unit)")
+    normalized_purchase_price: Optional[float] = Field(None, description="Procurement cost normalized to single inventory/basis unit")
 
 
 class DetectedColumnSchema(BaseModel):
@@ -181,6 +184,11 @@ class InvoiceConfirmItem(BaseModel):
     paid_quantity: Optional[float] = Field(None, ge=0, description="Paid units included in quantity")
     free_quantity: Optional[float] = Field(None, ge=0, description="Free units included in quantity")
     is_free_item: bool = Field(False, description="Printed free line (rate 0.00); never sets the product's cost")
+    price_basis_quantity: Optional[float] = Field(1.0, gt=0, description="Reference quantity for purchase price (default 1.0)")
+    price_basis_unit: Optional[str] = Field(None, description="Canonical unit in which purchase price is quoted")
+    mrp_basis_quantity: Optional[float] = Field(None, gt=0, description="Reference quantity for which invoice line MRP is quoted (defaults to price_basis_quantity if null)")
+    mrp_basis_unit: Optional[str] = Field(None, description="Canonical unit in which invoice line MRP is quoted (defaults to price_basis_unit if null)")
+    update_selling_price: bool = Field(False, description="Explicit confirmation to update retail selling price on existing products")
 
     @model_validator(mode="after")
     def free_units_add_up(self) -> "InvoiceConfirmItem":

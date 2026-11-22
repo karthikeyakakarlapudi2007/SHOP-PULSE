@@ -15,6 +15,11 @@ class ProductBase(BaseModel):
     current_stock: Quantity = Field(0, ge=0, description="Current stock in the product unit (>= 0; up to 3 decimals for kg, g, L, ml)")
     reorder_level: Optional[Quantity] = Field(0, ge=0, description="Reorder level in the product unit (>= 0)")
     unit: Optional[str] = Field("pcs", description="Unit of measurement")
+    price_basis_quantity: Optional[float] = Field(1.0, gt=0, description="Reference quantity for which selling_price is quoted (default 1.0)")
+    price_basis_unit: Optional[str] = Field(None, description="Canonical unit in which selling_price is quoted (e.g. kg, g, pcs)")
+    mrp_basis_quantity: Optional[float] = Field(None, gt=0, description="Reference quantity for which MRP is quoted (defaults to price_basis_quantity if null)")
+    mrp_basis_unit: Optional[str] = Field(None, description="Canonical unit in which MRP is quoted (defaults to price_basis_unit if null)")
+    pricing_status: Optional[str] = Field("NEEDS_REVIEW", description="Pricing lifecycle status: VERIFIED | NEEDS_REVIEW | INCOMPLETE | WHOLESALE_ONLY")
     supplier_id: Optional[UUID] = Field(None, description="Supplier ID")
     sku: Optional[str] = Field(None, description="SKU or Barcode")
     is_active: bool = Field(True, description="Whether product is active in catalog")
@@ -32,9 +37,17 @@ class ProductUpdate(BaseModel):
     current_stock: Optional[Quantity] = Field(None, ge=0)
     reorder_level: Optional[Quantity] = Field(None, ge=0)
     unit: Optional[str] = None
+    price_basis_quantity: Optional[float] = Field(None, gt=0)
+    price_basis_unit: Optional[str] = None
+    mrp_basis_quantity: Optional[float] = Field(None, gt=0)
+    mrp_basis_unit: Optional[str] = None
+    pricing_status: Optional[str] = Field(None, description="Deprecated; cannot be changed via standard product update")
     supplier_id: Optional[UUID] = None
     sku: Optional[str] = None
     is_active: Optional[bool] = None
+
+class ProductVerifyRequest(BaseModel):
+    reason: Optional[str] = Field(None, description="Reason or justification for pricing verification")
 
 class ProductResponse(ProductBase):
     id: UUID

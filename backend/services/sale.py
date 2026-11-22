@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional, List, Tuple
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -6,55 +7,94 @@ from db.models.sale import Sale
 from db.models.sale_item import SaleItem
 from db.models.product import Product
 from schemas.sale import SaleCreate
-from services.money import bill_total, sale_line_amount, to_number
-from services.stock import format_quantity, remove_stock, to_stock_quantity
+from services.money import bill_total, to_number
+from services.pricing_engine import calculate_line_price
+from services.stock import format_quantity, remove_stock, InsufficientStockError
 
 def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
     try:
         validated_items = []
-        line_amounts = []  # Decimal, each rounded to 2 dp half-up (approved sale rule)
+        line_amounts = []
 
+        # ---------------------------------------------------------------------
+        # Phase 1: Pre-validation & Server-Authoritative Pricing Calculation
+        # ---------------------------------------------------------------------
         for item in sale_in.items:
             product = db.query(Product).filter(Product.id == item.product_id).first()
-            if not product or product.shop_id != shop_id:
-                raise ValueError(f"Product {item.product_id} not found or does not belong to your shop.")
-            
-            # Quantity in the product's stock unit (fractions only for kg, g, L, ml; compatible units converted)
-            qty = to_stock_quantity(item.quantity, item.unit, product)
-            if (product.current_stock or 0) < float(qty):  # early, friendly check; the atomic update decides
-                raise ValueError(
+            if not product:
+                raise ValueError(f"Product {item.product_id} not found.")
+            if product.shop_id != shop_id:
+                raise ValueError(f"Product '{product.name}' does not belong to your shop.")
+            if not product.is_active:
+                raise ValueError(f"Product '{product.name}' is inactive and cannot be sold.")
+
+            # Resolve pricing basis and units from catalog
+            req_unit = item.unit if item.unit and str(item.unit).strip() else product.unit
+            basis_qty = product.price_basis_quantity if product.price_basis_quantity is not None else Decimal("1.0")
+            basis_unit = product.price_basis_unit if product.price_basis_unit else product.unit
+            status = product.pricing_status
+
+            # Server-authoritative calculation via Pricing Engine (with statutory MRP ceiling check)
+            pricing_result = calculate_line_price(
+                quantity=item.quantity,
+                requested_unit=req_unit,
+                selling_price=product.selling_price,
+                price_basis_quantity=basis_qty,
+                price_basis_unit=basis_unit,
+                inventory_unit=product.unit,
+                product_conversions=None,
+                client_unit_price=item.unit_price,
+                pricing_status=status,
+                product_name=product.name,
+                mrp=product.mrp,
+                mrp_basis_quantity=getattr(product, "mrp_basis_quantity", None),
+                mrp_basis_unit=getattr(product, "mrp_basis_unit", None),
+            )
+
+            # Friendly pre-check of stock availability (atomic update enforces it during write)
+            stock_qty_float = float(pricing_result.stock_deduction_quantity)
+            if (product.current_stock or 0) < stock_qty_float:
+                raise InsufficientStockError(
                     f"Insufficient stock for product '{product.name}'. "
-                    f"Available: {format_quantity(product.current_stock)}, requested: {format_quantity(qty)}"
+                    f"Available: {format_quantity(product.current_stock)}, "
+                    f"requested: {format_quantity(pricing_result.stock_deduction_quantity)}"
                 )
 
-            unit_price = item.unit_price if item.unit_price is not None else product.selling_price
-            # Line = quantity x unit price per stock unit (3-dp prices kept), rounded once; bill = sum of lines
-            line_amounts.append(sale_line_amount(qty, unit_price))
-            validated_items.append((product, qty, unit_price))
+            line_amounts.append(pricing_result.line_total)
+            validated_items.append((product, pricing_result))
 
-        # Create Sale Header
+        # ---------------------------------------------------------------------
+        # Phase 2: Create Sale Header
+        # ---------------------------------------------------------------------
+        total_amt = bill_total(line_amounts)
         db_sale = Sale(
             shop_id=shop_id,
-            total_amount=to_number(bill_total(line_amounts)),
+            total_amount=to_number(total_amt),
             payment_method=sale_in.payment_method,
         )
         db.add(db_sale)
         db.flush()  # Obtain db_sale.id
 
-        # Create Sale Items & Deduct Inventory
-        for product, qty, unit_price in validated_items:
+        # ---------------------------------------------------------------------
+        # Phase 3: Create Sale Items & Deduct Inventory Atomically
+        # ---------------------------------------------------------------------
+        for product, result in validated_items:
             db_item = SaleItem(
                 sale_id=db_sale.id,
                 product_id=product.id,
-                quantity=float(qty),
-                unit_price=unit_price,
+                quantity=float(result.stock_deduction_quantity),
+                unit_price=to_number(result.effective_unit_price),
             )
             db.add(db_item)
 
-            # Atomic, conditional deduction in the same transaction: concurrent sales cannot overwrite each
-            # other or drive stock negative (InsufficientStockError rolls the whole sale back)
-            remove_stock(db, product, qty)
+            # Atomic conditional stock deduction:
+            # UPDATE products SET current_stock = ROUND(current_stock - q, 3) WHERE id = :id AND current_stock >= q
+            # Concurrent sales cannot oversell; rowcount != 1 raises InsufficientStockError
+            remove_stock(db, product, result.stock_deduction_quantity)
 
+        # ---------------------------------------------------------------------
+        # Phase 4: Commit Entire Transaction Once
+        # ---------------------------------------------------------------------
         db.commit()
         db.refresh(db_sale)
 
@@ -68,7 +108,7 @@ def create_sale(db: Session, sale_in: SaleCreate, shop_id: UUID) -> Sale:
             shop = db.query(Shop).filter(Shop.id == shop_id).first()
             if shop and shop.owner_id:
                 today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                for product, _, _ in validated_items:
+                for product, _ in validated_items:
                     reorder = product.reorder_level or 0
                     if product.current_stock <= 0:
                         create_notification(

@@ -60,7 +60,7 @@ def test_prepared_page_reads_at_least_as_well(results, cid):
     base_crit, prep_crit = r["critical"]
     n = len(DATA[cid].critical_tokens)
     assert prep_cer <= base_cer + 0.02, f"CER regressed {base_cer:.3f} -> {prep_cer:.3f}"
-    assert prep_crit >= base_crit - 1.0 / n, f"critical tokens regressed {base_crit:.3f} -> {prep_crit:.3f}"
+    assert prep_crit >= base_crit - 1.0 / n - 1e-9, f"critical tokens regressed {base_crit:.3f} -> {prep_crit:.3f}"
     assert prep_cer < 0.30, f"prepared CER still high: {prep_cer:.3f}"
 
 

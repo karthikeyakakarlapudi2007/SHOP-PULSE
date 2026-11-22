@@ -25,7 +25,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 def get_user_shop_or_raise(db: Session, user: User):
-    shop = shop_service.get_shop_by_owner(db, owner_id=user.id)
+    shop = deps.get_user_accessible_shop(db, user)
     if not shop:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -86,8 +86,11 @@ def confirm_invoice(
         return invoice_service.confirm_and_update_stock(
             db=db,
             shop_id=user_shop.id,
-            confirm_in=confirm_in
+            confirm_in=confirm_in,
+            current_user_id=current_user.id,
         )
+    except invoice_service.InvoicePermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
     except invoice_service.InvoiceConflictError as ce:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ce))
     except (ValueError, GroceryOCRError) as ve:

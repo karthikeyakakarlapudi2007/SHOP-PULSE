@@ -17,3 +17,4 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     shops = relationship("Shop", back_populates="owner")
+    shop_memberships = relationship("ShopMember", back_populates="user", cascade="all, delete-orphan")

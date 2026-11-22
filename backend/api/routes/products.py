@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
@@ -11,7 +11,12 @@ from schemas.product import (
     ProductResponse,
     PaginatedProductResponse,
     ProductLookupResponse,
+    ProductVerifyRequest,
 )
+from schemas.pricing_audit import PricingAuditLogResponse
+from db.models.shop_member import ShopRole
+from services import shop_member as shop_member_service
+from services import pricing_audit as pricing_audit_service
 from services import shop as shop_service
 from services import product as product_service
 from services import product_lookup as product_lookup_service
@@ -19,7 +24,7 @@ from services import product_lookup as product_lookup_service
 router = APIRouter()
 
 def get_user_shop_or_raise(db: Session, user: User):
-    shop = shop_service.get_shop_by_owner(db, owner_id=user.id)
+    shop = deps.get_user_accessible_shop(db, user)
     if not shop:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -40,7 +45,12 @@ def create_product(
     """
     user_shop = get_user_shop_or_raise(db, current_user)
     try:
-        return product_service.create_product(db, product_in=product_in, shop_id=user_shop.id)
+        return product_service.create_product(
+            db,
+            product_in=product_in,
+            shop_id=user_shop.id,
+            acting_user_id=current_user.id,
+        )
     except ValueError as e:  # unit / stock validation (e.g. 2.5 pcs, unknown unit)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -156,7 +166,12 @@ def update_product(
             detail="Not authorized to update this product.",
         )
     try:
-        return product_service.update_product(db, db_product=product, product_in=product_in)
+        return product_service.update_product(
+            db,
+            db_product=product,
+            product_in=product_in,
+            acting_user_id=current_user.id,
+        )
     except ValueError as e:  # unit / stock validation
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -184,3 +199,74 @@ def delete_product(
         )
     product_service.delete_product(db, db_product=product)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{id}/verify", response_model=ProductResponse)
+def verify_product(
+    *,
+    db: Session = Depends(deps.get_db),
+    id: UUID,
+    verify_in: Optional[ProductVerifyRequest] = None,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Verify product pricing metadata. Strictly restricted to Manager or Owner roles.
+    """
+    product = product_service.get_product_by_id(db, product_id=id)
+    if not product or not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found.",
+        )
+
+    # Check shop membership and authorization
+    member = shop_member_service.get_shop_member(db, shop_id=product.shop_id, user_id=current_user.id)
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access products of this shop.",
+        )
+    if member.role not in [ShopRole.OWNER.value, ShopRole.MANAGER.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Managers and Owners are authorized to verify product pricing.",
+        )
+
+    try:
+        reason = verify_in.reason if verify_in else None
+        return product_service.verify_product(db, product=product, acting_user_id=current_user.id, reason=reason)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+
+
+@router.get("/{id}/audit-trail", response_model=List[PricingAuditLogResponse])
+def get_product_audit_trail(
+    *,
+    db: Session = Depends(deps.get_db),
+    id: UUID,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Get audit trail for a product. Strictly restricted to Managers and Owners.
+    """
+    product = product_service.get_product_by_id(db, product_id=id)
+    if not product or not product.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found.",
+        )
+
+    member = shop_member_service.get_shop_member(db, shop_id=product.shop_id, user_id=current_user.id)
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access products of this shop.",
+        )
+    if member.role not in [ShopRole.OWNER.value, ShopRole.MANAGER.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Managers and Owners are authorized to review pricing audit history.",
+        )
+
+    return pricing_audit_service.get_product_audit_logs(db, shop_id=product.shop_id, product_id=product.id)
+

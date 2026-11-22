@@ -11,6 +11,12 @@ class VoiceProductCandidate(BaseModel):
     unit: str
     category: Optional[str] = None
     sku: Optional[str] = None
+    price_basis_quantity: Optional[Union[float, int]] = Field(1.0, description="Reference quantity for selling price")
+    price_basis_unit: Optional[str] = Field(None, description="Reference unit for selling price")
+    pricing_status: Optional[str] = Field("VERIFIED", description="Pricing status: VERIFIED, NEEDS_REVIEW, INCOMPLETE, WHOLESALE_ONLY")
+    mrp: Optional[float] = Field(None, description="Statutory Maximum Retail Price")
+    mrp_basis_quantity: Optional[Union[float, int]] = Field(None, description="Reference quantity for MRP")
+    mrp_basis_unit: Optional[str] = Field(None, description="Reference unit for MRP")
 
 class MatchedVoiceItem(BaseModel):
     product_id: str
@@ -29,6 +35,9 @@ class MatchedVoiceItem(BaseModel):
     price_source: str = "catalogue"
     # What was said when it differs from the stock quantity/unit (e.g. "500 g" sold as 0.5 kg)
     spoken_quantity: Optional[str] = None
+    pricing_status: Optional[str] = Field(None, description="Product pricing verification status")
+    mrp: Optional[float] = Field(None, description="Maximum Retail Price")
+    catalog_line_total: Optional[float] = Field(None, description="Standard catalog line total for comparison if spoken price was agreed")
 
 class AmbiguousVoiceItem(BaseModel):
     queried_name: str

@@ -23,3 +23,4 @@ class Shop(Base):
     products = relationship("Product", back_populates="shop")
     sales = relationship("Sale", back_populates="shop")
     purchases = relationship("Purchase", back_populates="shop")
+    members = relationship("ShopMember", back_populates="shop", cascade="all, delete-orphan")

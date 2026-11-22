@@ -35,7 +35,10 @@ def _assert_isolated_database():
     from core.db_safety import DEFAULT_DB_PATH
     from db.session import engine
 
-    assert str(engine.url) == _TEST_DB_URL, f"application engine is {engine.url}, expected {_TEST_DB_URL}"
+    import urllib.parse
+    actual_url = urllib.parse.unquote(str(engine.url)).replace("\\", "/")
+    expected_url = urllib.parse.unquote(_TEST_DB_URL).replace("\\", "/")
+    assert actual_url.lower() == expected_url.lower(), f"application engine is {engine.url}, expected {_TEST_DB_URL}"
     assert str(DEFAULT_DB_PATH) not in str(engine.url)
     yield
 

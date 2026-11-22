@@ -606,9 +606,39 @@ def _render_generic_gst_invoice(header_align: str = "center"):
     import numpy as np
     from PIL import Image, ImageDraw, ImageFont
 
-    fonts = [f for f in glob.glob("/usr/share/fonts/**/*Mono*.ttf", recursive=True)
-             if "Bold" not in f and "Oblique" not in f and "Italic" not in f]
-    font = ImageFont.truetype(sorted(fonts)[0], 30)
+    font = None
+    candidate_names = [
+        "cour.ttf", "consola.ttf", "lucon.ttf",
+        "DejaVuSansMono.ttf", "LiberationMono-Regular.ttf", "FreeMono.ttf",
+        "Menlo.ttc", "Courier.dfont",
+    ]
+    for name in candidate_names:
+        try:
+            font = ImageFont.truetype(name, 30)
+            break
+        except Exception:
+            continue
+    if font is None:
+        import os
+        font_dirs = [
+            "/usr/share/fonts", "/usr/local/share/fonts",
+            os.path.expanduser("~/.fonts"),
+            os.environ.get("WINDIR", r"C:\Windows") + r"\Fonts",
+        ]
+        for fdir in font_dirs:
+            matches = [f for f in glob.glob(f"{fdir}/**/*Mono*.ttf", recursive=True)
+                       if "Bold" not in f and "Oblique" not in f and "Italic" not in f]
+            if matches:
+                try:
+                    font = ImageFont.truetype(sorted(matches)[0], 30)
+                    break
+                except Exception:
+                    pass
+    if font is None:
+        try:
+            font = ImageFont.load_default(size=30)
+        except TypeError:
+            font = ImageFont.load_default()
     hdr = [("Sl",), ("HSN",), ("Product Name",), ("UPC",), ("MRP",), ("Cs",), ("Pcs",), ("Base", "Rate"),
            ("Sch", "Disc"), ("RS Disc",), ("Taxable", "Amt"), ("GST", "%"), ("CGST", "Amt"), ("SGST", "Amt"),
            ("Net Amt",)]

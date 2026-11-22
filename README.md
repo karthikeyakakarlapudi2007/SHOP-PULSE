@@ -110,19 +110,44 @@ backend\.venv\Scripts\pip install -r backend/requirements.txt
 
 ### 3. Running Locally
 ```bash
-# Start Vite development server (auto-proxies to backend)
+# Terminal 1: Start FastAPI backend server
+cd backend
+.venv\Scripts\uvicorn main:app --reload --port 8000
+
+# Terminal 2: Start Vite frontend development server
 npm run dev
 ```
 Open [http://localhost:5173/](http://localhost:5173/) in your browser.
 
 ### 4. Running Verification Test Suites
 ```bash
-# Run Frontend Vitest Suite (43 tests)
+# Run Frontend Vitest Suite (134 tests across 17 suites)
 npm test
 
-# Run Backend Pytest Suite (396 tests)
+# Run Backend Pytest Suite (915 collected: 906 passed, 9 skipped)
 & "backend\.venv\Scripts\python.exe" -m pytest -c backend/pytest.ini backend/tests
+
+# Check TypeScript Projects
+npx tsc -b
+npx tsc --noEmit -p tests/tsconfig.json
+
+# Check Python Types with Pyrefly
+& "backend\.venv\Scripts\pyrefly.exe" check --config pyrefly.toml backend/db/session.py backend/main.py scripts/debug/verify_voice_sales_live.py
 ```
+
+---
+
+## 🗄️ Database Architecture & Safety
+
+- **Engine & Storage:** SQLite3 managed via SQLAlchemy ORM (`backend/shoppulse.db`).
+- **Core Entities:**
+  - `products`: Product master with canonical units, category taxonomy, cost/selling prices, and real-time inventory balances.
+  - `sales` & `sale_items`: POS checkout records with half-up banker's Decimal precision and atomic stock deductions.
+  - `invoices` & `invoice_items`: Extracted wholesale invoices with HSN, tax rate, rate/MRP parsing, and idempotent stock updates.
+  - `purchases`: Supplier procurement bills and payment ledger tracking.
+  - `users` & `shops`: Authentication credentials and multi-tenant shop association.
+  - `mrp`: Cached product barcode-to-MRP mappings for instant invoice auditing.
+- **Test Isolation Safeguards:** When running tests (`SHOPPULSE_TEST_MODE=1`), the session layer (`backend/core/db_safety.py`) strictly enforces that all test operations run in transient temporary directories (`%TEMP%/shoppulse-pytest-*`). The live database is protected from test mutation.
 
 ---
 

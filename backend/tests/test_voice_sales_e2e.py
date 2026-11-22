@@ -60,7 +60,8 @@ def setup_shop_with_catalog(email: str = "voiceowner@example.com"):
         "selling_price": 28.0,
         "purchase_price": 22.0,
         "current_stock": 50,
-        "unit": "pkt"
+        "unit": "pkt",
+        "pricing_status": "VERIFIED"
     }, headers=headers).json()
 
     # Product B: Parle-G (Stock: 100, Price: 10.0)
@@ -70,7 +71,8 @@ def setup_shop_with_catalog(email: str = "voiceowner@example.com"):
         "selling_price": 10.0,
         "purchase_price": 8.0,
         "current_stock": 100,
-        "unit": "pack"
+        "unit": "pack",
+        "pricing_status": "VERIFIED"
     }, headers=headers).json()
 
     # Product C: Sona Masoori Rice (Stock: 30, Price: 65.0)
@@ -80,7 +82,8 @@ def setup_shop_with_catalog(email: str = "voiceowner@example.com"):
         "selling_price": 65.0,
         "purchase_price": 50.0,
         "current_stock": 30,
-        "unit": "kg"
+        "unit": "kg",
+        "pricing_status": "VERIFIED"
     }, headers=headers).json()
 
     return {

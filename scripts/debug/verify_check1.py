@@ -32,10 +32,9 @@ def check_1_database():
     assert count > 0, "Inventory records were lost!"
 
     # Now verify via SQLAlchemy session exactly as used by invoice extraction
-    import importlib
-    SessionLocal = importlib.import_module("db.session").SessionLocal
-    Product = importlib.import_module("db.models.product").Product
-    Shop = importlib.import_module("db.models.shop").Shop
+    from db.session import SessionLocal
+    from db.models.product import Product
+    from db.models.shop import Shop
     
     db = SessionLocal()
     try:

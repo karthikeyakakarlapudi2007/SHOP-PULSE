@@ -9,6 +9,10 @@ from db.models.sale_item import SaleItem
 from db.models.purchase_item import PurchaseItem
 from schemas.product import ProductCreate, ProductUpdate
 from services.stock import validate_stock_value, validate_unit_text
+from services.unit_registry import normalize_unit, are_units_compatible
+from services.pricing_engine import evaluate_mrp_ceiling, PricingEngineError
+from services.pricing_audit import create_pricing_audit_log
+from services.shop_member import get_shop_member, ShopRole
 
 
 def _check_unit_and_stock(unit, current_stock, reorder_level) -> None:
@@ -21,8 +25,71 @@ def _check_unit_and_stock(unit, current_stock, reorder_level) -> None:
         validate_stock_value(reorder_level, unit, label="Reorder level")
 
 
-def create_product(db: Session, product_in: ProductCreate, shop_id: UUID) -> Product:
+def create_product(
+    db: Session,
+    product_in: ProductCreate,
+    shop_id: UUID,
+    acting_user_id: Optional[UUID] = None,
+) -> Product:
     _check_unit_and_stock(product_in.unit, product_in.current_stock, product_in.reorder_level)
+
+    basis_qty = product_in.price_basis_quantity if product_in.price_basis_quantity is not None else 1.0
+    basis_unit = product_in.price_basis_unit or product_in.unit
+    mrp_basis_qty = product_in.mrp_basis_quantity or basis_qty
+    mrp_basis_unit = product_in.mrp_basis_unit or basis_unit
+
+    # Universal MRP validation on product creation
+    if product_in.mrp is not None and float(product_in.mrp) > 0 and product_in.selling_price is not None and float(product_in.selling_price) > 0:
+        try:
+            mrp_eval = evaluate_mrp_ceiling(
+                selling_price=product_in.selling_price,
+                mrp=product_in.mrp,
+                price_basis_quantity=basis_qty,
+                price_basis_unit=basis_unit,
+                mrp_basis_quantity=mrp_basis_qty,
+                mrp_basis_unit=mrp_basis_unit,
+                product_name=product_in.name,
+            )
+            if mrp_eval.is_exceeded:
+                raise ValueError(
+                    f"Selling price ₹{product_in.selling_price} exceeds statutory MRP ceiling ₹{product_in.mrp} for '{product_in.name}'."
+                )
+        except PricingEngineError as pe:
+            raise ValueError(str(pe)) from pe
+
+    # Determine initial pricing status: defaults to NEEDS_REVIEW.
+    # An authorized manager or owner may initialize as VERIFIED only if all pricing metadata is complete and valid.
+    init_status = "NEEDS_REVIEW"
+    if product_in.pricing_status == "VERIFIED" and acting_user_id:
+        member = get_shop_member(db, shop_id, acting_user_id)
+        if member and member.role in [ShopRole.OWNER.value, ShopRole.MANAGER.value]:
+            stock_unit = product_in.unit
+            sp = product_in.selling_price
+            mrp = product_in.mrp
+
+            try:
+                norm_basis = normalize_unit(basis_unit) if basis_unit else None
+                norm_stock = normalize_unit(stock_unit) if stock_unit else None
+                units_ok = bool(norm_basis and norm_stock and are_units_compatible(norm_stock, norm_basis))
+                price_ok = sp is not None and float(sp) > 0
+                mrp_ok = True
+                if mrp is not None and float(mrp) > 0 and price_ok:
+                    mrp_eval = evaluate_mrp_ceiling(
+                        selling_price=sp,
+                        mrp=mrp,
+                        price_basis_quantity=basis_qty,
+                        price_basis_unit=basis_unit,
+                        mrp_basis_quantity=mrp_basis_qty,
+                        mrp_basis_unit=mrp_basis_unit,
+                        product_name=product_in.name,
+                    )
+                    mrp_ok = not mrp_eval.is_exceeded
+
+                if units_ok and price_ok and mrp_ok and float(basis_qty) > 0:
+                    init_status = "VERIFIED"
+            except Exception:
+                init_status = "NEEDS_REVIEW"
+
     # If a previously deleted/archived product with the same name exists, reactivate it
     existing_inactive = db.query(Product).filter(
         Product.shop_id == shop_id,
@@ -44,6 +111,16 @@ def create_product(db: Session, product_in: ProductCreate, shop_id: UUID) -> Pro
             existing_inactive.mrp = product_in.mrp
             existing_inactive.mrp_source = product_in.mrp_source or "MANUAL"
             existing_inactive.mrp_updated_at = datetime.now(timezone.utc)
+        if product_in.price_basis_quantity is not None:
+            existing_inactive.price_basis_quantity = product_in.price_basis_quantity
+        if product_in.price_basis_unit is not None:
+            existing_inactive.price_basis_unit = product_in.price_basis_unit
+        if product_in.mrp_basis_quantity is not None:
+            existing_inactive.mrp_basis_quantity = product_in.mrp_basis_quantity
+        if product_in.mrp_basis_unit is not None:
+            existing_inactive.mrp_basis_unit = product_in.mrp_basis_unit
+        # Always require review when reactivating an inactive product
+        existing_inactive.pricing_status = "NEEDS_REVIEW"
         db.add(existing_inactive)
         db.commit()
         db.refresh(existing_inactive)
@@ -57,6 +134,11 @@ def create_product(db: Session, product_in: ProductCreate, shop_id: UUID) -> Pro
         mrp=product_in.mrp,
         mrp_source=(product_in.mrp_source or "MANUAL") if product_in.mrp is not None else None,
         mrp_updated_at=datetime.now(timezone.utc) if product_in.mrp is not None else None,
+        price_basis_quantity=basis_qty,
+        price_basis_unit=basis_unit,
+        mrp_basis_quantity=mrp_basis_qty,
+        mrp_basis_unit=mrp_basis_unit,
+        pricing_status=init_status,
         current_stock=product_in.current_stock,
         reorder_level=product_in.reorder_level,
         unit=product_in.unit,
@@ -68,6 +150,24 @@ def create_product(db: Session, product_in: ProductCreate, shop_id: UUID) -> Pro
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
+
+    if init_status == "VERIFIED" and acting_user_id:
+        create_pricing_audit_log(
+            db=db,
+            shop_id=shop_id,
+            acting_user_id=acting_user_id,
+            action_type="VERIFY_PRICING",
+            product_id=db_product.id,
+            previous_status="NEEDS_REVIEW",
+            new_status="VERIFIED",
+            previous_selling_price=db_product.selling_price,
+            new_selling_price=db_product.selling_price,
+            previous_mrp=db_product.mrp,
+            new_mrp=db_product.mrp,
+            reason="Initial manager verification on product creation",
+        )
+        db.commit()
+
     return db_product
 
 def get_product_by_id(db: Session, product_id: UUID) -> Optional[Product]:
@@ -97,8 +197,15 @@ def get_products_by_shop(
     items = query.order_by(Product.created_at.desc()).offset(skip).limit(limit).all()
     return items, total
 
-def update_product(db: Session, db_product: Product, product_in: ProductUpdate) -> Product:
+def update_product(
+    db: Session,
+    db_product: Product,
+    product_in: ProductUpdate,
+    acting_user_id: Optional[UUID] = None,
+) -> Product:
     update_data = product_in.model_dump(exclude_unset=True)
+    # Never allow generic product updates to modify pricing_status directly
+    update_data.pop("pricing_status", None)
     if {"unit", "current_stock", "reorder_level"} & set(update_data):
         # Check the resulting unit, stock and reorder level together (a unit change must suit the stock)
         final_unit = update_data["unit"] if "unit" in update_data else db_product.unit
@@ -110,6 +217,42 @@ def update_product(db: Session, db_product: Product, product_in: ProductUpdate) 
         reorder = update_data.get("reorder_level", db_product.reorder_level)
         if reorder is not None and ("reorder_level" in update_data or "unit" in update_data):
             validate_stock_value(reorder, final_unit, label="Reorder level")
+
+    final_sp = update_data.get("selling_price", db_product.selling_price)
+    final_sp_basis_qty = update_data.get("price_basis_quantity", db_product.price_basis_quantity) or 1.0
+    final_sp_basis_unit = update_data.get("price_basis_unit", db_product.price_basis_unit) or db_product.unit
+    final_mrp = update_data.get("mrp", db_product.mrp)
+    final_mrp_basis_qty = update_data.get("mrp_basis_quantity", getattr(db_product, "mrp_basis_quantity", None)) or final_sp_basis_qty
+    final_mrp_basis_unit = update_data.get("mrp_basis_unit", getattr(db_product, "mrp_basis_unit", None)) or final_sp_basis_unit
+
+    # Universal MRP validation on product update
+    if final_mrp is not None and float(final_mrp) > 0 and final_sp is not None and float(final_sp) > 0:
+        try:
+            mrp_eval = evaluate_mrp_ceiling(
+                selling_price=final_sp,
+                mrp=final_mrp,
+                price_basis_quantity=final_sp_basis_qty,
+                price_basis_unit=final_sp_basis_unit,
+                mrp_basis_quantity=final_mrp_basis_qty,
+                mrp_basis_unit=final_mrp_basis_unit,
+                product_name=db_product.name,
+            )
+            if mrp_eval.is_exceeded:
+                if "mrp" in update_data and update_data["mrp"] != db_product.mrp and final_sp == db_product.selling_price:
+                    raise ValueError(
+                        f"MRP reduction to ₹{final_mrp} is below existing selling price ₹{final_sp} for '{db_product.name}'. Selling price must be reduced first or updated."
+                    )
+                raise ValueError(
+                    f"Selling price ₹{final_sp} exceeds statutory MRP ceiling ₹{final_mrp} for '{db_product.name}'."
+                )
+        except PricingEngineError as pe:
+            raise ValueError(str(pe)) from pe
+
+    old_sp = db_product.selling_price
+    old_mrp = db_product.mrp
+    sp_changed = ("selling_price" in update_data and update_data["selling_price"] != old_sp)
+    mrp_changed = ("mrp" in update_data and update_data["mrp"] != old_mrp)
+
     mrp_source = update_data.pop("mrp_source", None)
     if "mrp" in update_data and update_data["mrp"] != db_product.mrp:
         # Track where the MRP came from whenever it changes
@@ -119,9 +262,111 @@ def update_product(db: Session, db_product: Product, product_in: ProductUpdate) 
         setattr(db_product, field, value)
         
     db.add(db_product)
+
+    # Server-side audit log for price or MRP modifications
+    if (sp_changed or mrp_changed) and acting_user_id:
+        action = "SELLING_PRICE_OVERRIDE" if sp_changed else "MRP_UPDATE"
+        create_pricing_audit_log(
+            db=db,
+            shop_id=db_product.shop_id,
+            acting_user_id=acting_user_id,
+            action_type=action,
+            product_id=db_product.id,
+            previous_status=db_product.pricing_status,
+            new_status=db_product.pricing_status,
+            previous_selling_price=old_sp,
+            new_selling_price=final_sp,
+            previous_mrp=old_mrp,
+            new_mrp=final_mrp,
+            reason="Product update",
+        )
+
     db.commit()
     db.refresh(db_product)
     return db_product
+
+def verify_product(
+    db: Session,
+    product: Product,
+    acting_user_id: UUID,
+    reason: Optional[str] = None
+) -> Product:
+    """Verify product pricing metadata by an authorized manager or owner.
+    
+    Validates price basis, units, selling price, and statutory MRP ceiling.
+    Atomically updates pricing_status to VERIFIED and records an immutable audit log.
+    """
+    if product.pricing_status == "VERIFIED":
+        return product
+
+    if product.price_basis_quantity is None or float(product.price_basis_quantity) <= 0:
+        raise ValueError(f"Product '{product.name}' has invalid price basis quantity: {product.price_basis_quantity}. Must be > 0.")
+
+    if not product.price_basis_unit or not product.price_basis_unit.strip():
+        raise ValueError(f"Product '{product.name}' lacks a price basis unit.")
+
+    if not product.unit or not product.unit.strip():
+        raise ValueError(f"Product '{product.name}' lacks an inventory stock unit.")
+
+    try:
+        norm_basis_unit = normalize_unit(product.price_basis_unit)
+    except Exception as e:
+        raise ValueError(f"Product '{product.name}' has invalid price basis unit '{product.price_basis_unit}': {e}")
+
+    try:
+        norm_stock_unit = normalize_unit(product.unit)
+    except Exception as e:
+        raise ValueError(f"Product '{product.name}' has invalid stock unit '{product.unit}': {e}")
+
+    if not are_units_compatible(norm_stock_unit, norm_basis_unit):
+        raise ValueError(
+            f"Product stock unit '{product.unit}' and pricing basis unit '{product.price_basis_unit}' are incompatible."
+        )
+
+    if product.selling_price is None or float(product.selling_price) <= 0:
+        raise ValueError(f"Product '{product.name}' selling price must be greater than zero.")
+
+    if product.mrp is not None and float(product.mrp) > 0:
+        mrp_basis_qty = getattr(product, "mrp_basis_quantity", None) or product.price_basis_quantity
+        mrp_basis_u = getattr(product, "mrp_basis_unit", None) or product.price_basis_unit
+        mrp_eval = evaluate_mrp_ceiling(
+            selling_price=product.selling_price,
+            mrp=product.mrp,
+            price_basis_quantity=product.price_basis_quantity,
+            price_basis_unit=product.price_basis_unit,
+            mrp_basis_quantity=mrp_basis_qty,
+            mrp_basis_unit=mrp_basis_u,
+            product_name=product.name
+        )
+        if mrp_eval.is_exceeded:
+            raise ValueError(
+                f"Selling price ₹{product.selling_price} exceeds statutory MRP ceiling ₹{product.mrp} for '{product.name}'."
+            )
+
+    prev_status = product.pricing_status
+    product.pricing_status = "VERIFIED"
+    product.updated_at = datetime.now(timezone.utc)
+    db.add(product)
+
+    # Server-side immutable audit log
+    create_pricing_audit_log(
+        db=db,
+        shop_id=product.shop_id,
+        acting_user_id=acting_user_id,
+        action_type="VERIFY_PRICING",
+        product_id=product.id,
+        previous_status=prev_status,
+        new_status="VERIFIED",
+        previous_selling_price=product.selling_price,
+        new_selling_price=product.selling_price,
+        previous_mrp=product.mrp,
+        new_mrp=product.mrp,
+        reason=reason or "Manager product verification"
+    )
+
+    db.commit()
+    db.refresh(product)
+    return product
 
 def delete_product(db: Session, db_product: Product) -> None:
     # Check if this product has historical financial records (sales or purchases)

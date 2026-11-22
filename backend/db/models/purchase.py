@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Float, DateTime, ForeignKey, String
+from sqlalchemy import Column, Float, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -8,6 +8,9 @@ from db.session import Base
 
 class Purchase(Base):
     __tablename__ = "purchases"
+    __table_args__ = (
+        UniqueConstraint("shop_id", "supplier_id", "invoice_number", name="uq_purchases_shop_supplier_invoice"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False, index=True)

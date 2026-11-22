@@ -7,6 +7,8 @@ from .sale_item import SaleItem
 from .purchase import Purchase
 from .purchase_item import PurchaseItem
 from .notification import Notification, NotificationPreference, DeviceToken
+from .shop_member import ShopMember, ShopRole
+from .pricing_audit_log import PricingAuditLog
 
 __all__ = [
     "User",
@@ -20,5 +22,7 @@ __all__ = [
     "Notification",
     "NotificationPreference",
     "DeviceToken",
+    "ShopMember",
+    "ShopRole",
+    "PricingAuditLog",
 ]
-

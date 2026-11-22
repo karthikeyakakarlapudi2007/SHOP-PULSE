@@ -76,6 +76,7 @@ def test_this_run_uses_the_isolated_database():
 
     assert os.environ["SHOPPULSE_TEST_MODE"] == "1"
     assert engine.url.get_backend_name() == "sqlite"
+    assert engine.url.database is not None
     assert Path(engine.url.database).resolve() != DEFAULT_DB_PATH
     assert BACKEND_DIR not in Path(engine.url.database).resolve().parents
 
@@ -91,6 +92,8 @@ def _fingerprint(path: Path):
 
 def _import_app(env_overrides, cwd=BACKEND_DIR):
     env = {k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "SHOPPULSE_TEST_MODE")}
+    if "DATABASE_URL" not in env_overrides:
+        env["DATABASE_URL"] = ""
     env.update(env_overrides)
     return subprocess.run([sys.executable, "-c", "import main; from db.session import engine; print(engine.url)"],
                           cwd=cwd, env=env, capture_output=True, text=True, timeout=120)
@@ -116,7 +119,9 @@ def test_app_starts_on_a_test_database_and_creates_its_schema_there(tmp_path):
     db = tmp_path / "isolated.db"
     proc = _import_app({"SHOPPULSE_TEST_MODE": "1", "DATABASE_URL": f"sqlite:///{db}"})
     assert proc.returncode == 0, proc.stderr
-    assert str(db) in proc.stdout
+    import urllib.parse
+    stdout_unquoted = urllib.parse.unquote(proc.stdout)
+    assert str(db) in stdout_unquoted.replace("/", "\\") or str(db).replace("\\", "/") in stdout_unquoted
     import sqlite3
 
     with sqlite3.connect(db) as con:

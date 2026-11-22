@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from services import ocr as ocr_service
@@ -39,6 +40,8 @@ from schemas.invoice import (
     MrpLookupSchema,
 )
 from schemas.product import ProductResponse
+from services.shop_member import get_shop_member, ShopRole
+from services.pricing_audit import create_pricing_audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +49,20 @@ from services.grocery_ocr.engines.ocr_engine import TesseractOCREngine
 from sqlalchemy import null as sa_null
 from services.invoice_reconciliation import reconcile_invoice_total
 from services.money import format_rupees, keep_printed_precision, quantize_half_up, to_decimal, to_number
-from services.stock import add_stock, format_quantity, to_stock_quantity, validate_unit_text
-from services.unit_registry import try_normalize_unit
+from services.stock import add_stock, format_quantity, to_stock_quantity, validate_unit_text, StockError
+from services.unit_registry import (
+    are_units_compatible,
+    convert_quantity,
+    normalize_unit,
+    try_normalize_unit,
+    UnitError,
+)
+from services.pricing_engine import (
+    calculate_purchase_cost,
+    evaluate_mrp_ceiling,
+    round_price,
+    PricingEngineError,
+)
 from services.grocery_ocr.pipeline.invoice_pipeline import InvoicePipeline
 
 USE_NEW_GROCERY_OCR = os.getenv("USE_NEW_GROCERY_OCR", "true").lower() in ("true", "1", "yes")
@@ -63,6 +78,10 @@ class InvoiceConflictError(ValueError):
 
 class InvoiceValidationError(ValueError):
     """The confirm request is incomplete (e.g. a new product without a selling price)."""
+
+
+class InvoicePermissionError(PermissionError):
+    """Raised when an unauthorized user attempts an operation requiring elevated privileges."""
 
 
 # --------------------------------------------------------------------------
@@ -154,9 +173,9 @@ _keep_printed_precision = keep_printed_precision
 
 def resolve_item_arithmetic_py(
     qty: Optional[float], rate: Optional[float], total: Optional[float], tax: Optional[float] = None,
-    discount: Optional[float] = None,
+    discount: Optional[float] = None, price_basis_quantity: Optional[float] = 1.0,
 ) -> Dict[str, Any]:
-    """Check quantity x rate - discount + tax against the printed amount (Decimal arithmetic).
+    """Check (quantity x rate / basis) - discount + tax against the printed amount (Decimal arithmetic).
 
     Values are never changed here: a mismatch is reported with suggestions only.
     """
@@ -168,9 +187,12 @@ def resolve_item_arithmetic_py(
     line_total_source = "INVOICE"
     q, r, t = _dec(qty), _dec(rate), _dec(total)
     tx, dc = _dec(tax) or Decimal("0"), _dec(discount) or Decimal("0")
+    b_qty = _dec(price_basis_quantity) or Decimal("1.0")
+    if b_qty <= 0:
+        b_qty = Decimal("1.0")
 
     if q is not None and r is not None:
-        base = q * r
+        base = (q * r) / b_qty
         expected = base - dc + tx
         if t is None:
             line_total = float(_keep_printed_precision(expected))
@@ -181,13 +203,13 @@ def resolve_item_arithmetic_py(
             status = "MISMATCH"
             issues.append(f"Amount ₹{t:,.2f} does not match quantity × rate ({q:,.2f} × ₹{r:,.2f} = ₹{base:,.2f})")
             tol = max(Decimal("1.0"), t * Decimal("0.01"))
-            if q > 0 and abs((q / 10) * r - dc + tx - t) <= tol:
+            if q > 0 and abs(((q / 10) * r) / b_qty - dc + tx - t) <= tol:
                 suggestions.append(f"Quantity may be {(q / 10).normalize():f} (shifted decimal)")
-            elif q > 0 and abs((q / 100) * r - dc + tx - t) <= tol:
+            elif q > 0 and abs(((q / 100) * r) / b_qty - dc + tx - t) <= tol:
                 suggestions.append(f"Quantity may be {(q / 100).normalize():f} (shifted decimal)")
     elif q is not None and r is None:
         if t is not None and q > 0:
-            suggested_rate = float(_keep_printed_precision((t + dc - tx) / q))
+            suggested_rate = float(_keep_printed_precision(((t + dc - tx) * b_qty) / q))
             status = "MISMATCH"
             issues.append("Rate could not be read; suggested from line amount ÷ quantity")
     elif t is None and r is not None:
@@ -198,6 +220,8 @@ def resolve_item_arithmetic_py(
         "quantity": qty,
         "rate": rate,
         "purchase_price": rate,
+        "price_basis_quantity": float(b_qty),
+        "normalized_purchase_price": float(_keep_printed_precision(r / b_qty)) if r is not None else None,
         "line_total": line_total,
         "line_total_source": line_total_source,
         "status": status,
@@ -643,6 +667,17 @@ def _extract_invoice_with_new_pipeline(
                     else None
                 ),
                 pack_size_unit=it.package_size.unit if it.package_size else None,
+                price_basis_quantity=(
+                    float(it.package_size.value)
+                    if (it.package_size and it.package_size.value is not None and float(it.package_size.value) > 0)
+                    else 1.0
+                ),
+                price_basis_unit=it.package_size.unit if (it.package_size and it.package_size.unit) else norm_unit,
+                normalized_purchase_price=(
+                    float(_keep_printed_precision(_dec(pp) / _dec(it.package_size.value)))
+                    if (pp is not None and it.package_size and it.package_size.value and float(it.package_size.value) > 0)
+                    else pp
+                ),
                 classification_status=(
                     "GROCERY_CONFIDENT"
                     if it.is_grocery and it.review_status == "CONFIRMED"
@@ -835,12 +870,16 @@ def extract_invoice_from_bytes(
 
 
 def _line_amount_dec(line_amount: Optional[float], quantity: float, rate: float,
-                     paid_quantity: Optional[float] = None) -> Decimal:
-    """Printed line amount as given; otherwise paid units x rate, kept to 3 decimals (no paise rounding)."""
+                     paid_quantity: Optional[float] = None,
+                     price_basis_quantity: Optional[float] = 1.0) -> Decimal:
+    """Printed line amount as given; otherwise (paid units x rate) / price_basis_quantity, kept to 3 decimals (no paise rounding)."""
     if line_amount is not None:
         return _dec(line_amount)
     units = paid_quantity if paid_quantity is not None else quantity
-    return _keep_printed_precision(_dec(units) * _dec(rate))
+    basis_qty = _dec(price_basis_quantity) or Decimal("1.0")
+    if basis_qty <= 0:
+        basis_qty = Decimal("1.0")
+    return _keep_printed_precision((_dec(units) * _dec(rate)) / basis_qty)
 
 
 def _merge_duplicate_lines(items):
@@ -883,7 +922,12 @@ def _merge_duplicate_lines(items):
     return merged
 
 
-def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConfirmRequest) -> InvoiceConfirmResponse:
+def confirm_and_update_stock(
+    db: Session,
+    shop_id: UUID,
+    confirm_in: InvoiceConfirmRequest,
+    current_user_id: Optional[UUID] = None,
+) -> InvoiceConfirmResponse:
     try:
         items = _merge_duplicate_lines(confirm_in.items)
 
@@ -941,6 +985,19 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
         if missing_sp:
             raise InvoiceValidationError("Selling price is required for new products: " + ", ".join(missing_sp))
 
+        # Check authorization for selling price override on VERIFIED products BEFORE any mutations
+        price_overrides = [
+            (item, product) for item, product in resolved
+            if product is not None and getattr(product, "pricing_status", None) == "VERIFIED" and item.update_selling_price
+        ]
+        if price_overrides and current_user_id:
+            member = get_shop_member(db, shop_id, current_user_id)
+            if not member or member.role not in [ShopRole.OWNER.value, ShopRole.MANAGER.value]:
+                product_names = ", ".join(f"'{p.name}'" for _, p in price_overrides)
+                raise InvoicePermissionError(
+                    f"User does not have authorization to override selling price for verified product(s): {product_names}. Manager or Owner role required."
+                )
+
         db_purchase = Purchase(shop_id=shop_id, supplier_id=supplier_id, total_amount=0.0,
                                invoice_number=invoice_number, invoice_date=confirm_in.invoice_date,
                                processing_status="CONFIRMED", review_status="REVIEWED")
@@ -959,28 +1016,143 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
             # A printed free line carries a rate of 0.00: it is recorded on the purchase as printed, but
             # it never becomes the product's cost (no economic zero cost is assigned to free units)
             free_line = bool(item.is_free_item)
+
+            basis_qty = item.price_basis_quantity or (getattr(product, "price_basis_quantity", None) if product else None) or 1.0
+            basis_unit = item.price_basis_unit or (getattr(product, "price_basis_unit", None) if product else None) or (product.unit if product else item.unit.strip())
+
+            norm_unit_cost = None
+            if not free_line and item.purchase_price is not None:
+                try:
+                    cost_res = calculate_purchase_cost(
+                        quantity=qty,
+                        requested_unit=item.unit,
+                        purchase_price=item.purchase_price,
+                        price_basis_quantity=basis_qty,
+                        price_basis_unit=basis_unit,
+                        product_name=item.name.strip(),
+                    )
+                    prod_stock_unit = (product.unit if product else item.unit).strip()
+                    stock_unit_canon = normalize_unit(prod_stock_unit) if prod_stock_unit else cost_res.pricing_basis_unit
+                    if are_units_compatible(stock_unit_canon, cost_res.pricing_basis_unit):
+                        factor = convert_quantity(Decimal("1.0"), stock_unit_canon, cost_res.pricing_basis_unit)
+                        norm_unit_cost = round_price(cost_res.unit_cost * factor)
+                    else:
+                        norm_unit_cost = cost_res.unit_cost
+                except (PricingEngineError, StockError, UnitError) as e:
+                    raise InvoiceValidationError(f"Cost calculation failed for '{item.name}': {e}") from e
+
             if product is not None:
                 product.is_active = True
                 # Converted into the product's stock unit when compatible (250 g into kg -> 0.25); an
                 # incompatible unit is refused. Atomic increase in this transaction (rolled back on error).
-                add_stock(db, product, to_stock_quantity(qty, item.unit, product))
-                if not free_line:
-                    product.purchase_price = item.purchase_price
+                try:
+                    stock_add = to_stock_quantity(qty, item.unit, product)
+                except (StockError, UnitError) as e:
+                    raise InvoiceValidationError(f"Unit error for '{product.name}': {e}") from e
+                add_stock(db, product, stock_add)
+                if not free_line and norm_unit_cost is not None:
+                    product.purchase_price = float(norm_unit_cost)
                 if item.selling_price is not None:
-                    product.selling_price = item.selling_price
+                    is_verified = getattr(product, "pricing_status", None) == "VERIFIED"
+                    if not is_verified or item.update_selling_price:
+                        effective_mrp = item.mrp if item.mrp is not None else product.mrp
+                        effective_mrp_basis_qty = item.mrp_basis_quantity or getattr(product, "mrp_basis_quantity", None) or basis_qty
+                        effective_mrp_basis_unit = item.mrp_basis_unit or getattr(product, "mrp_basis_unit", None) or basis_unit
+                        if effective_mrp is not None:
+                            try:
+                                mrp_eval = evaluate_mrp_ceiling(
+                                    selling_price=item.selling_price,
+                                    mrp=effective_mrp,
+                                    price_basis_quantity=basis_qty,
+                                    price_basis_unit=basis_unit,
+                                    mrp_basis_quantity=effective_mrp_basis_qty,
+                                    mrp_basis_unit=effective_mrp_basis_unit,
+                                    product_name=product.name,
+                                )
+                                if mrp_eval.is_exceeded:
+                                    raise InvoiceValidationError(
+                                        f"Selling price ₹{item.selling_price} exceeds statutory MRP ceiling ₹{effective_mrp} for '{product.name}'"
+                                    )
+                            except PricingEngineError as pe:
+                                raise InvoiceValidationError(str(pe)) from pe
+                        old_sp = product.selling_price
+                        product.selling_price = item.selling_price
+                        if is_verified and item.update_selling_price:
+                            create_pricing_audit_log(
+                                db=db,
+                                shop_id=shop_id,
+                                acting_user_id=current_user_id or shop_id,
+                                action_type="SELLING_PRICE_OVERRIDE",
+                                product_id=product.id,
+                                previous_status=product.pricing_status,
+                                new_status=product.pricing_status,
+                                previous_selling_price=old_sp,
+                                new_selling_price=item.selling_price,
+                                previous_mrp=product.mrp,
+                                new_mrp=item.mrp if item.mrp is not None else product.mrp,
+                                invoice_number=invoice_number,
+                                reason=f"Invoice confirm selling price override ({invoice_number or 'manual'})",
+                            )
+
+                if item.mrp is not None and product.selling_price is not None:
+                    # Verify that current retail selling price does not exceed incoming invoice MRP
+                    check_sp = product.selling_price
+                    sp_basis_q = product.price_basis_quantity or 1.0
+                    sp_basis_u = product.price_basis_unit or product.unit
+                    mrp_basis_q = item.mrp_basis_quantity or getattr(product, "mrp_basis_quantity", None) or sp_basis_q
+                    mrp_basis_u = item.mrp_basis_unit or getattr(product, "mrp_basis_unit", None) or sp_basis_u
+                    try:
+                        mrp_eval = evaluate_mrp_ceiling(
+                            selling_price=check_sp,
+                            mrp=item.mrp,
+                            price_basis_quantity=sp_basis_q,
+                            price_basis_unit=sp_basis_u,
+                            mrp_basis_quantity=mrp_basis_q,
+                            mrp_basis_unit=mrp_basis_u,
+                            product_name=product.name,
+                        )
+                        if mrp_eval.is_exceeded:
+                            raise InvoiceValidationError(
+                                f"Invoice MRP ₹{item.mrp} is lower than existing retail selling price ₹{product.selling_price} for '{product.name}'. Selling price must be reduced first or updated."
+                            )
+                    except PricingEngineError as pe:
+                        raise InvoiceValidationError(str(pe)) from pe
                 restocked += 1
             else:
+                if item.selling_price is not None and item.mrp is not None:
+                    try:
+                        mrp_eval = evaluate_mrp_ceiling(
+                            selling_price=item.selling_price,
+                            mrp=item.mrp,
+                            price_basis_quantity=basis_qty,
+                            price_basis_unit=basis_unit,
+                            mrp_basis_quantity=item.mrp_basis_quantity or basis_qty,
+                            mrp_basis_unit=item.mrp_basis_unit or basis_unit,
+                            product_name=item.name.strip(),
+                        )
+                        if mrp_eval.is_exceeded:
+                            raise InvoiceValidationError(
+                                f"Selling price ₹{item.selling_price} exceeds statutory MRP ceiling ₹{item.mrp} for '{item.name.strip()}'"
+                            )
+                    except PricingEngineError as pe:
+                        raise InvoiceValidationError(str(pe)) from pe
+
                 product = Product(
                     shop_id=shop_id,
                     name=item.name.strip(),
                     category=item.category or "Groceries",
                     # unknown cost (explicit NULL; the column default would otherwise store 0.0)
-                    purchase_price=sa_null() if free_line else item.purchase_price,
+                    purchase_price=sa_null() if free_line or norm_unit_cost is None else float(norm_unit_cost),
                     selling_price=item.selling_price,
                     current_stock=float(qty),
                     unit=item.unit.strip(),
                     reorder_level=10,
                     is_active=True,
+                    price_basis_quantity=float(basis_qty),
+                    price_basis_unit=str(basis_unit),
+                    mrp_basis_quantity=float(item.mrp_basis_quantity or basis_qty),
+                    mrp_basis_unit=str(item.mrp_basis_unit or basis_unit),
+                    pricing_status="NEEDS_REVIEW",
                 )
                 db.add(product)
                 created += 1
@@ -989,11 +1161,15 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                 product.mrp = item.mrp
                 product.mrp_source = mrp_source
                 product.mrp_updated_at = now
+                if item.mrp_basis_quantity is not None:
+                    product.mrp_basis_quantity = float(item.mrp_basis_quantity)
+                if item.mrp_basis_unit is not None:
+                    product.mrp_basis_unit = str(item.mrp_basis_unit)
             db.add(product)
             db.flush()
             saved_products.append(product)
 
-            line_amount_d = _line_amount_dec(item.line_amount, qty, item.purchase_price, item.paid_quantity)
+            line_amount_d = _line_amount_dec(item.line_amount, qty, item.purchase_price, item.paid_quantity, basis_qty)
             line_amount = float(line_amount_d)
             total_amount += line_amount_d
             total_units += float(qty)
@@ -1012,10 +1188,19 @@ def confirm_and_update_stock(db: Session, shop_id: UUID, confirm_in: InvoiceConf
                 line_amount=line_amount,
                 mrp=item.mrp,
                 mrp_source=mrp_source,
+                price_basis_quantity=float(basis_qty),
+                price_basis_unit=str(basis_unit) if basis_unit else None,
             ))
 
         db_purchase.total_amount = float(_keep_printed_precision(total_amount))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise InvoiceConflictError(
+                f"Invoice {invoice_number} from this supplier was already added to stock by a concurrent transaction. "
+                "Stock was not changed."
+            ) from exc
         db.refresh(db_purchase)
 
         # Trigger System Notification for successful invoice stock update

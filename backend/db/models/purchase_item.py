@@ -12,8 +12,11 @@ class PurchaseItem(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id"), nullable=False, index=True)
     product_id = Column(UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True)
-    quantity = Column(Integer, nullable=False)
+    quantity = Column(Float, nullable=False)
     purchase_price = Column(Float, nullable=False)
+    # Universal pricing basis fields on purchase line (Stage 4C.1 Step 4)
+    price_basis_quantity = Column(Float, nullable=True, default=1.0, server_default="1.0")
+    price_basis_unit = Column(String, nullable=True)
     # Amount printed on the invoice line (after discount/tax as invoiced); NULL if not provided
     line_amount = Column(Float, nullable=True)
     mrp = Column(Float, nullable=True)

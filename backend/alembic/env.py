@@ -23,7 +23,10 @@ from core.config import settings
 from db.models import *
 from db.session import Base
 
-config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
+# Only default to settings.SQLALCHEMY_DATABASE_URI if the caller didn't supply a custom URL
+current_url = config.get_main_option("sqlalchemy.url")
+if not current_url or current_url.startswith("driver://") or current_url == "%(sqlalchemy.url)s":
+    config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
 
 target_metadata = Base.metadata
 

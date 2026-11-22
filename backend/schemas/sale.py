@@ -7,12 +7,13 @@ from schemas.quantity import Quantity
 class SaleItemCreate(BaseModel):
     product_id: UUID = Field(..., description="Product ID to sell")
     quantity: Quantity = Field(..., gt=0, description="Quantity to sell (> 0; fractional only for kg, g, L, ml)")
-    unit: Optional[str] = Field(None, description="Unit of the quantity when it differs from the product unit (e.g. g for a kg product)")
-    unit_price: Optional[float] = Field(None, ge=0, description="Optional custom unit price")
+    unit: Optional[str] = Field(None, description="Requested unit of the quantity (defaults to product inventory unit if omitted)")
+    unit_price: Optional[float] = Field(None, ge=0, description="Optional client price assertion. Validated against catalog pricing; never replaces server-authoritative calculation.")
 
 class SaleCreate(BaseModel):
     items: List[SaleItemCreate] = Field(..., min_length=1, description="Sale item lines")
     payment_method: str = Field("cash", description="Payment method (cash, upi, card, credit)")
+    customer_name: Optional[str] = Field(None, description="Optional counter customer name")
 
 class SaleItemResponse(BaseModel):
     id: UUID

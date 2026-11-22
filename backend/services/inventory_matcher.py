@@ -11,6 +11,7 @@ from schemas.voice import (
 )
 from services.voice_parser import ExtractedItem, canonical_voice_unit
 from services.money import bill_total, quantize_half_up, round_currency, round_price, sale_line_amount, to_decimal, to_number
+from services.pricing_engine import calculate_line_price, PricingEngineError, evaluate_mrp_ceiling
 from services.stock import format_quantity, quantity_number, to_stock_quantity
 from services.unit_registry import FAMILIES, UNITS, UnitError, convert_quantity, try_normalize_unit
 
@@ -93,6 +94,13 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
     if isinstance(p, VoiceProductCandidate):
         return p
     if hasattr(p, "id"):
+        basis_qty = getattr(p, "price_basis_quantity", None)
+        basis_qty = float(basis_qty) if basis_qty is not None else 1.0
+        basis_unit = getattr(p, "price_basis_unit", None)
+        mrp_basis_qty = getattr(p, "mrp_basis_quantity", None)
+        mrp_basis_unit = getattr(p, "mrp_basis_unit", None)
+        status = getattr(p, "pricing_status", None)
+        mrp = getattr(p, "mrp", None)
         return VoiceProductCandidate(
             id=str(p.id),
             name=p.name,
@@ -101,7 +109,20 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
             unit=str(p.unit or "pcs"),
             category=getattr(p, "category", None),
             sku=getattr(p, "sku", None),
+            price_basis_quantity=basis_qty,
+            price_basis_unit=str(basis_unit) if basis_unit else str(p.unit or "pcs"),
+            mrp_basis_quantity=float(mrp_basis_qty) if mrp_basis_qty is not None else None,
+            mrp_basis_unit=str(mrp_basis_unit) if mrp_basis_unit else None,
+            pricing_status=str(status) if status else "NEEDS_REVIEW",
+            mrp=float(mrp) if mrp is not None else None,
         )
+    basis_qty = p.get("price_basis_quantity")
+    basis_qty = float(basis_qty) if basis_qty is not None else 1.0
+    basis_unit = p.get("price_basis_unit")
+    mrp_basis_qty = p.get("mrp_basis_quantity")
+    mrp_basis_unit = p.get("mrp_basis_unit")
+    status = p.get("pricing_status")
+    mrp = p.get("mrp")
     return VoiceProductCandidate(
         id=str(p["id"]),
         name=p["name"],
@@ -110,6 +131,12 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
         unit=str(p.get("unit", "pcs")),
         category=p.get("category"),
         sku=p.get("sku"),
+        price_basis_quantity=basis_qty,
+        price_basis_unit=str(basis_unit) if basis_unit else str(p.get("unit", "pcs")),
+        mrp_basis_quantity=float(mrp_basis_qty) if mrp_basis_qty is not None else None,
+        mrp_basis_unit=str(mrp_basis_unit) if mrp_basis_unit else None,
+        pricing_status=str(status) if status else "VERIFIED",
+        mrp=float(mrp) if mrp is not None else None,
     )
 
 # Precision of the exact unit price derived from a spoken total (so quantity x price reproduces the total)
@@ -161,34 +188,98 @@ def _quantity_for_price(item: ExtractedItem, prod: VoiceProductCandidate) -> Dec
 
 
 def make_matched_item(prod: VoiceProductCandidate, item: ExtractedItem) -> MatchedVoiceItem:
-    """The sale line for a spoken item. A spoken price always wins over the catalogue price.
+    """The sale line for a spoken item. Resolves price and stock deduction authoritatively via PricingEngine.
+    A spoken price agreement is kept with price_source='spoken' and validated against statutory MRP.
 
-    Raises VoiceItemError when the line cannot be sold as said."""
-    qty = _stock_quantity(prod, item)
+    Raises VoiceItemError when the line cannot be sold as said (unverified status, incomplete pricing,
+    wholesale violation, incompatible units, MRP exceeded)."""
+    # 1. Gate check product pricing status
+    status = str(prod.pricing_status or "VERIFIED").strip().upper()
+    if status == "NEEDS_REVIEW":
+        raise VoiceItemError(f"Product '{prod.name}' requires manager pricing review before checkout.")
+    if status == "INCOMPLETE":
+        raise VoiceItemError(f"Product '{prod.name}' has incomplete pricing (₹0.00). Cannot be sold.")
+
+    spoken = _spoken_unit(item)
+    product_unit = try_normalize_unit(prod.unit) if prod.unit else None
+
+    # 2. Strict Wholesale Container Validation
+    if status == "WHOLESALE_ONLY":
+        req_u = spoken or product_unit or "pcs"
+        norm_req = try_normalize_unit(req_u)
+        norm_inv = product_unit
+        if norm_req != norm_inv:
+            raise VoiceItemError(f"Product '{prod.name}' is wholesale-only. Must purchase in '{prod.unit}', not in '{req_u}'.")
+        qty_dec = to_decimal(item.quantity)
+        if qty_dec != qty_dec.to_integral_value():
+            raise VoiceItemError(f"Product '{prod.name}' is wholesale-only. Must purchase whole containers, not fractional ({item.quantity}).")
+
+    # 3. Determine requested unit (respecting colloquial count units like packet of pcs)
+    if spoken and product_unit and _colloquial(spoken, product_unit):
+        req_unit = product_unit
+    else:
+        req_unit = spoken or product_unit or "pcs"
+
+    # 4. Universal Decimal Pricing Engine Calculation
+    basis_qty = prod.price_basis_quantity if prod.price_basis_quantity is not None else Decimal("1.0")
+    basis_unit = prod.price_basis_unit if prod.price_basis_unit else prod.unit
+
+    try:
+        pricing_result = calculate_line_price(
+            quantity=item.quantity,
+            requested_unit=req_unit,
+            selling_price=prod.selling_price,
+            price_basis_quantity=basis_qty,
+            price_basis_unit=basis_unit,
+            inventory_unit=prod.unit,
+            product_conversions=None,
+            client_unit_price=None,
+            pricing_status=status,
+            product_name=prod.name,
+            mrp=prod.mrp,
+            mrp_basis_quantity=getattr(prod, "mrp_basis_quantity", None),
+            mrp_basis_unit=getattr(prod, "mrp_basis_unit", None),
+        )
+    except PricingEngineError as exc:
+        raise VoiceItemError(str(exc)) from None
+    except ValueError as exc:
+        raise VoiceItemError(str(exc)) from None
+
+    qty = pricing_result.stock_deduction_quantity
+    catalog_line_total = pricing_result.line_total
+
+    # 5. Evaluate Spoken Price vs Catalog Price
     spoken_total = to_decimal(getattr(item, "spoken_price", None))
     spoken_unit_price = to_decimal(getattr(item, "spoken_unit_price", None))
+
     if spoken_total is not None and spoken_total > 0:
-        # The spoken amount is the line total. The exact unit price is kept for the sale, the 3-dp one is
-        # for display: ₹100 for 3 -> 33.333 shown, 33.3333333333 x 3 -> ₹100.00 recorded (never ₹99.99).
         line = round_currency(spoken_total)
         source = "spoken"
     elif spoken_unit_price is not None and spoken_unit_price > 0:
-        # "100 rupees each" / "45 rupees per kg": the line is quantity (in the priced unit) x that price
         line = sale_line_amount(_quantity_for_price(item, prod), spoken_unit_price)
         source = "spoken"
     else:
-        line = None
+        line = catalog_line_total
         source = "catalogue"
-    if line is not None:
+
+    # 6. Statutory MRP Ceiling Enforcement for Spoken Prices (Legal Metrology Act)
+    if source == "spoken" and pricing_result.line_mrp_total is not None:
+        if line > pricing_result.line_mrp_total:
+            raise VoiceItemError(
+                f"Spoken price ₹{to_number(line)} for '{prod.name}' exceeds statutory MRP ₹{to_number(pricing_result.line_mrp_total)}."
+            )
+
+    # 7. Unit price formatting
+    if source == "spoken":
         exact = quantize_half_up(line / qty, _EXACT_UNIT_PRICE)
         shown = round_price(exact)
     else:
-        exact = shown = to_decimal(prod.selling_price) or Decimal("0")
-        line = sale_line_amount(qty, exact)
+        exact = pricing_result.effective_unit_price
+        shown = round_price(exact)
 
-    spoken = _spoken_unit(item)
     said = f"{format_quantity(item.quantity)} {UNITS[spoken].label}" if spoken else None
     stocked = f"{format_quantity(qty)} {prod.unit}"
+
     return MatchedVoiceItem(
         product_id=prod.id,
         name=prod.name,
@@ -203,6 +294,9 @@ def make_matched_item(prod: VoiceProductCandidate, item: ExtractedItem) -> Match
         available_stock=max(0, prod.current_stock),
         price_source=source,
         spoken_quantity=said if said and said != stocked else None,
+        pricing_status=status,
+        mrp=to_number(pricing_result.line_mrp_total) if pricing_result.line_mrp_total is not None else (float(prod.mrp) if prod.mrp is not None else None),
+        catalog_line_total=to_number(catalog_line_total),
     )
 
 

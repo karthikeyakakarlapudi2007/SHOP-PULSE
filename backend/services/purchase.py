@@ -10,6 +10,8 @@ from db.models.supplier import Supplier
 from schemas.purchase import PurchaseCreate
 from services.money import keep_printed_precision, to_decimal, to_number
 from services.stock import add_stock, to_stock_quantity
+from services.pricing_engine import calculate_purchase_cost, round_price
+from services.unit_registry import normalize_unit, are_units_compatible, convert_quantity
 
 def create_purchase(db: Session, purchase_in: PurchaseCreate, shop_id: UUID) -> Purchase:
     try:
@@ -30,9 +32,20 @@ def create_purchase(db: Session, purchase_in: PurchaseCreate, shop_id: UUID) -> 
             
             # Quantity in the product's stock unit (fractions only for kg, g, L, ml; 250 g into kg -> 0.25)
             qty = to_stock_quantity(item.quantity, item.unit, product)
-            # Decimal, no intermediate rounding; the price is per stock unit; totals keep up to 3 dp
-            total_amount += qty * to_decimal(item.purchase_price)
-            products_to_update.append((product, item, qty))
+            
+            basis_qty = item.price_basis_quantity or getattr(product, "price_basis_quantity", None) or 1.0
+            basis_unit = item.price_basis_unit or getattr(product, "price_basis_unit", None) or product.unit
+            
+            cost_res = calculate_purchase_cost(
+                quantity=item.quantity,
+                requested_unit=item.unit or product.unit,
+                purchase_price=item.purchase_price,
+                price_basis_quantity=basis_qty,
+                price_basis_unit=basis_unit,
+                product_name=product.name,
+            )
+            total_amount += cost_res.line_cost
+            products_to_update.append((product, item, qty, cost_res))
 
         # Create Purchase Header
         db_purchase = Purchase(
@@ -44,18 +57,29 @@ def create_purchase(db: Session, purchase_in: PurchaseCreate, shop_id: UUID) -> 
         db.flush()  # Obtain db_purchase.id
 
         # Create Purchase Items & Update Inventory
-        for product, item, qty in products_to_update:
+        for product, item, qty, cost_res in products_to_update:
             db_item = PurchaseItem(
                 purchase_id=db_purchase.id,
                 product_id=product.id,
                 quantity=float(qty),
                 purchase_price=item.purchase_price,
+                line_amount=float(cost_res.line_cost),
+                price_basis_quantity=float(basis_qty),
+                price_basis_unit=str(basis_unit) if basis_unit else None,
             )
             db.add(db_item)
 
-            # Atomic stock increase in the same transaction; then the purchase price
+            # Atomic stock increase in the same transaction
             add_stock(db, product, qty)
-            product.purchase_price = item.purchase_price
+            
+            # Normalize unit cost to product inventory unit if compatible
+            stock_unit_canon = normalize_unit(product.unit) if product.unit else cost_res.pricing_basis_unit
+            if are_units_compatible(stock_unit_canon, cost_res.pricing_basis_unit):
+                factor = convert_quantity(Decimal("1.0"), stock_unit_canon, cost_res.pricing_basis_unit)
+                norm_unit_cost = round_price(cost_res.unit_cost * factor)
+            else:
+                norm_unit_cost = cost_res.unit_cost
+            product.purchase_price = float(norm_unit_cost)
             db.add(product)
 
         db.commit()

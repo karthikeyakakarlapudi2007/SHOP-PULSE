@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from db.models.shop import Shop
+from db.models.shop_member import ShopMember, ShopRole
 from schemas.shop import ShopCreate, ShopUpdate
 
 def get_shop_by_owner(db: Session, owner_id: UUID) -> Optional[Shop]:
@@ -20,6 +21,16 @@ def create_shop(db: Session, shop_in: ShopCreate, owner_id: UUID) -> Shop:
         owner_id=owner_id,
     )
     db.add(db_shop)
+    db.flush()
+
+    # Automatically register the creator as OWNER of this shop
+    owner_membership = ShopMember(
+        shop_id=db_shop.id,
+        user_id=owner_id,
+        role=ShopRole.OWNER.value,
+        is_active=True
+    )
+    db.add(owner_membership)
     db.commit()
     db.refresh(db_shop)
     return db_shop
@@ -34,6 +45,16 @@ def update_shop(db: Session, db_shop: Shop, shop_in: ShopUpdate) -> Shop:
         setattr(db_shop, field, value)
     
     db.add(db_shop)
+    db.flush()
+
+    # Automatically register the creator as OWNER of this shop
+    owner_membership = ShopMember(
+        shop_id=db_shop.id,
+        user_id=owner_id,
+        role=ShopRole.OWNER.value,
+        is_active=True
+    )
+    db.add(owner_membership)
     db.commit()
     db.refresh(db_shop)
     return db_shop

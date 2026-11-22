@@ -46,6 +46,12 @@ def init_db_schema(bind=None):
     with bind.connect() as conn:
         inspector = inspect(conn)
         tables = set(inspector.get_table_names())
+        # If database is managed by Alembic, schema evolution belongs exclusively to migrations.
+        # Skipping INCREMENTAL_COLUMNS prevents subverting Alembic downgrades.
+        if "alembic_version" in tables:
+            logger.info("Database schema is managed by Alembic; skipping legacy INCREMENTAL_COLUMNS sync.")
+            return
+
         for table, columns in INCREMENTAL_COLUMNS.items():
             if table not in tables:
                 continue

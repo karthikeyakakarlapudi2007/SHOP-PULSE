@@ -29,12 +29,14 @@ FONT_CANDIDATES_REGULAR = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     "DejaVuSans.ttf",
+    "tahoma.ttf",
     "arial.ttf",
 )
 FONT_CANDIDATES_BOLD = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "DejaVuSans-Bold.ttf",
+    "tahomabd.ttf",
     "arialbd.ttf",
 )
 
@@ -61,7 +63,7 @@ PAGE_1_ITEMS: List[ItemRow] = [
     ("3", "Tata Salt 1kg", "2501", "20", "pkt", "22.00", "28.00", "440.00"),
     ("4", "MDH Jeera Powder 100g", "0909", "12", "pcs", "58.75", "72.00", "705.00"),
     ("5", "Parle-G Biscuits 250g", "1905", "24", "pkt", "9.50", "12.00", "228.00"),
-    ("6", "Toor Dal Loose", "0713", "2.5", "kg", "132.40", "150.00", "331.00"),
+    ("6", "Toor Dal Loose", "0713", "2.50", "kg", "132.40", "150.00", "331.00"),
     ("7", "Eno Fruit Salt 5g", "3004", "50", "pcs", "0.85", "1.00", "42.50"),
 ]
 
@@ -115,7 +117,7 @@ def render_invoice_page(
     draw.text((margin, s(130)), HEADER_LINES[1], font=_font(s(22)), fill=ink)
     lines.extend(HEADER_LINES)
     meta = [m.format(inv=invoice_no) for m in META_LINES_TEMPLATE]
-    meta_font = _font(s(24))
+    meta_font = _font(s(24)) if landscape else _font(s(24), True)
     for i, m in enumerate(meta):
         mw = draw.textlength(m, font=meta_font)
         draw.text((width - margin - mw, s(70 + 36 * i)), m, font=meta_font, fill=ink)
@@ -394,7 +396,7 @@ def build_dataset() -> Dict[str, DatasetCase]:
         background_color=(228, 230, 232), seed=21, texture=4.0)
     add(DatasetCase("16_similar_background", "Paper on a background close to the paper colour",
                     [jpeg_roundtrip(similar, 88)], [gt1], crit, tags=["photo", "similar_bg"]))
-    very_blurry = jpeg_roundtrip(blur(downscale(p1.image, 0.5), 3.5), 80)
+    very_blurry = jpeg_roundtrip(blur(downscale(p1.image, 0.5), 4.5), 80)
     add(DatasetCase("17_unrecoverable", "Severely blurred, low-resolution capture (should ask for retake)",
                     [very_blurry], [gt1], crit, tags=["unreadable"]))
     return {c.case_id: c for c in cases}

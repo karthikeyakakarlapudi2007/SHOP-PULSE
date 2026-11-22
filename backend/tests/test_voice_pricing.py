@@ -139,9 +139,9 @@ def api():
     Base.metadata.drop_all(bind=_engine)
 
 
-def _product(c, h, name, unit, stock, price):
+def _product(c, h, name, unit, stock, price, pricing_status="VERIFIED"):
     r = c.post("/api/v1/products", json={"name": name, "selling_price": price, "purchase_price": price,
-                                         "current_stock": stock, "unit": unit}, headers=h)
+                                         "current_stock": stock, "unit": unit, "pricing_status": pricing_status}, headers=h)
     assert r.status_code == 201, r.text
     return r.json()
 

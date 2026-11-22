@@ -1,0 +1,24 @@
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+project-excludes = [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.venv/**",
+    "**/scratch/**"
+]
+search-path = [
+    ".",
+    "..",
+    "api",
+    "db",
+    "services",
+    "tests",
+    "../scripts/debug"
+]
+site-packages-path = [
+    ".venv/Lib/site-packages",
+    "backend/.venv/Lib/site-packages"
+]
+python-interpreter-path = ".venv/Scripts/python.exe"

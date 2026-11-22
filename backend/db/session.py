@@ -5,7 +5,7 @@ from core.config import settings
 from core.db_safety import guard_database_url
 
 # Test runs must use a dedicated test database; refused before any engine exists (no-op outside tests)
-guard_database_url(settings.SQLALCHEMY_DATABASE_URI, explicit=settings.DATABASE_URL is not None)
+guard_database_url(settings.SQLALCHEMY_DATABASE_URI, explicit=bool(settings.DATABASE_URL))
 
 is_sqlite = settings.SQLALCHEMY_DATABASE_URI.startswith("sqlite")
 connect_args = {"check_same_thread": False, "timeout": 30} if is_sqlite else {}

@@ -9,10 +9,13 @@ project-excludes = [
     "**/scratch/**"
 ]
 search-path = [
+    ".",
     "backend",
     "backend/api",
     "backend/db",
-    "backend/services"
+    "backend/services",
+    "backend/tests",
+    "scripts/debug"
 ]
 site-packages-path = [
     "backend/.venv/Lib/site-packages"
