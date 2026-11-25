@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { PageRoute } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useShopRole } from '../hooks/useShopRole';
 
 export interface BottomNavProps {
   activePage: PageRoute;
@@ -21,13 +22,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onOpenMenu 
 }) => {
   const { t } = useLanguage();
+  const { canAccessPage } = useShopRole();
 
   const navItems = [
     { id: 'dashboard' as PageRoute, labelKey: 'nav.home', icon: Home },
     { id: 'sales' as PageRoute, labelKey: 'nav.sales', icon: Receipt },
     { id: 'inventory' as PageRoute, labelKey: 'nav.stock', icon: Package },
     { id: 'insights' as PageRoute, labelKey: 'nav.shopInsights', icon: Sparkles },
-  ];
+  ].filter((item) => canAccessPage(item.id));
 
   const isMenuSectionActive = activePage === 'settings';
 

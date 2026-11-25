@@ -13,26 +13,34 @@ import {
   ArrowDownRight,
   Filter,
   ChevronRight,
-  ShoppingBag
+  ShoppingBag,
+  Activity,
+  Lock
 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Card } from '../components/Card';
 import { StatCard } from '../components/StatCard';
 import { SalesChart, type SalesChartDataPoint } from '../components/SalesChart';
+import { DemandForecastSection } from '../components/DemandForecastSection';
+import { useShopRole } from '../hooks/useShopRole';
 import { 
   insightsApi, 
   type SalesInsightsData, 
   type InventoryInsightsData, 
-  type AiInsightsData 
+  type AiInsightsData,
+  type ShopForecastSummary
 } from '../api/insights';
 import { notificationsApi } from '../api/notifications';
 
-type InsightsTab = 'sales' | 'inventory' | 'ai';
+type InsightsTab = 'sales' | 'inventory' | 'forecast' | 'ai';
 type DateFilter = 'today' | '7d' | '30d' | '90d' | 'custom';
 type PerformanceTab = 'best' | 'slow' | 'rising' | 'declining';
 type InventoryFilter = 'all' | 'low' | 'out' | 'over' | 'healthy';
 
 export const Insights: React.FC = () => {
+  const { role, isCashier, canAccessAnalytics } = useShopRole();
+  const isInsightsRestricted = isCashier || !canAccessAnalytics;
+
   const [activeTab, setActiveTab] = useState<InsightsTab>('sales');
   const [dateFilter, setDateFilter] = useState<DateFilter>('7d');
   const [customStart, setCustomStart] = useState<string>('');
@@ -43,14 +51,25 @@ export const Insights: React.FC = () => {
   const [salesData, setSalesData] = useState<SalesInsightsData | null>(null);
   const [inventoryData, setInventoryData] = useState<InventoryInsightsData | null>(null);
   const [aiData, setAiData] = useState<AiInsightsData | null>(null);
+  const [forecastSummary, setForecastSummary] = useState<ShopForecastSummary | null>(null);
+  const [forecastRefreshSignal, setForecastRefreshSignal] = useState<number>(0);
 
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(!isInsightsRestricted);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async (isManualRefresh: boolean = false) => {
-    if (isManualRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (isInsightsRestricted) {
+      setLoading(false);
+      return;
+    }
+
+    if (isManualRefresh) {
+      setRefreshing(true);
+      setForecastRefreshSignal((prev) => prev + 1);
+    } else {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -75,7 +94,7 @@ export const Insights: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateFilter, customStart, customEnd]);
+  }, [dateFilter, customStart, customEnd, isInsightsRestricted]);
 
   useEffect(() => {
     fetchData();
@@ -106,8 +125,40 @@ export const Insights: React.FC = () => {
     return true;
   });
 
+  const forecastAttentionCount =
+    (forecastSummary?.out_of_stock_count ?? 0) +
+    (forecastSummary?.at_risk_stockout_7d_count ?? 0);
+
+  if (isInsightsRestricted) {
+    return (
+      <div className="w-full space-y-6 max-w-6xl mx-auto min-w-0 font-sans pb-12">
+        <PageHeader
+          title="AI Insights & Analytics"
+          description="Real-time sales performance, stock health intelligence, and grounded business explanations."
+        />
+        <div
+          role="alert"
+          className="bg-white rounded-2xl border border-[#EF806D]/40 p-6 sm:p-8 text-center max-w-xl mx-auto my-6 shadow-xs"
+        >
+          <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-[#FDF1EF] text-[#B93838] flex items-center justify-center">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-extrabold text-[#153D32]">
+            Access Restricted
+          </h2>
+          <p className="text-xs sm:text-sm text-[#5E6C64] mt-1.5 leading-relaxed">
+            Shop analytics, demand forecasting, and business insights are restricted to{' '}
+            <strong className="text-[#153D32]">Owner</strong> and{' '}
+            <strong className="text-[#153D32]">Manager</strong> roles.
+            {role ? ` Current role: ${role}.` : ''}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-6xl mx-auto min-w-0 font-sans pb-12">
+    <div className="w-full space-y-6 max-w-6xl mx-auto min-w-0 font-sans pb-12">
       {/* 1. Header with Module Navigation */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <PageHeader
@@ -127,12 +178,18 @@ export const Insights: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Primary Tabs: Sales Insights | Inventory Insights | AI Intelligence */}
-      <div className="flex items-center gap-2 border-b border-[#DDE9DF] pb-2">
+      {/* 2. Primary Tabs: Sales Insights | Inventory Insights | Demand Forecast | AI Intelligence */}
+      <div
+        role="tablist"
+        aria-label="Insights sections"
+        className="w-full min-w-0 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 border-b border-[#DDE9DF] pb-2"
+      >
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'sales'}
           onClick={() => setActiveTab('sales')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer shrink-0 ${
             activeTab === 'sales'
               ? 'bg-[#153D32] text-[#FAF8F2] shadow-sm'
               : 'text-[#5E6C64] hover:bg-[#FAF8F2] hover:text-[#153D32]'
@@ -144,8 +201,10 @@ export const Insights: React.FC = () => {
 
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'inventory'}
           onClick={() => setActiveTab('inventory')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer shrink-0 ${
             activeTab === 'inventory'
               ? 'bg-[#153D32] text-[#FAF8F2] shadow-sm'
               : 'text-[#5E6C64] hover:bg-[#FAF8F2] hover:text-[#153D32]'
@@ -162,8 +221,30 @@ export const Insights: React.FC = () => {
 
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'forecast'}
+          onClick={() => setActiveTab('forecast')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer shrink-0 ${
+            activeTab === 'forecast'
+              ? 'bg-[#153D32] text-[#FAF8F2] shadow-sm'
+              : 'text-[#5E6C64] hover:bg-[#FAF8F2] hover:text-[#153D32]'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-[#23866A]" />
+          <span>Demand Forecast</span>
+          {forecastAttentionCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#D6AE62] text-[#153D32]">
+              {forecastAttentionCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'ai'}
           onClick={() => setActiveTab('ai')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer shrink-0 ${
             activeTab === 'ai'
               ? 'bg-[#153D32] text-[#FAF8F2] shadow-sm'
               : 'text-[#5E6C64] hover:bg-[#FAF8F2] hover:text-[#153D32]'
@@ -556,7 +637,17 @@ export const Insights: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: AI INTELLIGENCE & EXPLANATIONS                                     */}
+      {/* TAB 3: DEMAND FORECAST                                                    */}
+      {/* ========================================================================= */}
+      {activeTab === 'forecast' && (
+        <DemandForecastSection
+          refreshSignal={forecastRefreshSignal}
+          onSummaryLoaded={setForecastSummary}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: AI INTELLIGENCE & EXPLANATIONS                                     */}
       {/* ========================================================================= */}
       {activeTab === 'ai' && (
         <div className="space-y-6">

@@ -25,7 +25,14 @@ def search(
     (invoice number, supplier, product on the invoice) and sales (bill number, product sold).
     Partial and case-insensitive. Queries shorter than 2 characters return no results.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
+    shop = deps.get_user_accessible_shop(db, current_user)
     if not shop:
         return SearchResponse(query=q.strip())
-    return search_service.search_shop_records(db, shop_id=shop.id, query=q, limit=limit)
+    
+    results = search_service.search_shop_records(db, shop_id=shop.id, query=q, limit=limit)
+    member = deps.shop_member_service.get_shop_member(db, shop.id, current_user.id)
+    if member and member.role == deps.ShopRole.CASHIER.value:
+        # Cashiers cannot access supplier purchases
+        results.purchases = []
+        results.totals.purchases = 0
+    return results

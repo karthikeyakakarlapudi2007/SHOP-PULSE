@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_, or_
+from sqlalchemy.exc import IntegrityError
 
 from db.models.notification import Notification, NotificationPreference, DeviceToken
 from db.models.product import Product
@@ -22,19 +23,25 @@ logger = logging.getLogger(__name__)
 def get_or_create_preferences(db: Session, user_id: UUID, shop_id: UUID) -> NotificationPreference:
     pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
     if not pref:
-        pref = NotificationPreference(
-            user_id=user_id,
-            shop_id=shop_id,
-            sales_alerts=True,
-            inventory_alerts=True,
-            system_alerts=True,
-            in_app_enabled=True,
-            push_enabled=True,
-            daily_summary_enabled=True
-        )
-        db.add(pref)
-        db.commit()
-        db.refresh(pref)
+        try:
+            pref = NotificationPreference(
+                user_id=user_id,
+                shop_id=shop_id,
+                sales_alerts=True,
+                inventory_alerts=True,
+                system_alerts=True,
+                in_app_enabled=True,
+                push_enabled=True,
+                daily_summary_enabled=True
+            )
+            db.add(pref)
+            db.commit()
+            db.refresh(pref)
+        except IntegrityError:
+            db.rollback()
+            pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
+            if not pref:
+                raise
     return pref
 
 

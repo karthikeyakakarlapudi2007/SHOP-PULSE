@@ -295,7 +295,11 @@ _BUSINESS_RE = re.compile(r"\b(?:traders?|enterprises?|distributors?|agenc(?:y|i
                           r"foods?|corporation|brothers|bros|kirana|provisions|general)\b", re.I)
 _GSTIN_RE = re.compile(r"\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b")
 # "(?:in|n)?voice" also accepts OCR output that clipped the first letters of "Invoice"
-_INVNO_RE = re.compile(r"\b(?:(?:in|n)?voice|inv|bill|voucher)\s*(?:no|number|num|#)\.?\s*[:#\-.]?\s*([A-Za-z0-9][A-Za-z0-9/\-_.]{0,30})", re.I)
+_INV_VAL_PATTERN = r"([A-Za-z0-9]+(?:\s*[/\-_#.]\s*(?!(?:date|dated|dt|gstin|ph|phone)\b)[A-Za-z0-9]+)*)"
+_INVNO_RE = re.compile(r"\b(?:(?:in|n)?voice|inv|bill|voucher)\s*(?:no|number|num|#)\.?\s*[:#\-.]?\s*" + _INV_VAL_PATTERN, re.I)
+_INV_COLON_RE = re.compile(r"\b(?:(?:in|n)?voice|inv|bill)\s*[:#\-]\s*" + _INV_VAL_PATTERN, re.I)
+_INVNO_LABEL_END_RE = re.compile(r"\b(?:(?:in|n)?voice|inv|bill|voucher)\s*(?:no|number|num|#)\.?\s*[:#\-.]?\s*$", re.I)
+_PHONE_RE = re.compile(r"\b(?:\+91[\-\s]?)?[6-9]\d{9}\b")
 # Column headings of an item table; a line with two or more of them is the table header row
 _COLUMN_WORD_RE = re.compile(r"\b(?:qty|quantity|rate|amount|total|mrp|hsn|description|particulars|item|items|unit|"
                              r"uom|price|s\.?\s?no|sl|disc|gst|tax)\b", re.I)
@@ -309,6 +313,25 @@ _TOTAL_PRIORITY = [
     (re.compile(r"^\s*total\s*(?:amount|amt)\b", re.I), 2),
     (re.compile(r"^\s*total\b", re.I), 1),
 ]
+
+
+def _clean_supplier_candidate(text: str) -> str:
+    """Remove known metadata tokens (invoice numbers, GSTIN, dates, phone, email, FSSAI)
+    from a header line to reveal the underlying business name if printed side-by-side."""
+    cand = text
+    cand = _INVNO_RE.sub(" ", cand)
+    cand = _INV_COLON_RE.sub(" ", cand)
+    cand = _GSTIN_RE.sub(" ", cand)
+    cand = _DATE_RE.sub(" ", cand)
+    cand = re.sub(r"\b(?:date|dated)\s*[:#\-.]?\s*\S+", " ", cand, flags=re.I)
+    cand = re.sub(r"\b(?:phone|ph|mob|mobile|tel|contact)\s*[:#\-.]?\s*[\d+\-\s]{6,15}", " ", cand, flags=re.I)
+    cand = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", " ", cand)
+    cand = re.sub(r"\b(?:www\.[^\s]+|[a-zA-Z0-9.-]+\.(?:com|in|org|net))\b", " ", cand, flags=re.I)
+    cand = re.sub(r"\bfssai\s*[:#\-.]?\s*\d+", " ", cand, flags=re.I)
+    cand = re.sub(r"\bstate\s*(?:code)?\s*[:#\-.]?\s*[A-Za-z0-9]+", " ", cand, flags=re.I)
+    cand = _FIELD_LABEL_RE.sub(" ", cand)
+    cand = re.sub(r"[\s|,:;._\-/#*~=`^<>()\[\]{}]+", " ", cand).strip(" *|,:;._-/#~=`^<>()[]{}")
+    return cand
 
 
 def _merge_title_fragments(lines: List[str]) -> List[str]:
@@ -350,30 +373,63 @@ def extract_metadata(lines: List[str], header_text: Optional[str]) -> Dict[str, 
             break
         if len(_COLUMN_WORD_RE.findall(clean)) >= 2:
             break  # reached the item table: the supplier is printed above it, never in it
-        if (not clean or _TITLE_RE.match(clean) or _GSTIN_RE.search(clean.upper()) or _INVNO_RE.search(clean)
-                or _FIELD_LABEL_RE.search(clean)
-                or re.search(r"\b(?:date|dated|phone|ph|mob|mobile|email|gstin|fssai|state)\b", clean, re.I)):
+
+        # Strip metadata labels and values that may share the line with supplier name
+        cand = _clean_supplier_candidate(clean)
+        if not cand or _TITLE_RE.match(cand):
             continue
-        words = re.findall(r"[A-Za-z&]{2,}", clean)
-        if len(words) < 2 or sum(c.isdigit() for c in clean) > len(clean) * 0.3:
+
+        words = re.findall(r"[A-Za-z&]{2,}", cand)
+        if len(words) < 2 or sum(c.isdigit() for c in cand) > len(cand) * 0.3:
             continue
-        if _BUSINESS_RE.search(clean):
-            supplier, supplier_conf = clean, 85.0
+        if len(_COLUMN_WORD_RE.findall(cand)) >= 2:
+            continue
+
+        if _BUSINESS_RE.search(cand):
+            supplier, supplier_conf = cand, 85.0
             break
-        fallback = fallback or clean
+        fallback = fallback or cand
+
     if supplier is None and fallback:
         supplier, supplier_conf = fallback, 55.0
 
     invoice_number, inv_conf = None, 0.0
     invoice_date, date_conf = None, 0.0
     gstin = None
-    for line in top or lines[:15]:
+    search_lines = list(top or lines[:15])
+    for idx, line in enumerate(search_lines):
         if invoice_number is None:
-            m = _INVNO_RE.search(line)
+            m = _INVNO_RE.search(line) or _INV_COLON_RE.search(line)
             if m:
                 cand = m.group(1).rstrip(".-")
-                if cand.lower() not in {"date", "dated", "dt", "no", "number"} and not _DATE_RE.fullmatch(cand):
-                    invoice_number, inv_conf = cand, 85.0
+                cand_clean = cand.strip(" .:-_/#")
+                cand_clean = re.sub(r"\s*([/\-_#])\s*", r"\1", cand_clean)
+                is_invalid = (
+                    cand_clean.lower() in {"date", "dated", "dt", "no", "number", "num", "invoice", "inv", "bill"}
+                    or _DATE_RE.search(cand_clean)
+                    or _GSTIN_RE.search(cand_clean.upper())
+                    or bool(_PHONE_RE.search(cand_clean))
+                    or len(cand_clean) < 1
+                    or len(cand_clean) > 35
+                )
+                if not is_invalid:
+                    invoice_number, inv_conf = cand_clean, 85.0
+            elif idx + 1 < len(search_lines) and _INVNO_LABEL_END_RE.search(line):
+                # Check for multi-line: "Invoice No:" on this line, number on next line
+                next_line = search_lines[idx + 1].strip()
+                nm = re.match(r"^" + _INV_VAL_PATTERN + r"$", next_line)
+                if nm:
+                    ncand = nm.group(1).strip(" .:-_/#")
+                    ncand = re.sub(r"\s*([/\-_#])\s*", r"\1", ncand)
+                    if (
+                        ncand.lower() not in {"date", "dated", "dt", "no", "number", "num"}
+                        and not _DATE_RE.search(ncand)
+                        and not _GSTIN_RE.search(ncand.upper())
+                        and not _PHONE_RE.search(ncand)
+                        and 1 <= len(ncand) <= 35
+                    ):
+                        invoice_number, inv_conf = ncand, 85.0
+
         dm = _DATE_RE.search(line)
         if dm and (invoice_date is None or (date_conf < 85 and re.search(r"\bdate", line, re.I))):
             invoice_date = dm.group(1)
@@ -730,12 +786,45 @@ def _extract_invoice_with_new_pipeline(
     hdr_text = t0.header_text if t0 else None
     meta = extract_metadata(text_lines, hdr_text)
 
-    supplier_name = extracted.supplier_name or meta.get("supplier_name")
-    supplier_conf = 85.0 if extracted.supplier_name else float(meta.get("supplier_confidence", 0.0))
-    invoice_number = extracted.invoice_number or meta.get("invoice_number")
-    inv_conf = 85.0 if extracted.invoice_number else float(meta.get("invoice_no_confidence", 0.0))
-    invoice_date = extracted.invoice_date or meta.get("invoice_date")
-    date_conf = 85.0 if extracted.invoice_date else float(meta.get("date_confidence", 0.0))
+    # Independent extraction and safe confidence handling
+    pipeline_supp = getattr(extracted, "supplier_name", None)
+    meta_supp = meta.get("supplier_name")
+    meta_supp_conf = float(meta.get("supplier_confidence", 0.0))
+    if pipeline_supp:
+        supplier_name = pipeline_supp
+        supplier_conf = 85.0
+    elif meta_supp:
+        supplier_name = meta_supp
+        supplier_conf = meta_supp_conf
+    else:
+        supplier_name = None
+        supplier_conf = 0.0
+
+    pipeline_inv = getattr(extracted, "invoice_number", None)
+    meta_inv = meta.get("invoice_number")
+    meta_inv_conf = float(meta.get("invoice_no_confidence", 0.0))
+    if pipeline_inv:
+        invoice_number = pipeline_inv
+        inv_conf = 85.0
+    elif meta_inv:
+        invoice_number = meta_inv
+        inv_conf = meta_inv_conf
+    else:
+        invoice_number = None
+        inv_conf = 0.0
+
+    pipeline_date = getattr(extracted, "invoice_date", None)
+    meta_date = meta.get("invoice_date")
+    meta_date_conf = float(meta.get("date_confidence", 0.0))
+    if pipeline_date:
+        invoice_date = pipeline_date
+        date_conf = 85.0
+    elif meta_date:
+        invoice_date = meta_date
+        date_conf = meta_date_conf
+    else:
+        invoice_date = None
+        date_conf = 0.0
     gstin = meta.get("gstin")
     meta_total = meta.get("invoice_total")
     tot_amt_res = tot_amt if tot_amt > 0 else (meta_total or 0.0)
@@ -937,25 +1026,36 @@ def confirm_and_update_stock(
             if not supplier:
                 raise InvoiceValidationError("Supplier not found for this shop.")
         elif confirm_in.supplier_name and confirm_in.supplier_name.strip():
+            norm_sup_name = confirm_in.supplier_name.strip()
             supplier = db.query(Supplier).filter(
                 Supplier.shop_id == shop_id,
-                Supplier.supplier_name.ilike(confirm_in.supplier_name.strip()),
+                func.lower(func.trim(Supplier.supplier_name)) == norm_sup_name.lower(),
             ).first()
             if not supplier:
-                supplier = Supplier(shop_id=shop_id, supplier_name=confirm_in.supplier_name.strip())
-                db.add(supplier)
-                db.flush()
-            supplier_id = supplier.id
+                try:
+                    supplier = Supplier(shop_id=shop_id, supplier_name=norm_sup_name)
+                    db.add(supplier)
+                    db.flush()
+                except IntegrityError:
+                    db.rollback()
+                    supplier = db.query(Supplier).filter(
+                        Supplier.shop_id == shop_id,
+                        func.lower(func.trim(Supplier.supplier_name)) == norm_sup_name.lower(),
+                    ).first()
+            if supplier:
+                supplier_id = supplier.id
 
         invoice_number = (confirm_in.invoice_number or "").strip() or None
         # Duplicate protection needs a real printed invoice number: when it is missing the
         # invoice is saved without a duplicate check rather than matched on an invented value.
         # The match ignores letter case so the same invoice read as "INV-1" and "inv-1" is caught.
         if invoice_number:
+            norm_inv = invoice_number.lower()
+            sup_filter = Purchase.supplier_id.is_(None) if supplier_id is None else (Purchase.supplier_id == supplier_id)
             dup = db.query(Purchase).filter(
                 Purchase.shop_id == shop_id,
-                func.lower(Purchase.invoice_number) == invoice_number.lower(),
-                Purchase.supplier_id == supplier_id,
+                func.lower(func.trim(Purchase.invoice_number)) == norm_inv,
+                sup_filter,
             ).first()
             if dup:
                 when = dup.created_at.strftime("%d/%m/%Y") if dup.created_at else "earlier"
@@ -1077,6 +1177,10 @@ def confirm_and_update_stock(
                                 raise InvoiceValidationError(str(pe)) from pe
                         old_sp = product.selling_price
                         product.selling_price = item.selling_price
+                        if item.price_basis_quantity is not None:
+                            product.price_basis_quantity = float(item.price_basis_quantity)
+                        if item.price_basis_unit is not None:
+                            product.price_basis_unit = str(basis_unit)
                         if is_verified and item.update_selling_price:
                             create_pricing_audit_log(
                                 db=db,
@@ -1244,6 +1348,13 @@ def confirm_and_update_stock(
             saved_products=[ProductResponse.model_validate(p) for p in saved_products],
             promotional_lines=promotional_lines,
         )
+    except IntegrityError as exc:
+        db.rollback()
+        inv_str = f" {invoice_number}" if invoice_number else ""
+        raise InvoiceConflictError(
+            f"Invoice{inv_str} was already added to stock by a concurrent transaction. "
+            "Stock was not changed."
+        ) from exc
     except Exception:
         db.rollback()
         raise

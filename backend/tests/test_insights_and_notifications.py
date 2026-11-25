@@ -80,7 +80,11 @@ def test_sales_and_inventory_insights_with_data():
         "purchase_price": 400.0,
         "current_stock": 20,
         "reorder_level": 5,
-        "unit": "bag"
+        "unit": "bag",
+        "pricing_status": "VERIFIED",
+        "mrp": 600.0,
+        "price_basis_quantity": 1.0,
+        "price_basis_unit": "bag",
     })
     p1_id = p1_res.json()["id"]
 
@@ -91,7 +95,11 @@ def test_sales_and_inventory_insights_with_data():
         "purchase_price": 120.0,
         "current_stock": 3,
         "reorder_level": 10,  # Low stock: current_stock (3) <= reorder_level (10)
-        "unit": "bottle"
+        "unit": "bottle",
+        "pricing_status": "VERIFIED",
+        "mrp": 180.0,
+        "price_basis_quantity": 1.0,
+        "price_basis_unit": "bottle",
     })
     p2_id = p2_res.json()["id"]
 
@@ -102,7 +110,11 @@ def test_sales_and_inventory_insights_with_data():
         "purchase_price": 18.0,
         "current_stock": 0,  # Out of stock
         "reorder_level": 15,
-        "unit": "pack"
+        "unit": "pack",
+        "pricing_status": "VERIFIED",
+        "mrp": 30.0,
+        "price_basis_quantity": 1.0,
+        "price_basis_unit": "pack",
     })
     p3_id = p3_res.json()["id"]
 
@@ -113,7 +125,11 @@ def test_sales_and_inventory_insights_with_data():
         "purchase_price": 45.0,
         "current_stock": 100,  # Overstocked (> 5x reorder and >= 40)
         "reorder_level": 10,
-        "unit": "pack"
+        "unit": "pack",
+        "pricing_status": "VERIFIED",
+        "mrp": 65.0,
+        "price_basis_quantity": 1.0,
+        "price_basis_unit": "pack",
     })
     p4_id = p4_res.json()["id"]
 
@@ -333,7 +349,11 @@ def test_sale_creation_triggers_low_stock_alert():
         "purchase_price": 230.0,
         "current_stock": 5,
         "reorder_level": 4,
-        "unit": "bag"
+        "unit": "bag",
+        "pricing_status": "VERIFIED",
+        "mrp": 300.0,
+        "price_basis_quantity": 1.0,
+        "price_basis_unit": "bag",
     })
     prod_id = prod_res.json()["id"]
 
@@ -372,4 +392,122 @@ def test_invoice_confirm_triggers_system_notification():
     notifs = client.get("/api/v1/notifications?category=system", headers=headers).json()
     assert notifs["total"] >= 1
     assert any("Invoice Processed" in n["title"] and "Metro Cash & Carry" or "INV-METRO-991" in n["message"] or n["title"] for n in notifs["items"])
+
+
+def test_get_or_create_preferences_concurrent_safety():
+    import tempfile
+    import sqlite3
+    import threading
+    from pathlib import Path
+    from services.notification import get_or_create_preferences
+    from db.models.user import User
+    from db.models.shop import Shop
+    from db.models.notification import NotificationPreference
+
+    temp_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    temp_db_path = temp_db_file.name
+    temp_db_file.close()
+
+    conn = sqlite3.connect(temp_db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=10000;")
+    conn.commit()
+    conn.close()
+
+    clean_path = str(Path(temp_db_path).resolve()).replace("\\", "/")
+    concurrent_engine = create_engine(
+        f"sqlite:///{clean_path}",
+        connect_args={"check_same_thread": False, "timeout": 30},
+    )
+    Base.metadata.create_all(bind=concurrent_engine)
+    ConcurrentSession = sessionmaker(autocommit=False, autoflush=False, bind=concurrent_engine)
+
+    db = ConcurrentSession()
+    user_id = uuid.uuid4()
+    shop_id = uuid.uuid4()
+    u = User(id=user_id, email=f"concur_{user_id}@example.com", hashed_password="pw")
+    s = Shop(id=shop_id, shop_name="Concur Shop", owner_name="Owner", business_type="Retail", owner_id=user_id)
+    db.add(u)
+    db.add(s)
+    db.commit()
+    db.close()
+
+    results = []
+    errors = []
+
+    def worker():
+        session = ConcurrentSession()
+        try:
+            p = get_or_create_preferences(session, user_id=user_id, shop_id=shop_id)
+            results.append(p.id)
+        except Exception as e:
+            errors.append((type(e).__name__, str(e)))
+        finally:
+            session.close()
+
+    threads = [threading.Thread(target=worker) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(errors) == 0, f"Encountered errors during concurrent preferences: {errors}"
+    assert len(results) == 10
+
+    verify_session = ConcurrentSession()
+    total_prefs = verify_session.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).count()
+    verify_session.close()
+    assert total_prefs == 1
+
+    concurrent_engine.dispose()
+    try:
+        import os
+        os.remove(temp_db_path)
+    except Exception:
+        pass
+
+
+def test_get_or_create_preferences_preserves_uncommitted_caller_transaction():
+    from services.notification import get_or_create_preferences
+    from db.models.user import User
+    from db.models.shop import Shop
+    from db.models.product import Product
+    from db.models.notification import NotificationPreference
+
+    user_id = uuid.uuid4()
+    shop_id = uuid.uuid4()
+
+    db_setup = TestingSessionLocal()
+    u = User(id=user_id, email=f"staged_{user_id}@example.com", hashed_password="pw")
+    s = Shop(id=shop_id, shop_name="Staged Shop", owner_name="Owner", business_type="Retail", owner_id=user_id)
+    db_setup.add(u)
+    db_setup.add(s)
+    db_setup.commit()
+    db_setup.close()
+
+    # db1 stages a product without committing
+    db1 = TestingSessionLocal()
+    p = Product(id=uuid.uuid4(), shop_id=shop_id, name="Staged Product", selling_price=99.0, current_stock=10, unit="pcs")
+    db1.add(p)
+
+    # db2 commits a preference first
+    db2 = TestingSessionLocal()
+    pref2 = NotificationPreference(user_id=user_id, shop_id=shop_id)
+    db2.add(pref2)
+    db2.commit()
+    db2.close()
+
+    # db1 calls get_or_create_preferences - should recover safely
+    pref1 = get_or_create_preferences(db1, user_id=user_id, shop_id=shop_id)
+    assert pref1 is not None
+
+    # db1's staged product must still commit cleanly
+    db1.commit()
+    db1.close()
+
+    db_verify = TestingSessionLocal()
+    saved_prod = db_verify.query(Product).filter(Product.name == "Staged Product").first()
+    assert saved_prod is not None
+    db_verify.close()
+
 

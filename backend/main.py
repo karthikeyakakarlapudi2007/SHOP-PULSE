@@ -1,4 +1,5 @@
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Ensure backend root directory is in sys.path for direct script execution
@@ -41,16 +42,28 @@ INCREMENTAL_COLUMNS = {
 
 
 def init_db_schema(bind=None):
+    """Explicit database schema initialization for development and testing environments.
+
+    If the database contains an 'alembic_version' table, schema evolution belongs
+    exclusively to Alembic migrations, and automatic DDL generation is safely bypassed
+    to prevent corrupting or modifying managed databases.
+    """
     bind = bind or engine
-    Base.metadata.create_all(bind=bind)
     with bind.connect() as conn:
         inspector = inspect(conn)
         tables = set(inspector.get_table_names())
         # If database is managed by Alembic, schema evolution belongs exclusively to migrations.
-        # Skipping INCREMENTAL_COLUMNS prevents subverting Alembic downgrades.
+        # Skipping Base.metadata.create_all and INCREMENTAL_COLUMNS prevents mutating managed schemas.
         if "alembic_version" in tables:
             logger.info("Database schema is managed by Alembic; skipping legacy INCREMENTAL_COLUMNS sync.")
             return
+
+    # For unmigrated / fresh development databases:
+    Base.metadata.create_all(bind=bind)
+
+    with bind.connect() as conn:
+        inspector = inspect(conn)
+        tables = set(inspector.get_table_names())
 
         for table, columns in INCREMENTAL_COLUMNS.items():
             if table not in tables:
@@ -83,12 +96,20 @@ def init_db_schema(bind=None):
             except Exception as exc:
                 logger.debug("Index creation %s skipped: %s", idx_name, exc)
 
-init_db_schema()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.AUTO_INIT_DB:
+        logger.info("Controlled startup: initializing database schema via AUTO_INIT_DB=True")
+        init_db_schema()
+    yield
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url="/docs"
+    docs_url="/docs",
+    lifespan=lifespan,
 )
 
 # Set all CORS enabled origins
@@ -116,4 +137,8 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
+    if "--init-db" in sys.argv:
+        init_db_schema()
+        print("Database schema initialization completed.")
+        sys.exit(0)
     uvicorn.run("main:app", host="127.0.0.1", port=settings.PORT, reload=True, reload_dirs=[str(_backend_dir)])

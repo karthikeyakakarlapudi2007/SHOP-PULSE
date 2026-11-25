@@ -20,11 +20,11 @@ from services import notification as notif_service
 router = APIRouter()
 
 def get_user_shop_or_raise(db: Session, user: User):
-    shop = shop_service.get_shop_by_owner(db, owner_id=user.id)
+    shop = deps.get_user_accessible_shop(db, user)
     if not shop:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User must create a shop profile before managing notifications.",
+            detail="User must create or join a shop profile before managing notifications.",
         )
     return shop
 

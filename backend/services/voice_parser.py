@@ -13,6 +13,8 @@ class ExtractedItem(BaseModel):
     # (None for "each": per spoken unit)
     spoken_unit_price: Optional[float] = None
     price_unit: Optional[str] = None
+    # Action intent: "add", "remove", "update"
+    action: Optional[str] = "add"
 
 # Comprehensive mapping of spoken numbers to integer digits across English and Indian languages
 NUMBER_WORDS = {
@@ -166,20 +168,75 @@ NUMBER_WORDS = {
     "ನಾಲ್ಕು": 4,
     "ಐದು": 5,
     "ಹತ್ತು": 10,
-    # Bengali script
+    # Bengali & Assamese script
     "এক": 1,
     "দুই": 2,
     "তিন": 3,
+    "তিনি": 3,
     "চার": 4,
+    "চাৰি": 4,
     "পাঁচ": 5,
+    "ছয়": 6,
+    "সাত": 7,
+    "আট": 8,
+    "আঠ": 8,
+    "নয়": 9,
+    "ন": 9,
     "দশ": 10,
+    "দহ": 10,
+    # Malayalam script
+    "ഒന്ന്": 1,
+    "രണ്ട്": 2,
+    "മൂന്ന്": 3,
+    "നാല്": 4,
+    "അഞ്ച്": 5,
+    "പത്ത്": 10,
+    # Marathi script
+    "दोन": 2,
+    "पाच": 5,
+    "सहा": 6,
+    "नऊ": 9,
+    "दहा": 10,
+    # Gujarati script
+    "એક": 1,
+    "બે": 2,
+    "ત્રણ": 3,
+    "ચાર": 4,
+    "પાંચ": 5,
+    "છ": 6,
+    "સાત": 7,
+    "આઠ": 8,
+    "નવ": 9,
+    "દસ": 10,
+    # Punjabi script
+    "ਇੱਕ": 1,
+    "ਦੋ": 2,
+    "ਤਿੰਨ": 3,
+    "ਚਾਰ": 4,
+    "ਪੰਜ": 5,
+    "ਛੇ": 6,
+    "ਸੱਤ": 7,
+    "ਅੱਠ": 8,
+    "ਨੌਂ": 9,
+    "ਦਸ": 10,
+    # Odia script
+    "ଏକ": 1,
+    "ଦୁଇ": 2,
+    "ତିନି": 3,
+    "ଚାରି": 4,
+    "ପାଞ୍ଚ": 5,
+    "ଛଅ": 6,
+    "ସାତ": 7,
+    "ଆଠ": 8,
+    "ନଅ": 9,
+    "ଦଶ": 10,
 }
 
 # Unit qualifiers that follow or precede numbers
-PACKAGING_UNITS_REGEX = r"\b(?:కిలోల?|కేజీల?|లీటర్ల?|ప్యాకెట్ల?|బాటిల్|సంచులు|किलो|लीटर|पैकेट|बोतल|पॉकेट|கிலோ|லிட்டர்|பாக்கெட்|ಕಿಲೋ|ಲೀಟರ್|ಕിലോ|ലിറ്റർ|কেজি|packets?|pkts?|pouches?|pouch|boxes?|box|dabba|dappe|pieces?|pcs?|pc|bottles?|btls?|cans?|bags?|trays?|bori|basta|units?|liters?|ltrs?|ltr|kg|kilo|grams?|gms?)\b(?:\s+of\b)?"
+PACKAGING_UNITS_REGEX = r"\b(?:కిలోల?|కేజీల?|లీటర్ల?|ప్యాకెట్ల?|బాటిల్|సంచులు|किलो|लीटर|पैकेट|बोतल|पॉकेट|கிலோ|லிட்டர்|பாக்கெட்|ಕಿಲೋ|ಲೀಟರ್|ಕിലോ|ലിറ്റർ|কেজি|packets?|pkts?|pouches?|pouch|boxes?|box|dabba|dappe|pieces?|pcs?|pc|bottles?|btls?|cans?|bags?|trays?|bori|basta|units?|liters?|litres?|ltrs?|ltr|kg|kgs|kilo|kilos|kilograms?|grams?|gms?|gm)\b(?:\s+of\b)?"
 
 UNIT_STRING_LIST = [
-    "kg", "kgs", "kilo", "kilos", "gram", "grams", "g", "gm", "gms",
+    "kilogram", "kilograms", "kg", "kgs", "kilo", "kilos", "gram", "grams", "g", "gm", "gms",
     "liter", "liters", "litre", "litres", "l", "ltr", "ltrs", "ml",
     "packet", "packets", "pack", "packs", "pkt", "pkts", "pouch", "pouches",
     "piece", "pieces", "pc", "pcs", "unit", "units",
@@ -194,8 +251,8 @@ UNIT_STRING_LIST = [
 # Spoken unit words in regional scripts / colloquial English, mapped to canonical registry unit ids.
 # Language vocabulary only: the units themselves (families, factors, fraction rules) come from the registry.
 REGIONAL_UNIT_IDS = {
-    **{w: "kg" for w in ["కిలో", "కిలోలు", "కిలోల", "కేజీ", "కేజీలు", "కేజీల", "किलो", "किलों", "கிலோ", "ಕಿಲೋ", "കിലോ", "কেজি"]},
-    **{w: "L" for w in ["లీటర్", "లీటర్లు", "లీటర్ల", "लीटर", "लीटरों", "லிட்டர்", "ಲೀಟರ್", "ലിറ്റർ"]},
+    **{w: "kg" for w in ["కిలో", "కిలోలు", "కిలోల", "కేజీ", "కేజీలు", "కేజీల", "किलो", "किलों", "கிலோ", "ಕಿಲೋ", "ಕിലോ", "কেজি", "kilogram", "kilograms"]},
+    **{w: "L" for w in ["లీటర్", "లీటర్లు", "లీటర్ల", "लीटर", "लीटरों", "லிட்டர்", "ಲೀటర్", "ലിറ്റർ", "litre", "litres", "liter", "liters"]},
     **{w: "packet" for w in ["ప్యాకెట్", "ప్యాకెట్లు", "ప్యాకెట్ల", "पैकेट", "पैकेटों", "पॉकेट", "பாக்கெட்", "ಪ್ಯಾಕೆಟ್", "പാക്കറ്റ്"]},
     **{w: "bottle" for w in ["बोतल", "బాటిల్"]},
     "dabba": "box", "dappe": "box", "సంచులు": "bag", "basta": "bag",
@@ -219,9 +276,9 @@ CURRENCY_REGEX = r"(?:రూపాయలు|రూ|రూ\.|రూపాయ|ర
 
 # Conversational fillers at start or end of phrases
 CONVERSATIONAL_FILLERS = [
-    r"^(?:please\s+)?(?:give\s+me|give\s+us|i\s+want|we\s+need|add|bill|put|take|pack|bhejo|dena|daal\s+do|likho|chahiye|ivvandi|kaavali)\s+",
+    r"^(?:please\s+)?(?:give\s+me|give\s+us|i\s+want|we\s+need|add|bill|put|take|pack|remove|delete|cancel|change|update|make|bhejo|dena|daal\s+do|likho|chahiye|ivvandi|kaavali|తీసివేయి|తీసేయి|హటాओ|निकालो)\s+",
     r"\s+(?:chahiye|dena|daal\s+do|likho|bhejo|ivvandi|kaavali|please)$",
-    r"(?:kripya|bhai|bhaiya|ji|andi|ayya)",
+    r" (?:kripya|bhai|bhaiya|ji|andi|ayya) ",
 ]
 
 def normalize_digits_and_numbers(text: str) -> str:
@@ -230,11 +287,20 @@ def normalize_digits_and_numbers(text: str) -> str:
     """
     s = text.strip()
 
-    # Convert Indic script digits to standard 0-9
-    devanagari_digits = str.maketrans("०१२३४५६७८९", "0123456789")
-    telugu_digits = str.maketrans("౦౧౨౩౪౫౬౭౮౯", "0123456789")
-    bengali_digits = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
-    s = s.translate(devanagari_digits).translate(telugu_digits).translate(bengali_digits)
+    # Convert all 10 Indic script digits to standard 0-9
+    indic_digits_map = {
+        '०': '0', '१': '1', '२': '2', '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
+        '౦': '0', '౧': '1', '౨': '2', '౩': '3', '౪': '4', '౫': '5', '౬': '6', '౭': '7', '౮': '8', '౯': '9',
+        '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9',
+        '૦': '0', '૧': '1', '૨': '2', '૩': '3', '૪': '4', '૫': '5', '૬': '6', '૭': '7', '૮': '8', '૯': '9',
+        '੦': '0', '੧': '1', '੨': '2', '੩': '3', '੪': '4', '੫': '5', '੬': '6', '੭': '7', '੮': '8', '੯': '9',
+        '୦': '0', '୧': '1', '୨': '2', '୩': '3', '୪': '4', '୫': '5', '୬': '6', '୭': '7', '୮': '8', '୯': '9',
+        '೦': '0', '೧': '1', '೨': '2', '೩': '3', '೪': '4', '೫': '5', '೬': '6', '೭': '7', '೮': '8', '೯': '9',
+        '൦': '0', '൧': '1', '൨': '2', '൩': '3', '൪': '4', '൫': '5', '൬': '6', '൭': '7', '൮': '8', '൯': '9',
+        '௦': '0', '௧': '1', '௨': '2', '௩': '3', '௪': '4', '௫': '5', '௬': '6', '௭': '7', '௮': '8', '௯': '9',
+    }
+    indic_trans = str.maketrans("".join(indic_digits_map.keys()), "".join(indic_digits_map.values()))
+    s = s.translate(indic_trans)
 
     s = f" {s} "
 
@@ -431,12 +497,27 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
 
     # Split into item clauses by common spoken sentence connectors
     delimiters = r"[,;\n\+]|\b(?:and|aur|plus|mariyu|matrum|evam|tatha)\b|&"
-    raw_segments = [s.strip() for s in re.split(delimiters, normalized, flags=re.IGNORECASE) if s.strip()]
+    raw_segments = [s.strip().rstrip('.!?') for s in re.split(delimiters, normalized, flags=re.IGNORECASE) if s.strip()]
 
     items: List[ExtractedItem] = []
 
     for raw_seg in raw_segments:
         s = raw_seg.strip()
+
+        # Detect change or removal command
+        item_action = "add"
+        ch_match = re.match(
+            r"^(?:change|update|modify|make|badlo|marchu)\s+(.+?)(?:\s+(?:quantity|qty))?\s+to\s+(\d+(?:\.\d+)?.*)$",
+            s,
+            flags=re.IGNORECASE,
+        )
+        if ch_match:
+            s = f"{ch_match.group(2).rstrip('.!? ')} {ch_match.group(1).rstrip('.!? ')}".strip()
+            item_action = "update"
+        elif re.search(r"^(?:remove|delete|cancel|drop|hatao|nikalo|theesey|తీసివేయి|తీసేయి)\s+", s, flags=re.IGNORECASE):
+            s = re.sub(r"^(?:remove|delete|cancel|drop|hatao|nikalo|theesey|తీసివేయి|తీసేయి)\s+", "", s, flags=re.IGNORECASE).strip()
+            item_action = "remove"
+
         for pattern in CONVERSATIONAL_FILLERS:
             s = re.sub(pattern, "", s, flags=re.IGNORECASE).strip()
 
@@ -471,6 +552,7 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
                         name=prod_text,
                         quantity=qty_val if qty_val > 0 else 1,
                         unit=unit_id,
+                        action=item_action,
                         **price_fields,
                     ))
 
@@ -495,6 +577,7 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
                         name=prod_text,
                         quantity=qty_val if qty_val > 0 else 1,
                         unit=unit_id,
+                        action=item_action,
                         **price_fields,
                     ))
 
@@ -508,6 +591,7 @@ def extract_items_from_transcript(transcript: str) -> List[ExtractedItem]:
                     name=prod_text,
                     quantity=1,
                     unit=None,
+                    action=item_action,
                     **price_fields,
                 ))
             break

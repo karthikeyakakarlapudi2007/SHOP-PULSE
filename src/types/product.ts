@@ -41,6 +41,11 @@ export interface Product {
   sku?: string;
   supplierId?: string;
   isActive?: boolean;
+  priceBasisQuantity?: number;
+  priceBasisUnit?: string;
+  mrpBasisQuantity?: number;
+  mrpBasisUnit?: string;
+  pricingStatus?: 'VERIFIED' | 'NEEDS_REVIEW' | 'INCOMPLETE' | 'WHOLESALE_ONLY' | string;
   lastRestocked?: string;
   createdAt: string;
   updatedAt: string;
@@ -64,6 +69,11 @@ export interface ProductInput {
   barcode?: string;
   sku?: string;
   supplierId?: string;
+  priceBasisQuantity?: number;
+  priceBasisUnit?: string;
+  mrpBasisQuantity?: number;
+  mrpBasisUnit?: string;
+  pricingStatus?: string;
   lastRestocked?: string;
 }
 

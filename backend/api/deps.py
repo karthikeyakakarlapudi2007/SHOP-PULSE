@@ -110,3 +110,39 @@ def require_shop_roles(allowed_roles: List[str]) -> Callable:
             )
         return member
     return role_checker
+
+
+def get_current_shop_and_role(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> tuple[Shop, ShopMember]:
+    """Fetch the active shop and the user's membership for the shop.
+    Returns 400 if user has no shop profile, or 403 if user is not an active authorized member."""
+    shop = get_user_accessible_shop(db, current_user)
+    if not shop:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User must create a shop profile or join an existing shop first."
+        )
+    member = shop_member_service.get_shop_member(db, shop_id=shop.id, user_id=current_user.id)
+    if not member or not member.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not an authorized active member of this shop."
+        )
+    return shop, member
+
+
+def require_roles(allowed_roles: List[str]) -> Callable:
+    """Dependency factory ensuring current user holds one of allowed_roles in their accessible shop."""
+    def role_checker(
+        shop_and_member: tuple[Shop, ShopMember] = Depends(get_current_shop_and_role)
+    ) -> tuple[Shop, ShopMember]:
+        shop, member = shop_and_member
+        if member.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Operation requires elevated role ({', '.join(allowed_roles)}). Current role: {member.role}."
+            )
+        return shop, member
+    return role_checker

@@ -56,6 +56,8 @@ def add_product(headers, name, sku=None, category="Groceries", stock=50, price=3
     res = client.post("/api/v1/products", json={
         "name": name, "category": category, "selling_price": price, "purchase_price": price - 5,
         "current_stock": stock, "reorder_level": 5, "unit": "pcs", "sku": sku,
+        "pricing_status": "VERIFIED", "mrp": max(float(price) * 1.5, 50.0),
+        "price_basis_quantity": 1.0, "price_basis_unit": "pcs",
     }, headers=headers)
     assert res.status_code == 201, res.text
     return res.json()

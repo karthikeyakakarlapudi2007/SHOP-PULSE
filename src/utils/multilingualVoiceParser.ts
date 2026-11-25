@@ -433,7 +433,7 @@ const CURRENCY_REGEX =
  * Conversational filler words at beginning or ending of voice commands.
  */
 const CONVERSATIONAL_FILLERS = [
-  /^(?:please\s+)?(?:give\s+me|give\s+us|i\s+want|we\s+need|add|bill|put|take|pack|bhejo|dena|daal\s+do|likho|chahiye|ivvandi|kaavali|veeyandi|thanga|kodu|tha|venum)\s+/i,
+  /^(?:please\s+)?(?:give\s+me|give\s+us|i\s+want|we\s+need|add|bill|put|take|pack|remove|delete|cancel|change|update|make|bhejo|dena|daal\s+do|likho|chahiye|ivvandi|kaavali|veeyandi|thanga|kodu|tha|venum)\s+/i,
   /\s+(?:chahiye|dena|daal\s+do|likho|bhejo|ivvandi|kaavali|veeyandi|thanga|kodu|tha|venum|please)$/i,
   /\b(?:kripya|bhai|bhaiya|ji|andi|ayya|anna)\b/gi,
 ];
@@ -522,13 +522,13 @@ export function cleanExtractedProductName(raw: string): string {
 
   // Remove leading unit qualifiers in English and Indic scripts (e.g. "kg rice" -> "rice")
   name = name.replace(
-    /^(?:కిలోల?|కేజీ|లీటర్ల?|ప్యాకెట్ల?|బాటిల్|సంచులు|किलो|लीटर|पैकेट|बोतल|थैला|बोरी|पॉकेट|கிலோ|லிட்டர்|பாக்கெட்|பாட்டில்|பைகள்|ಕಿಲೋ|ಲೀಟರ್|ಪ್ಯಾಕೆಟ್|ಬಾಟಲ್|കിലോ|ലിറ്റർ|പാക്കറ്റ്|കുപ്പി|पाकीट|बाटली|কেজি|প্যাকেট|પેકેટ|પૅકેટ|પੈકેટ|ବୋତଲ|পেকেট|packets?|pkts?|pouches?|pouch|boxes?|box|pieces?|pcs?|pc|bottles?|btls?|cans?|bags?|trays?|units?|liters?|ltrs?|ltr|kg|kilo|grams?|gms?)(?:\s+of)?(?:\s+|$)/gi,
+    /^(?:కిలోల?|కేజీ|లీటర్ల?|ప్యాకెట్ల?|బాటిల్|సంచులు|किलो|लीटर|पैकेट|बोतल|थैला|बोरी|पॉकेट|கிலோ|லிட்டர்|பாக்கெட்|பாட்டில்|பைகள்|ಕಿಲೋ|ಲೀಟರ್|ಪ್ಯಾಕೆಟ್|ಬಾಟಲ್|കിലോ|ലിറ്റർ|പാക്കറ്റ്|കുപ്പി|पाकीट|बाटली|কেজি|প্যাকেট|પેકેટ|પૅકેટ|પੈકેટ|ବୋତଲ|পেকেট|packets?|pkts?|pouches?|pouch|boxes?|box|pieces?|pcs?|pc|bottles?|btls?|cans?|bags?|trays?|units?|liters?|litres?|ltrs?|ltr|kg|kgs|kilo|kilos|kilograms?|grams?|gms?|g|gm)(?:\s+of)?(?:\s+|$)/gi,
     ''
   ).trim();
 
   // Remove trailing isolated unit qualifier if not part of a size like 1kg/500g (e.g. "rice kg" -> "rice")
   name = name.replace(
-    /(?<=\s)(?:కిలోల?|కేజీ|లీటర్ల?|ప్యాకెట్ల?|బాటిల్|సంచులు|किलो|लीटर|पैकेट|बोतल|थैला|बोरी|पॉकेट|கிலோ|லிட்டர்|பாக்கெட்|பாட்டில்|பைகள்|ಕಿಲೋ|ಲೀಟರ್|ಪ್ಯಾಕೆಟ್|ಬಾಟಲ್|കിലോ|ലിറ്റർ|പാക്കറ്റ്|കുപ്പി|पाकीट|बाटली|কেজি|প্যাকেট|પેકેટ|પૅકેટ|પੈકેટ|ବୋତଲ|পেকেট|packets?|pkts?|pouches?|pouch|boxes?|box|pieces?|pcs?|pc|bottles?|btls?|cans?|bags?|trays?|units?|liters?|ltrs?|ltr|kg|kilo|grams?|gms?)$/gi,
+    /(?<=\s)(?:కిలోల?|కేజీ|లీటర్ల?|ప్యాకెట్ల?|బాటిల్|సంచులు|किलो|लीटर|पैकेट|बोतल|थैला|बोरी|पॉकेट|கிலோ|லிட்டர்|பாக்கெட்|பாட்டில்|பைகள்|ಕಿಲೋ|ಲೀಟರ್|ಪ್ಯಾಕೆಟ್|ಬಾಟಲ್|കിലോ|ലിറ്റർ|പാക്കറ്റ്|കുപ്പി|पाकीट|बाटली|কেজি|প্যাকেট|પેકેટ|પૅકેટ|પੈકેટ|ବୋତଲ|পেকেট|packets?|pkts?|pouches?|pouch|boxes?|box|pieces?|pcs?|pc|bottles?|btls?|cans?|bags?|trays?|units?|liters?|litres?|ltrs?|ltr|kg|kgs|kilo|kilos|kilograms?|grams?|gms?|g|gm)$/gi,
     ''
   ).trim();
 
@@ -740,7 +740,20 @@ export function extractItemsFromClause(clause: string): ExtractedVoiceClause[] {
     .filter(Boolean);
 
   for (const chunk of subChunks) {
-    let s = chunk;
+    let s = chunk.trim();
+
+    // Handle change or removal command expressions
+    const chMatch = s.match(/^(?:change|update|modify|make)\s+(.+?)(?:\s+(?:quantity|qty))?\s+to\s+(\d+(?:\.\d+)?.*)$/i);
+    if (chMatch) {
+      s = `${chMatch[2].replace(/[.!?]+$/, '')} ${chMatch[1].replace(/[.!?]+$/, '')}`.trim();
+    } else {
+      s = s.replace(/^(?:remove|delete|cancel|drop)\s+/i, '').trim();
+    }
+
+    // Strip leading and trailing conversational fillers before item/quantity extraction
+    for (const filler of CONVERSATIONAL_FILLERS) {
+      s = s.replace(filler, ' ').trim();
+    }
 
     while (s.length > 0) {
       s = s.trim();
@@ -906,30 +919,58 @@ export function parseMultilingualVoiceBill(
         continue;
       }
 
-      // A unit other than the product's needs the backend's exact conversion (500 g of a kg product is
-      // 0.5 kg): this offline preview never guesses it, the line is shown for correction instead
+      // Support standard metric conversions (500 g -> 0.5 kg, 500 ml -> 0.5 L)
       const productUnit = UNIT_NORMALIZATION_MAP[(matchedProduct.unit || '').trim().toLowerCase()] ?? null;
-      const isMeasure = (u: CanonicalUnit | null) => u === 'kg' || u === 'g' || u === 'L' || u === 'ml';
-      // Count / package words ("2 packets" of a product counted in packs) mean the product's own unit
-      if (detectedUnit !== null && detectedUnit !== productUnit && (isMeasure(detectedUnit) || isMeasure(productUnit))) {
-        unmatchedItems.push({
-          queried_name: cleanName,
-          quantity,
-          reason: `Said in ${detectedUnit}, but ${matchedProduct.name} is sold in ${matchedProduct.unit || 'its own unit'}: check the quantity`,
-        });
-        continue;
+      const isWeight = (u: CanonicalUnit | null) => u === 'kg' || u === 'g';
+      const isVolume = (u: CanonicalUnit | null) => u === 'L' || u === 'ml';
+      const isMeasure = (u: CanonicalUnit | null) => isWeight(u) || isVolume(u);
+
+      let effectiveQuantity = quantity;
+      if (detectedUnit !== null && detectedUnit !== productUnit) {
+        if (detectedUnit === 'g' && productUnit === 'kg') {
+          effectiveQuantity = Math.round((quantity / 1000) * 1000) / 1000;
+        } else if (detectedUnit === 'kg' && productUnit === 'g') {
+          effectiveQuantity = quantity * 1000;
+        } else if (detectedUnit === 'ml' && productUnit === 'L') {
+          effectiveQuantity = Math.round((quantity / 1000) * 1000) / 1000;
+        } else if (detectedUnit === 'L' && productUnit === 'ml') {
+          effectiveQuantity = quantity * 1000;
+        } else if (isMeasure(detectedUnit) || isMeasure(productUnit)) {
+          unmatchedItems.push({
+            queried_name: cleanName,
+            quantity,
+            reason: `Said in ${detectedUnit}, but ${matchedProduct.name} is sold in ${matchedProduct.unit || 'its own unit'}: check the quantity`,
+          });
+          continue;
+        }
       }
 
       // Single clear match
       const catalogPrice = matchedProduct.sellingPrice ?? matchedProduct.price ?? 0;
+      const basisQty = (matchedProduct.priceBasisQuantity ?? (matchedProduct as any).price_basis_quantity) || 1.0;
+      const basisUnit = (matchedProduct.priceBasisUnit ?? (matchedProduct as any).price_basis_unit) || matchedProduct.unit || 'pcs';
+
+      let normalizedBasisQty = basisQty;
+      if (productUnit === 'kg' && basisUnit === 'g') {
+        normalizedBasisQty = basisQty / 1000;
+      } else if (productUnit === 'g' && basisUnit === 'kg') {
+        normalizedBasisQty = basisQty * 1000;
+      } else if (productUnit === 'L' && basisUnit === 'ml') {
+        normalizedBasisQty = basisQty / 1000;
+      } else if (productUnit === 'ml' && basisUnit === 'L') {
+        normalizedBasisQty = basisQty * 1000;
+      }
+
+      const effectiveBasis = normalizedBasisQty > 0 ? normalizedBasisQty : 1.0;
       // A spoken total is the line total; the exact unit price reproduces it (100 for 3 -> 33.333..., never 99.99)
-      const lineTotal = spokenPrice !== null ? spokenPrice : Math.round(catalogPrice * quantity * 100) / 100;
-      const unitPriceExact = spokenPrice !== null ? spokenPrice / quantity : catalogPrice;
+      const calculatedLineTotal = Math.round(((catalogPrice * effectiveQuantity) / effectiveBasis) * 100) / 100;
+      const lineTotal = spokenPrice !== null ? spokenPrice : calculatedLineTotal;
+      const unitPriceExact = spokenPrice !== null ? spokenPrice / effectiveQuantity : (catalogPrice / effectiveBasis);
 
       matchedItems.push({
         product_id: matchedProduct.id,
         name: matchedProduct.name,
-        quantity,
+        quantity: effectiveQuantity,
         unit_price: Math.round(unitPriceExact * 1000) / 1000,
         unit_price_exact: unitPriceExact,
         price_source: spokenPrice !== null ? 'spoken' : 'catalogue',
@@ -937,7 +978,7 @@ export function parseMultilingualVoiceBill(
         unit: matchedProduct.unit || 'pcs',
         current_stock: matchedProduct.stock ?? 10,
         is_out_of_stock: (matchedProduct.stock ?? 0) <= 0,
-        is_insufficient_stock: quantity > (matchedProduct.stock ?? 0),
+        is_insufficient_stock: effectiveQuantity > (matchedProduct.stock ?? 0),
         available_stock: Math.max(0, matchedProduct.stock ?? 0),
       });
     } else {

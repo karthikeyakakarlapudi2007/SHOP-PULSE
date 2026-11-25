@@ -117,10 +117,23 @@ def test_app_refuses_the_development_database_in_test_mode():
 def test_app_starts_on_a_test_database_and_creates_its_schema_there(tmp_path):
     before = _fingerprint(DEFAULT_DB_PATH)
     db = tmp_path / "isolated.db"
+
+    # 1. Importing main does not create the database file
     proc = _import_app({"SHOPPULSE_TEST_MODE": "1", "DATABASE_URL": f"sqlite:///{db}"})
     assert proc.returncode == 0, proc.stderr
+    assert not db.exists(), "importing main should not create the database file"
+
+    # 2. Controlled initialization explicitly initializes schema on the test database
+    env = {k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "SHOPPULSE_TEST_MODE")}
+    env.update({"SHOPPULSE_TEST_MODE": "1", "DATABASE_URL": f"sqlite:///{db}"})
+    init_proc = subprocess.run(
+        [sys.executable, "-c", "import main; main.init_db_schema(); from db.session import engine; print(engine.url)"],
+        cwd=BACKEND_DIR, env=env, capture_output=True, text=True, timeout=120
+    )
+    assert init_proc.returncode == 0, init_proc.stderr
+
     import urllib.parse
-    stdout_unquoted = urllib.parse.unquote(proc.stdout)
+    stdout_unquoted = urllib.parse.unquote(init_proc.stdout)
     assert str(db) in stdout_unquoted.replace("/", "\\") or str(db).replace("\\", "/") in stdout_unquoted
     import sqlite3
 

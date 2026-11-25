@@ -46,8 +46,16 @@ def api():
 
 
 def _product(c, h, name, unit, stock, price=50.0, expect=201):
-    r = c.post("/api/v1/products", json={"name": name, "selling_price": price, "purchase_price": price,
-                                         "current_stock": stock, "unit": unit}, headers=h)
+    payload = {
+        "name": name, "selling_price": price, "purchase_price": price,
+        "current_stock": stock, "unit": unit
+    }
+    if expect == 201:
+        payload["pricing_status"] = "VERIFIED"
+        payload["mrp"] = max(float(price) * 2, 100.0)
+        payload["price_basis_quantity"] = 1.0
+        payload["price_basis_unit"] = unit
+    r = c.post("/api/v1/products", json=payload, headers=h)
     assert r.status_code == expect, r.text
     return r.json() if expect == 201 else r.json()["detail"]
 
@@ -119,7 +127,7 @@ def test_purchase_250_g(api):
 @pytest.mark.parametrize("payload,needle", [
     ({"quantity": 2.5}, "whole"),                     # pcs product
     ({"quantity": 1, "unit": "kg"}, "cannot be converted"),
-    ({"quantity": 1, "unit": "zzz"}, "not a registered unit"),
+    ({"quantity": 1, "unit": "zzz"}, "unit registry"),
 ])
 def test_invalid_sale_quantities_change_nothing(api, payload, needle):
     c, h = api
@@ -191,7 +199,18 @@ def _race(tmp_path, stock, sale_qty):
         shop = Shop(shop_name="K", owner_name="R", business_type="Grocery/Kirana", location="B", owner_id=u.id)
         s.add(shop)
         s.flush()
-        p = Product(name="Salt", selling_price=22.0, purchase_price=20.0, current_stock=stock, unit="kg", shop_id=shop.id)
+        p = Product(
+            name="Salt",
+            selling_price=22.0,
+            purchase_price=20.0,
+            mrp=30.0,
+            pricing_status="VERIFIED",
+            current_stock=stock,
+            unit="kg",
+            price_basis_quantity=1.0,
+            price_basis_unit="kg",
+            shop_id=shop.id,
+        )
         s.add(p)
         s.commit()
         pid, sid = p.id, shop.id

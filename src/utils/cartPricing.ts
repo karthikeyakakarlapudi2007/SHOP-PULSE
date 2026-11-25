@@ -48,7 +48,26 @@ export function lineTotal(quantity: number, unitPrice: number): number {
 }
 
 export function catalogPrice(product: Product): number {
-  return Number(product.sellingPrice ?? product.price ?? 0);
+  const sp = Number(product.sellingPrice ?? product.price ?? 0);
+  const basisQty = Number((product as any).priceBasisQuantity ?? (product as any).price_basis_quantity ?? 1.0);
+  const basisUnit = ((product as any).priceBasisUnit ?? (product as any).price_basis_unit ?? product.unit ?? '').toLowerCase().trim();
+  const prodUnit = (product.unit ?? '').toLowerCase().trim();
+
+  if (!basisQty || basisQty <= 0) return sp;
+
+  let normalizedBasisQty = basisQty;
+  if (prodUnit === 'kg' && (basisUnit === 'g' || basisUnit === 'gm')) {
+    normalizedBasisQty = basisQty / 1000;
+  } else if ((prodUnit === 'g' || prodUnit === 'gm') && basisUnit === 'kg') {
+    normalizedBasisQty = basisQty * 1000;
+  } else if ((prodUnit === 'l' || prodUnit === 'lt' || prodUnit === 'ltr' || prodUnit === 'liter' || prodUnit === 'litre') && basisUnit === 'ml') {
+    normalizedBasisQty = basisQty / 1000;
+  } else if (prodUnit === 'ml' && (basisUnit === 'l' || basisUnit === 'lt' || basisUnit === 'ltr' || basisUnit === 'liter' || basisUnit === 'litre')) {
+    normalizedBasisQty = basisQty * 1000;
+  }
+
+  const effectiveBasis = normalizedBasisQty > 0 ? normalizedBasisQty : 1.0;
+  return sp / effectiveBasis;
 }
 
 /** The price per unit this line is sold at: its agreed (spoken / corrected) price, else the catalogue. */

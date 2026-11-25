@@ -38,6 +38,7 @@ class ShopUpdate(BaseModel):
 class ShopResponse(ShopBase):
     id: UUID
     owner_id: UUID
+    current_user_role: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

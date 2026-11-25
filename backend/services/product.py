@@ -253,6 +253,15 @@ def update_product(
     sp_changed = ("selling_price" in update_data and update_data["selling_price"] != old_sp)
     mrp_changed = ("mrp" in update_data and update_data["mrp"] != old_mrp)
 
+    # If the product is VERIFIED, modifying selling price or MRP is a price override and requires MANAGER or OWNER role
+    if (sp_changed or mrp_changed) and getattr(db_product, "pricing_status", None) == "VERIFIED" and acting_user_id:
+        member = get_shop_member(db, db_product.shop_id, acting_user_id)
+        if not member or member.role not in [ShopRole.OWNER.value, ShopRole.MANAGER.value]:
+            field_name = "selling price" if sp_changed else "MRP"
+            raise PermissionError(
+                f"User does not have authorization to override {field_name} for verified product '{db_product.name}'. Manager or Owner role required."
+            )
+
     mrp_source = update_data.pop("mrp_source", None)
     if "mrp" in update_data and update_data["mrp"] != db_product.mrp:
         # Track where the MRP came from whenever it changes

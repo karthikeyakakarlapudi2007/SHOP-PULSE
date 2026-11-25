@@ -4,25 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from api import deps
-from db.models.user import User
+from db.models.shop import Shop
+from db.models.shop_member import ShopMember, ShopRole
 from schemas.purchase import (
     PurchaseCreate,
     PurchaseResponse,
     PaginatedPurchaseResponse,
 )
-from services import shop as shop_service
 from services import purchase as purchase_service
+from services.forecasting import invalidate_forecast_cache
 
 router = APIRouter()
-
-def get_user_shop_or_raise(db: Session, user: User):
-    shop = shop_service.get_shop_by_owner(db, owner_id=user.id)
-    if not shop:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User must create a shop profile before logging stock purchases.",
-        )
-    return shop
 
 @router.post("", response_model=PurchaseResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=PurchaseResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
@@ -30,14 +22,17 @@ def create_purchase(
     *,
     db: Session = Depends(deps.get_db),
     purchase_in: PurchaseCreate,
-    current_user: User = Depends(deps.get_current_user)
+    auth_context: tuple[Shop, ShopMember] = Depends(deps.require_roles([ShopRole.OWNER.value, ShopRole.MANAGER.value])),
 ) -> Any:
     """
     Log a new stock purchase, automatically increasing product inventory.
+    Restricted to Owner and Manager roles.
     """
-    user_shop = get_user_shop_or_raise(db, current_user)
+    user_shop, _ = auth_context
     try:
-        return purchase_service.create_purchase(db, purchase_in=purchase_in, shop_id=user_shop.id)
+        purchase = purchase_service.create_purchase(db, purchase_in=purchase_in, shop_id=user_shop.id)
+        invalidate_forecast_cache(user_shop.id)
+        return purchase
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -48,17 +43,15 @@ def get_purchases(
     db: Session = Depends(deps.get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    current_user: User = Depends(deps.get_current_user)
+    auth_context: tuple[Shop, ShopMember] = Depends(deps.require_roles([ShopRole.OWNER.value, ShopRole.MANAGER.value])),
 ) -> Any:
     """
     Get paginated purchase history for the authenticated user's shop.
+    Restricted to Owner and Manager roles.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
-    if not shop:
-        return PaginatedPurchaseResponse(items=[], total=0, skip=skip, limit=limit)
-    
+    user_shop, _ = auth_context
     items, total = purchase_service.get_purchases_by_shop(
-        db, shop_id=shop.id, skip=skip, limit=limit
+        db, shop_id=user_shop.id, skip=skip, limit=limit
     )
     return PaginatedPurchaseResponse(items=items, total=total, skip=skip, limit=limit)
 
@@ -67,12 +60,13 @@ def get_purchase(
     *,
     db: Session = Depends(deps.get_db),
     id: UUID,
-    current_user: User = Depends(deps.get_current_user)
+    auth_context: tuple[Shop, ShopMember] = Depends(deps.require_roles([ShopRole.OWNER.value, ShopRole.MANAGER.value])),
 ) -> Any:
     """
     Get purchase details by ID, including item lines.
+    Restricted to Owner and Manager roles.
     """
-    user_shop = get_user_shop_or_raise(db, current_user)
+    user_shop, _ = auth_context
     purchase = purchase_service.get_purchase_by_id(db, purchase_id=id)
     if not purchase:
         raise HTTPException(

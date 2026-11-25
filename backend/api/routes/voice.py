@@ -32,6 +32,7 @@ SUPPORTED_LANGUAGES = [
     {"code": "gu-IN", "name": "Gujarati", "nativeName": "ગુજરાતી"},
     {"code": "pa-IN", "name": "Punjabi", "nativeName": "ਪੰਜਾਬੀ"},
     {"code": "or-IN", "name": "Odia", "nativeName": "ଓଡ଼ିଆ"},
+    {"code": "as-IN", "name": "Assamese", "nativeName": "অসমীয়া"},
 ]
 
 def get_optional_current_user(db: Session, token: Optional[str]) -> Optional[User]:
@@ -56,24 +57,22 @@ def resolve_catalog_products(
 ) -> List[Any]:
     """
     Resolves product catalog:
-    1. If user is authenticated with a shop profile, fetch the shop's live products from DB.
+    1. If user is authenticated with an accessible shop profile, fetch only that shop's live products from DB.
     2. If custom_products are provided in the payload (e.g. from frontend active inventory or tests), use them.
-    3. Fallback to all products available in DB for the workspace.
+    3. If unauthenticated, fallback to custom_products or empty list. NEVER fall back to another shop's records.
     """
-    catalog = []
     if current_user:
-        user_shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
+        user_shop = deps.get_user_accessible_shop(db, current_user)
         if user_shop:
-            catalog = db.query(Product).filter(Product.shop_id == user_shop.id).all()
+            return db.query(Product).filter(
+                Product.shop_id == user_shop.id,
+                Product.is_active.is_(True)
+            ).all()
 
-    if not catalog and custom_products:
+    if custom_products:
         return custom_products
 
-    if not catalog:
-        # Fallback to any products in DB
-        catalog = db.query(Product).limit(100).all()
-
-    return catalog
+    return []
 
 @router.get("/status", response_model=VoiceStatusResponse)
 def get_voice_status() -> Any:

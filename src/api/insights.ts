@@ -107,6 +107,64 @@ export interface AiInsightsData {
   note: string | null;
 }
 
+export type ForecastTier =
+  | 'TIER_1_SUFFICIENT'
+  | 'TIER_2_SPARSE'
+  | 'TIER_3_COLD_START';
+
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+
+export type ForecastStatus =
+  | 'ACTIVE'
+  | 'OUT_OF_STOCK'
+  | 'LOW_STOCK'
+  | 'SPARSE_HISTORY'
+  | 'NEW_PRODUCT_NO_SALES_HISTORY'
+  | 'UNIT_REVIEW_REQUIRED'
+  | 'INSUFFICIENT_HISTORY';
+
+export interface ProductDemandForecast {
+  product_id: string;
+  product_name: string;
+  current_stock: number;
+  normalized_unit: string;
+  total_valid_sales: number;
+  observable_days: number;
+  daily_demand_rate: number | null;
+  expected_seven_day_demand: number | null;
+  days_to_stockout: number | null;
+  recommended_reorder_quantity: number | null;
+  confidence_level: ConfidenceLevel;
+  forecast_tier: ForecastTier;
+  forecast_status: ForecastStatus;
+  is_reorder_provisional: boolean;
+  assumptions: string[];
+  warnings: string[];
+}
+
+export interface ShopForecastSummary {
+  shop_id: string;
+  generated_at: string;
+  total_products_analyzed: number;
+  tier_1_count: number;
+  tier_2_count: number;
+  tier_3_count: number;
+  out_of_stock_count: number;
+  at_risk_stockout_7d_count: number;
+  forecasts: ProductDemandForecast[];
+}
+
+export interface DemandForecastParams {
+  product_id?: string;
+  forecast_tier?: ForecastTier;
+  forecast_status?: ForecastStatus;
+  confidence_level?: ConfidenceLevel;
+  lead_time_days?: number;
+  alpha?: number;
+  include_zero_price?: boolean;
+  no_cache?: boolean;
+}
+
 export const insightsApi = {
   getSalesInsights: async (
     period: 'today' | '7d' | '30d' | '90d' | 'custom' = '7d',
@@ -126,6 +184,14 @@ export const insightsApi = {
 
   getAiInsights: async (): Promise<AiInsightsData> => {
     return apiClient.get<AiInsightsData>('/api/v1/insights/ai-summary');
+  },
+
+  getDemandForecast: async (
+    params?: DemandForecastParams
+  ): Promise<ShopForecastSummary> => {
+    return apiClient.get<ShopForecastSummary>('/api/v1/insights/demand-forecast', {
+      params: params as Record<string, string | number | boolean | undefined | null>,
+    });
   },
 
 };

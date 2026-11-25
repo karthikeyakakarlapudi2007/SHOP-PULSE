@@ -4,7 +4,7 @@
  * Belongs in `src/types/user.ts`.
  */
 
-export type UserRole = 'owner' | 'manager' | 'staff';
+export type UserRole = 'owner' | 'manager' | 'cashier' | 'staff' | 'OWNER' | 'MANAGER' | 'CASHIER';
 
 export type BusinessType = 
   | 'Kirana Store' 

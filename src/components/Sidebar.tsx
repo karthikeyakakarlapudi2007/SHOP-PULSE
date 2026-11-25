@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { PageRoute } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useShopRole } from '../hooks/useShopRole';
 
 export interface SidebarProps {
   activePage: PageRoute;
@@ -40,6 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
 }) => {
   const { t } = useLanguage();
+  const { canAccessPage } = useShopRole();
 
   // Navigation groups aligned with Shelfora intelligence architecture
   const navGroups: NavGroup[] = [
@@ -81,6 +83,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessPage(item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <aside 
       aria-label="Sidebar Navigation"
@@ -90,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* Navigation Groups */}
       <nav aria-label="Main menu" className="space-y-3 overflow-y-auto pr-0.5">
-        {navGroups.map((group, groupIdx) => (
+        {visibleGroups.map((group, groupIdx) => (
           <div key={group.id} className="space-y-1">
             {/* Group Header / Separator */}
             {!isCollapsed ? (

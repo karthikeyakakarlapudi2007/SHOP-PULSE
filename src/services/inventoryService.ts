@@ -53,6 +53,11 @@ export function mapBackendProductToFrontend(bp: ProductBackend): Product {
     sku: bp.sku || undefined,
     supplierId: bp.supplier_id || undefined,
     isActive: bp.is_active ?? true,
+    priceBasisQuantity: typeof bp.price_basis_quantity === 'number' ? bp.price_basis_quantity : undefined,
+    priceBasisUnit: bp.price_basis_unit || undefined,
+    mrpBasisQuantity: typeof bp.mrp_basis_quantity === 'number' ? bp.mrp_basis_quantity : undefined,
+    mrpBasisUnit: bp.mrp_basis_unit || undefined,
+    pricingStatus: bp.pricing_status || undefined,
     createdAt: bp.created_at || new Date().toISOString(),
     updatedAt: bp.updated_at || new Date().toISOString(),
   };
@@ -64,6 +69,11 @@ export function normalizeProduct(id: string, data: any): Product {
   const reorderLevel = Number(data.reorderLevel ?? data.minStock ?? data.reorder_level ?? 10);
   const stock = Number(data.stock ?? data.current_stock ?? 0);
   const status: StockStatus = data.status || calculateStockStatus(stock, reorderLevel);
+  const priceBasisQuantity = data.priceBasisQuantity ?? data.price_basis_quantity;
+  const priceBasisUnit = data.priceBasisUnit ?? data.price_basis_unit;
+  const mrpBasisQuantity = data.mrpBasisQuantity ?? data.mrp_basis_quantity;
+  const mrpBasisUnit = data.mrpBasisUnit ?? data.mrp_basis_unit;
+  const pricingStatus = data.pricingStatus ?? data.pricing_status;
 
   return {
     id,
@@ -74,11 +84,18 @@ export function normalizeProduct(id: string, data: any): Product {
     sellingPrice,
     price: sellingPrice,
     purchasePrice,
+    mrp: typeof data.mrp === 'number' ? data.mrp : undefined,
+    mrpSource: data.mrpSource ?? data.mrp_source,
     reorderLevel,
     minStock: reorderLevel,
     status,
     barcode: data.barcode || data.sku,
     sku: data.sku || data.barcode,
+    priceBasisQuantity: typeof priceBasisQuantity === 'number' ? priceBasisQuantity : undefined,
+    priceBasisUnit: typeof priceBasisUnit === 'string' ? priceBasisUnit : undefined,
+    mrpBasisQuantity: typeof mrpBasisQuantity === 'number' ? mrpBasisQuantity : undefined,
+    mrpBasisUnit: typeof mrpBasisUnit === 'string' ? mrpBasisUnit : undefined,
+    pricingStatus: typeof pricingStatus === 'string' ? pricingStatus : undefined,
     createdAt: data.createdAt || new Date().toISOString(),
     updatedAt: data.updatedAt || new Date().toISOString(),
   };
@@ -194,6 +211,15 @@ export async function updateProduct(id: string, updates: Partial<ProductInput>):
 export async function deleteProduct(id: string): Promise<void> {
   await productsApi.deleteProduct(id);
   notifyInventoryChanged();
+}
+
+/**
+ * Verify product pricing. Restricted to Owner or Manager roles.
+ */
+export async function verifyProduct(id: string, reason?: string): Promise<Product> {
+  const updated = await productsApi.verifyProduct(id, reason);
+  notifyInventoryChanged();
+  return mapBackendProductToFrontend(updated);
 }
 
 /**

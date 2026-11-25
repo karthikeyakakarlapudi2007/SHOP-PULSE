@@ -9,7 +9,8 @@ import {
   Trash2,
   Loader2,
   X,
-  Printer
+  Printer,
+  CheckCircle2
 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/Button';
@@ -20,6 +21,7 @@ import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
 import { PrintPortal } from '../components/PrintPortal';
 import { InventoryReportDocument } from '../components/PrintDocuments';
 import { usePrintRequest } from '../hooks/usePrint';
+import { useShopRole } from '../hooks/useShopRole';
 import type { Product } from '../types';
 import { PRODUCT_CATEGORIES } from '../data/mockData';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -28,7 +30,8 @@ import { describeError } from '../utils/errorHandler';
 import {
   increaseStock,
   updateProduct as serviceUpdateProduct,
-  deleteProduct as serviceDeleteProduct
+  deleteProduct as serviceDeleteProduct,
+  verifyProduct as serviceVerifyProduct
 } from '../services/inventoryService';
 
 const RESTOCK_STEP = 10;
@@ -86,6 +89,8 @@ export const Inventory: React.FC<InventoryProps> = ({
   }
   const deleteInFlight = useRef(false);
   const { isPrinting, requestPrint } = usePrintRequest();
+  const { canVerifyPricing } = useShopRole();
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(() => new Set());
 
   // A product opened from global search is highlighted and scrolled into view once.
   const highlightRequestId = searchRequest?.highlightId;
@@ -205,13 +210,77 @@ export const Inventory: React.FC<InventoryProps> = ({
     }
   };
 
+  const handleVerifyProduct = async (id: string) => {
+    setVerifyingIds((prev) => new Set(prev).add(id));
+    try {
+      const verified = await serviceVerifyProduct(id);
+      setLocalProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, pricingStatus: 'VERIFIED' } : p))
+      );
+      if (onUpdateProduct) {
+        await onUpdateProduct(id, { pricingStatus: 'VERIFIED' });
+      }
+      toast.success('Product pricing verified', {
+        description: `${verified.name} pricing is now verified and ready for sales.`,
+      });
+    } catch (err: any) {
+      console.error('Failed to verify product pricing:', err);
+      toast.error('Pricing verification failed', {
+        description: describeError(err, 'Only Managers and Owners are authorized to verify pricing.'),
+      });
+    } finally {
+      setVerifyingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
   const showSkeleton = loading && localProducts.length === 0 && !loadError;
   const hasFilters = searchTerm.trim() !== '' || selectedCategory !== 'All';
 
   const actionButtonsFor = (prod: Product, compact: boolean) => {
     const isRestocking = restockingIds.has(prod.id);
+    const isVerifying = verifyingIds.has(prod.id);
     return (
       <>
+        {prod.pricingStatus === 'NEEDS_REVIEW' && (
+          canVerifyPricing ? (
+            <button
+              type="button"
+              data-testid="verify-pricing-btn"
+              onClick={() => handleVerifyProduct(prod.id)}
+              disabled={isVerifying}
+              aria-label={`Verify pricing for ${prod.name}`}
+              title="Verify Pricing"
+              className={compact
+                ? 'text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-2 rounded-lg border border-amber-300 flex items-center gap-1 cursor-pointer active:scale-95 transition-all min-h-[40px]'
+                : 'text-xs font-bold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-2.5 py-1.5 rounded-lg border border-amber-300 transition-all inline-flex items-center gap-1 cursor-pointer active:scale-95'}
+            >
+              {isVerifying ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
+              )}
+              <span>{isVerifying ? 'Verifying…' : 'Verify Price'}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="verify-pricing-restricted-btn"
+              disabled
+              aria-label="Pricing verification restricted to Managers and Owners"
+              title="Verification restricted to Managers and Owners"
+              className={compact
+                ? 'text-xs font-medium text-gray-400 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200 flex items-center gap-1 cursor-not-allowed opacity-70 min-h-[40px]'
+                : 'text-xs font-medium text-gray-400 bg-gray-100 px-2.5 py-1.5 rounded-lg border border-gray-200 inline-flex items-center gap-1 cursor-not-allowed opacity-70'}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+              <span>Verify (Restricted)</span>
+            </button>
+          )
+        )}
         <button
           type="button"
           onClick={() => restockItem(prod)}
@@ -477,10 +546,31 @@ export const Inventory: React.FC<InventoryProps> = ({
                     {prod.stock} {prod.unit}
                   </td>
                   <td className="py-4 px-4 font-extrabold text-[#202923] text-right tabular-nums whitespace-nowrap">
-                    ₹{prod.price}
+                    <div>₹{prod.sellingPrice ?? prod.price}</div>
+                    {prod.priceBasisUnit && (
+                      <div className="text-[10px] text-[#69736C] font-normal" data-testid="price-basis-label">
+                        per {prod.priceBasisQuantity && prod.priceBasisQuantity !== 1 ? `${prod.priceBasisQuantity} ` : ''}{prod.priceBasisUnit}
+                      </div>
+                    )}
                   </td>
                   <td className="py-4 px-4">
-                    <StatusBadge status={prod.status} />
+                    <div className="flex flex-col gap-1 items-start">
+                      <StatusBadge status={prod.status} />
+                      {prod.pricingStatus && (
+                        <span
+                          data-testid="pricing-status-badge"
+                          className={`inline-flex items-center gap-1 font-bold rounded-full text-[10px] px-2 py-0.5 uppercase tracking-wide ${
+                            prod.pricingStatus === 'VERIFIED'
+                              ? 'bg-[#E5EEE6] text-[#18382B] border border-[#52745D]/30'
+                              : prod.pricingStatus === 'NEEDS_REVIEW'
+                              ? 'bg-[#FEF9EB] text-[#A66A16] border border-[#A66A16]/30'
+                              : 'bg-gray-100 text-gray-700 border border-gray-300'
+                          }`}
+                        >
+                          {prod.pricingStatus === 'VERIFIED' ? '✓ Verified' : prod.pricingStatus}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-6 text-right">
                     <div className="flex items-center justify-end gap-1.5">
@@ -520,12 +610,28 @@ export const Inventory: React.FC<InventoryProps> = ({
                   ) : null}
                   <div className="min-w-0">
                     <h4 className="font-bold text-[#202923] text-base leading-tight break-words">{prod.name}</h4>
-                    <p className="text-xs text-[#69736C] font-medium mt-0.5">{prod.category} • ₹{prod.price} per {prod.unit}</p>
+                    <p className="text-xs text-[#69736C] font-medium mt-0.5">
+                      {prod.category} • ₹{prod.sellingPrice ?? prod.price} per {prod.priceBasisUnit || prod.unit}
+                    </p>
                     {prod.barcode && <p className="text-[10px] text-[#69736C] font-normal break-all">UPC: {prod.barcode}</p>}
                   </div>
                 </div>
-                <div className="shrink-0">
+                <div className="shrink-0 flex flex-col items-end gap-1">
                   <StatusBadge status={prod.status} size="sm" />
+                  {prod.pricingStatus && (
+                    <span
+                      data-testid="pricing-status-badge-sm"
+                      className={`inline-flex items-center gap-1 font-bold rounded-full text-[9px] px-1.5 py-0.5 uppercase tracking-wide ${
+                        prod.pricingStatus === 'VERIFIED'
+                          ? 'bg-[#E5EEE6] text-[#18382B] border border-[#52745D]/30'
+                          : prod.pricingStatus === 'NEEDS_REVIEW'
+                          ? 'bg-[#FEF9EB] text-[#A66A16] border border-[#A66A16]/30'
+                          : 'bg-gray-100 text-gray-700 border border-gray-300'
+                      }`}
+                    >
+                      {prod.pricingStatus === 'VERIFIED' ? '✓ Verified' : prod.pricingStatus}
+                    </span>
+                  )}
                 </div>
               </div>
 

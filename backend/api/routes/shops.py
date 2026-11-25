@@ -41,15 +41,19 @@ def get_my_shop(
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
     """
-    Get the authenticated user's shop profile.
+    Get the authenticated user's accessible shop profile and current role.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
+    shop = deps.get_user_accessible_shop(db, current_user)
     if not shop:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Shop profile not found for current user.",
         )
-    return shop
+    member = shop_member_service.get_shop_member(db, shop.id, current_user.id)
+    role_val = member.role if member else (ShopRole.OWNER.value if shop.owner_id == current_user.id else None)
+    resp = ShopResponse.model_validate(shop)
+    resp.current_user_role = role_val
+    return resp
 
 @router.put("/{id}", response_model=ShopResponse)
 def update_shop(

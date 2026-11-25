@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from api import deps
-from db.models.user import User
+from db.models.shop import Shop
+from db.models.shop_member import ShopMember, ShopRole
 from schemas.dashboard import DashboardResponse
-from services import shop as shop_service
 from services import dashboard as dashboard_service
 
 router = APIRouter()
@@ -15,16 +15,11 @@ router = APIRouter()
 def get_dashboard(
     *,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    auth_context: tuple[Shop, ShopMember] = Depends(deps.require_roles([ShopRole.OWNER.value, ShopRole.MANAGER.value])),
 ) -> Any:
     """
-    Fetch comprehensive dashboard information for the authenticated shop owner.
-    Single endpoint optimized for mobile devices.
+    Fetch comprehensive dashboard information for the authenticated shop owner or manager.
+    Single endpoint optimized for mobile devices. Restricted to Owner and Manager roles.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
-    if not shop:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User must create a shop profile before accessing dashboard.",
-        )
+    shop, _ = auth_context
     return dashboard_service.get_dashboard_data(db, shop_id=shop.id)

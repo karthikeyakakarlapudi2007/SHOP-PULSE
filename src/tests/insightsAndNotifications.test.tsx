@@ -98,6 +98,17 @@ vi.mock('../api/insights', () => ({
       overall_business_health: 'Healthy',
       has_sufficient_data: true,
       note: null
+    }),
+    getDemandForecast: vi.fn().mockResolvedValue({
+      shop_id: 'shop-1',
+      generated_at: '2026-11-24T18:00:00Z',
+      total_products_analyzed: 0,
+      tier_1_count: 0,
+      tier_2_count: 0,
+      tier_3_count: 0,
+      out_of_stock_count: 0,
+      at_risk_stockout_7d_count: 0,
+      forecasts: []
     })
   }
 }));
@@ -145,6 +156,7 @@ describe('AI Insights and Smart Notifications Frontend Module', () => {
     // Module primary tabs
     expect(html).toContain('Sales Insights');
     expect(html).toContain('Inventory Insights');
+    expect(html).toContain('Demand Forecast');
     expect(html).toContain('AI Intelligence');
 
     // Action header

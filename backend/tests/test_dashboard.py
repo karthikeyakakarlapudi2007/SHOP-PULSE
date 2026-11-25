@@ -130,7 +130,10 @@ def test_dashboard_shop_with_sales():
         "name": "Product A",
         "selling_price": 100.0,
         "current_stock": 100,
-        "reorder_level": 20
+        "reorder_level": 20,
+        "unit": "pcs",
+        "pricing_status": "VERIFIED",
+        "mrp": 150.0,
     }, headers=headers)
     assert p_a_res.status_code == 201
     p_a = p_a_res.json()
@@ -140,7 +143,10 @@ def test_dashboard_shop_with_sales():
         "name": "Product B",
         "selling_price": 50.0,
         "current_stock": 100,
-        "reorder_level": 20
+        "reorder_level": 20,
+        "unit": "pcs",
+        "pricing_status": "VERIFIED",
+        "mrp": 100.0,
     }, headers=headers)
     assert p_b_res.status_code == 201
     p_b = p_b_res.json()

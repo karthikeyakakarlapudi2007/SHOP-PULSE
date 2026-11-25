@@ -60,7 +60,10 @@ def test_sale_reduces_stock():
         "name": "Organic Honey 500g",
         "selling_price": 250.0,
         "current_stock": 50,
-        "reorder_level": 10
+        "reorder_level": 10,
+        "unit": "pcs",
+        "pricing_status": "VERIFIED",
+        "mrp": 300.0,
     }, headers=headers)
     product_id = p_res.json()["id"]
     
@@ -107,7 +110,10 @@ def test_overselling_blocked():
         "name": "Limited Spice Pack",
         "selling_price": 100.0,
         "current_stock": 5,
-        "reorder_level": 2
+        "reorder_level": 2,
+        "unit": "pcs",
+        "pricing_status": "VERIFIED",
+        "mrp": 150.0,
     }, headers=headers)
     product_id = p_res.json()["id"]
     

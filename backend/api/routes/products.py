@@ -68,7 +68,7 @@ def get_products(
     """
     Get paginated list of products for the authenticated user's shop with search and category filtering.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
+    shop = deps.get_user_accessible_shop(db, current_user)
     if not shop:
         return PaginatedProductResponse(items=[], total=0, skip=skip, limit=limit)
     
@@ -88,7 +88,7 @@ def get_low_stock_products(
     """
     Get products that need reordering (current_stock <= reorder_level) for the authenticated shop.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
+    shop = deps.get_user_accessible_shop(db, current_user)
     if not shop:
         return PaginatedProductResponse(items=[], total=0, skip=skip, limit=limit)
     
@@ -172,6 +172,8 @@ def update_product(
             product_in=product_in,
             acting_user_id=current_user.id,
         )
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
     except ValueError as e:  # unit / stock validation
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -183,9 +185,15 @@ def delete_product(
     current_user: User = Depends(deps.get_current_user)
 ) -> Response:
     """
-    Delete a product by ID.
+    Delete a product by ID. Restricted to Owner and Manager roles.
     """
     user_shop = get_user_shop_or_raise(db, current_user)
+    member = shop_member_service.get_shop_member(db, shop_id=user_shop.id, user_id=current_user.id)
+    if not member or member.role not in [ShopRole.OWNER.value, ShopRole.MANAGER.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only Managers and Owners are authorized to delete products.",
+        )
     product = product_service.get_product_by_id(db, product_id=id)
     if not product or not product.is_active:
         raise HTTPException(

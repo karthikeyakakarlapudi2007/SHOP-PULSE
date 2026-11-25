@@ -22,6 +22,11 @@ export interface ProductBackend {
   supplier_id?: string | null;
   sku?: string | null;
   is_active?: boolean;
+  price_basis_quantity?: number | null;
+  price_basis_unit?: string | null;
+  mrp_basis_quantity?: number | null;
+  mrp_basis_unit?: string | null;
+  pricing_status?: 'VERIFIED' | 'NEEDS_REVIEW' | 'INCOMPLETE' | 'WHOLESALE_ONLY' | string | null;
   stock_status: 'In Stock' | 'Low Stock' | 'Critical';
   created_at?: string | null;
   updated_at?: string | null;
@@ -44,6 +49,11 @@ export interface ProductCreateInput {
   current_stock: number;
   reorder_level?: number | null;
   unit?: string | null;
+  price_basis_quantity?: number | null;
+  price_basis_unit?: string | null;
+  mrp_basis_quantity?: number | null;
+  mrp_basis_unit?: string | null;
+  pricing_status?: string | null;
   supplier_id?: string | null;
   sku?: string | null;
 }
@@ -58,6 +68,11 @@ export interface ProductUpdateInput {
   current_stock?: number;
   reorder_level?: number | null;
   unit?: string | null;
+  price_basis_quantity?: number | null;
+  price_basis_unit?: string | null;
+  mrp_basis_quantity?: number | null;
+  mrp_basis_unit?: string | null;
+  pricing_status?: string | null;
   supplier_id?: string | null;
   sku?: string | null;
 }
@@ -122,6 +137,13 @@ export const productsApi = {
    */
   deleteProduct: async (id: string): Promise<void> => {
     return apiClient.delete<void>(`/api/v1/products/${id}`);
+  },
+
+  /**
+   * Verify product pricing metadata. Restricted to Manager or Owner roles.
+   */
+  verifyProduct: async (id: string, reason?: string): Promise<ProductBackend> => {
+    return apiClient.post<ProductBackend>(`/api/v1/products/${id}/verify`, { reason });
   },
 
   /**

@@ -28,9 +28,12 @@ import { INITIAL_PRODUCTS } from '../data/mockData';
 // Loose rice is sold by the kg. The mock catalogue's rice is a 5 kg bag (stocked in bags): "2 kg rice" of a
 // bag product cannot be sold without a pack-size conversion and is refused (Phase 4 unit rules), so the
 // spoken-kg recognition below is checked against a kg-stocked rice.
-const VOICE_CATALOG = INITIAL_PRODUCTS.map((p) =>
-  p.name.startsWith('Basmati Rice') ? { ...p, name: 'Basmati Rice (loose)', unit: 'kg' } : p,
-);
+const VOICE_CATALOG = INITIAL_PRODUCTS.map((p) => {
+  if (p.name.startsWith('Basmati Rice')) return { ...p, name: 'Basmati Rice (loose)', unit: 'kg' };
+  if (p.name.startsWith('Refined Sugar')) return { ...p, name: 'Refined Sugar', unit: 'kg' };
+  if (p.name.startsWith('Sunflower Cooking Oil')) return { ...p, name: 'Sunflower Cooking Oil', unit: 'L' };
+  return p;
+});
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -132,5 +135,44 @@ describe('Voice Multilingual Unit Tests', () => {
       assert(riceName.length > 0, `Rice translation present for ${lang.name}: ${riceName}`);
       assert(kgUnit.length > 0, `kg translation present for ${lang.name}: ${kgUnit}`);
     }
+  });
+
+  it('parses real-world target utterances with metric conversion and commands', () => {
+    // 1. "Give me 2 kilograms of rice."
+    const u1 = parseMultilingualVoiceBill('Give me 2 kilograms of rice.', VOICE_CATALOG, 'english');
+    assert(u1.matched_items.length === 1, 'Matched 1 item for u1');
+    assert(u1.matched_items[0].quantity === 2, 'Quantity 2 for u1');
+    assert(u1.matched_items[0].name.toLowerCase().includes('rice'), 'Matches rice for u1');
+
+    // 2. "Add 500 grams of sugar." (Refined sugar is in kg, converted 500g -> 0.5kg)
+    const u2 = parseMultilingualVoiceBill('Add 500 grams of sugar.', VOICE_CATALOG, 'english');
+    assert(u2.matched_items.length === 1, 'Matched 1 item for u2');
+    assert(u2.matched_items[0].quantity === 0.5, 'Quantity 0.5 kg for u2');
+    assert(u2.matched_items[0].name.toLowerCase().includes('sugar'), 'Matches sugar for u2');
+
+    // 3. "Give me 3 packets of milk."
+    const u3 = parseMultilingualVoiceBill('Give me 3 packets of milk.', VOICE_CATALOG, 'english');
+    assert(u3.matched_items.length === 1, 'Matched 1 item for u3');
+    assert(u3.matched_items[0].quantity === 3, 'Quantity 3 for u3');
+    assert(u3.matched_items[0].name.toLowerCase().includes('milk'), 'Matches milk for u3');
+
+    // 4. "Add 2 litres of oil."
+    const u4 = parseMultilingualVoiceBill('Add 2 litres of oil.', VOICE_CATALOG, 'english');
+    assert(u4.matched_items.length === 1, 'Matched 1 item for u4');
+    assert(u4.matched_items[0].quantity === 2, 'Quantity 2 for u4');
+    assert(u4.matched_items[0].name.toLowerCase().includes('oil'), 'Matches oil for u4');
+
+    // 6. "Add one packet of biscuits and two kilograms of rice."
+    const u6 = parseMultilingualVoiceBill('Add one packet of biscuits and two kilograms of rice.', VOICE_CATALOG, 'english');
+    assert(u6.matched_items.length === 2, 'Matched 2 items for u6');
+    const biscuit = u6.matched_items.find(i => i.name.toLowerCase().includes('biscuit') || i.name.toLowerCase().includes('marie') || i.name.toLowerCase().includes('parle'));
+    const rice = u6.matched_items.find(i => i.name.toLowerCase().includes('rice'));
+    assert(biscuit !== undefined && biscuit.quantity === 1, 'Biscuit qty 1');
+    assert(rice !== undefined && rice.quantity === 2, 'Rice qty 2');
+
+    // 8. "Change rice quantity to 3 kilograms."
+    const u8 = parseMultilingualVoiceBill('Change rice quantity to 3 kilograms.', VOICE_CATALOG, 'english');
+    assert(u8.matched_items.length === 1, 'Matched 1 item for u8');
+    assert(u8.matched_items[0].quantity === 3, 'Quantity 3 kg for u8');
   });
 });

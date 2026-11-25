@@ -13,8 +13,11 @@ import {
   Check,
   X,
   Camera,
-  FileText
+  FileText,
+  Scale,
+  Settings2,
 } from 'lucide-react';
+import { detectIsLooseProduct, detectDefaultBasisUnit } from '../utils/looseProductPricing';
 import { getAccessToken } from '../api/client';
 import { documentPrepApi, type PhotoAssessment, type PrepExtractResult } from '../api/documentPrep';
 import {
@@ -86,6 +89,20 @@ export interface ExtractedItem {
   igst_amount?: number | null;
   scheme_discount?: number | null;
   other_discount?: number | null;
+  /** Product selling type: standard packaged unit vs loose/variable weight product */
+  selling_type?: 'packaged' | 'loose';
+  /** Reference quantity for selling price (e.g. 1 kg, 500 g, 100 g) */
+  price_basis_quantity?: number | null;
+  /** Canonical unit for selling price (e.g. kg, g, L, ml) */
+  price_basis_unit?: string | null;
+  /** Reference quantity for MRP */
+  mrp_basis_quantity?: number | null;
+  /** Canonical unit for MRP */
+  mrp_basis_unit?: string | null;
+  /** Physical inventory stock tracking unit (e.g. kg, L) */
+  inventory_unit?: string | null;
+  /** Conversion factor from invoice unit to inventory unit (e.g. 1 bag = 50 kg) */
+  conversion_factor?: number | null;
 }
 
 export interface ExtractedInvoice {
@@ -118,6 +135,7 @@ export const InvoiceScanner: React.FC = () => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmSuccess, setConfirmSuccess] = useState<string | null>(null);
   const [confirmedProducts, setConfirmedProducts] = useState<any[]>([]);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   // 'camera': capture/prepare photos first (recommended); 'file': send a file straight to OCR
   const [inputMode, setInputMode] = useState<'camera' | 'file'>('camera');
   const [preparation, setPreparation] = useState<PrepExtractResult['preparation'] | null>(null);
@@ -182,38 +200,52 @@ export const InvoiceScanner: React.FC = () => {
 
   /** Shared by direct uploads and prepared scans: both return the /invoices/extract body. */
   const applyExtraction = (data: any) => {
-    const normalizedItems: ExtractedItem[] = (data.items || []).map((item: any, idx: number) => ({
-      id: item.id || `item_${idx}_${Date.now()}`,
-      product_name: item.product_name || item.raw_description || 'Grocery Item',
-      category: item.category || 'Grocery',
-      quantity: typeof item.quantity === 'number' ? item.quantity : null,
-      // As extracted; a missing unit stays empty for the user to select (never defaulted to pcs)
-      unit: typeof item.unit === 'string' ? item.unit.trim() : '',
-      purchase_price: typeof item.purchase_price === 'number' ? item.purchase_price : (item.rate ?? null),
-      selling_price: typeof item.selling_price === 'number' ? item.selling_price : null,
-      mrp: typeof item.mrp === 'number' ? item.mrp : null,
-      amount: typeof item.amount === 'number' ? item.amount : (item.line_total ?? null),
-      confidence: item.confidence ?? 85,
-      confidence_level: item.confidence_level || (item.confidence >= 80 ? 'HIGH' : item.confidence >= 60 ? 'MEDIUM' : 'LOW'),
-      needs_review: item.needs_review ?? false,
-      validation_issues: item.validation_issues || [],
-      suggestions: item.suggestions || [],
-      suggested_rate: typeof item.suggested_rate === 'number' ? item.suggested_rate : null,
-      suggested_quantity: typeof item.suggested_quantity === 'number' ? item.suggested_quantity : null,
-      matched_product_id: item.matched_product_id || null,
-      matched_product_name: item.matched_product_name || null,
-      derived_fields: Array.isArray(item.derived_fields) ? item.derived_fields : [],
-      is_free_item: Boolean(item.is_free_item),
-      free_quantity: typeof item.free_quantity === 'number' ? item.free_quantity : null,
-      paid_quantity: typeof item.paid_quantity === 'number' ? item.paid_quantity : null,
-      extracted_quantity: typeof item.quantity === 'number' ? item.quantity : null,
-      taxable_amount: typeof item.taxable_amount === 'number' ? item.taxable_amount : null,
-      cgst_amount: typeof item.cgst_amount === 'number' ? item.cgst_amount : null,
-      sgst_amount: typeof item.sgst_amount === 'number' ? item.sgst_amount : null,
-      igst_amount: typeof item.igst_amount === 'number' ? item.igst_amount : null,
-      scheme_discount: typeof item.scheme_discount === 'number' ? item.scheme_discount : null,
-      other_discount: typeof item.other_discount === 'number' ? item.other_discount : null,
-    }));
+    const normalizedItems: ExtractedItem[] = (data.items || []).map((item: any, idx: number) => {
+      const pName = item.product_name || item.raw_description || 'Grocery Item';
+      const rawUnit = typeof item.unit === 'string' ? item.unit.trim() : '';
+      const isLoose = detectIsLooseProduct(pName, rawUnit);
+      const defaultBasisUnit = detectDefaultBasisUnit(rawUnit, isLoose);
+
+      return {
+        id: item.id || `item_${idx}_${Date.now()}`,
+        product_name: pName,
+        category: item.category || 'Grocery',
+        quantity: typeof item.quantity === 'number' ? item.quantity : null,
+        // As extracted; a missing unit stays empty for the user to select (never defaulted to pcs)
+        unit: rawUnit,
+        purchase_price: typeof item.purchase_price === 'number' ? item.purchase_price : (item.rate ?? null),
+        selling_price: typeof item.selling_price === 'number' ? item.selling_price : null,
+        mrp: typeof item.mrp === 'number' ? item.mrp : null,
+        amount: typeof item.amount === 'number' ? item.amount : (item.line_total ?? null),
+        confidence: item.confidence ?? 85,
+        confidence_level: item.confidence_level || (item.confidence >= 80 ? 'HIGH' : item.confidence >= 60 ? 'MEDIUM' : 'LOW'),
+        needs_review: item.needs_review ?? false,
+        validation_issues: item.validation_issues || [],
+        suggestions: item.suggestions || [],
+        suggested_rate: typeof item.suggested_rate === 'number' ? item.suggested_rate : null,
+        suggested_quantity: typeof item.suggested_quantity === 'number' ? item.suggested_quantity : null,
+        matched_product_id: item.matched_product_id || null,
+        matched_product_name: item.matched_product_name || null,
+        derived_fields: Array.isArray(item.derived_fields) ? item.derived_fields : [],
+        is_free_item: Boolean(item.is_free_item),
+        free_quantity: typeof item.free_quantity === 'number' ? item.free_quantity : null,
+        paid_quantity: typeof item.paid_quantity === 'number' ? item.paid_quantity : null,
+        extracted_quantity: typeof item.quantity === 'number' ? item.quantity : null,
+        taxable_amount: typeof item.taxable_amount === 'number' ? item.taxable_amount : null,
+        cgst_amount: typeof item.cgst_amount === 'number' ? item.cgst_amount : null,
+        sgst_amount: typeof item.sgst_amount === 'number' ? item.sgst_amount : null,
+        igst_amount: typeof item.igst_amount === 'number' ? item.igst_amount : null,
+        scheme_discount: typeof item.scheme_discount === 'number' ? item.scheme_discount : null,
+        other_discount: typeof item.other_discount === 'number' ? item.other_discount : null,
+        selling_type: isLoose ? 'loose' : 'packaged',
+        price_basis_quantity: 1,
+        price_basis_unit: defaultBasisUnit,
+        mrp_basis_quantity: 1,
+        mrp_basis_unit: defaultBasisUnit,
+        inventory_unit: defaultBasisUnit,
+        conversion_factor: 1,
+      };
+    });
 
     setMissingAtConfirm([]);
     setFreeUnitsToConfirm([]);
@@ -348,6 +380,13 @@ export const InvoiceScanner: React.FC = () => {
       confidence: 100,
       confidence_level: 'HIGH',
       needs_review: false,
+      selling_type: 'packaged',
+      price_basis_quantity: 1,
+      price_basis_unit: 'pcs',
+      mrp_basis_quantity: 1,
+      mrp_basis_unit: 'pcs',
+      inventory_unit: 'pcs',
+      conversion_factor: 1,
     };
     setExtractedData((prev) => {
       if (!prev) return null;
@@ -409,6 +448,19 @@ export const InvoiceScanner: React.FC = () => {
       return;
     }
 
+    // Loose products must have a selling price configured before saving to inventory
+    const looseWithoutPrice = selectedItems.filter(
+      (i) => i.selling_type === 'loose' && (typeof i.selling_price !== 'number' || i.selling_price <= 0)
+    );
+    if (looseWithoutPrice.length > 0) {
+      setError(
+        `Cannot confirm: ${looseWithoutPrice.length} loose product(s) (` +
+        looseWithoutPrice.map((i) => `'${i.product_name}'`).join(', ') +
+        `) require a selling price per standard unit before saving to inventory. Please configure their selling price.`
+      );
+      return;
+    }
+
     // Every line needs a registered unit (a missing one is never assumed), and fractions are accepted only
     // for units the registry marks as fractional (kg, g, L, ml). Nothing is rounded and nothing is posted
     // for the invoice until the user corrects or deselects the line.
@@ -463,13 +515,24 @@ export const InvoiceScanner: React.FC = () => {
         ...(freeLines.length > 0 ? { confirm_free_units: true } : {}),
         items: selectedItems.map((i) => {
           const purchasePrice = Number(i.purchase_price);
-          // Preserve selling price, fall back to MRP or a standard margin if brand new
+          const isLoose = i.selling_type === 'loose';
+          const storageUnit = (isLoose && i.inventory_unit ? i.inventory_unit : i.unit).trim();
+
+          // Selling price: for loose, it MUST be the configured selling price
+          // For packaged: preserve selling price, or fall back to MRP or standard margin if brand new
           const sellingPrice =
             typeof i.selling_price === 'number' && i.selling_price > 0
               ? i.selling_price
-              : typeof i.mrp === 'number' && i.mrp > 0
+              : !isLoose && typeof i.mrp === 'number' && i.mrp > 0
               ? i.mrp
-              : Math.round(purchasePrice * 1.2 * 100) / 100;
+              : !isLoose
+              ? Math.round(purchasePrice * 1.2 * 100) / 100
+              : 0;
+
+          const basisQty = Number(i.price_basis_quantity || 1.0);
+          const basisUnit = (i.price_basis_unit || storageUnit).trim();
+          const mrpBasisQty = Number(i.mrp_basis_quantity || basisQty);
+          const mrpBasisUnit = (i.mrp_basis_unit || basisUnit).trim();
 
           return {
             name: i.product_name.trim(),
@@ -489,6 +552,11 @@ export const InvoiceScanner: React.FC = () => {
                 ? i.amount
                 : round3(purchasePrice * Number(promoPayload(i).paid_quantity ?? i.quantity)),
             matched_product_id: i.matched_product_id || undefined,
+            price_basis_quantity: basisQty,
+            price_basis_unit: basisUnit,
+            mrp_basis_quantity: mrpBasisQty,
+            mrp_basis_unit: mrpBasisUnit,
+            update_selling_price: true,
             ...promoPayload(i),
           };
         }),
@@ -1109,16 +1177,16 @@ export const InvoiceScanner: React.FC = () => {
                       (item.purchase_price <= 0 && !(item.is_free_item && item.purchase_price === 0));
 
                     return (
-                      <tr 
-                        key={item.id}
-                        className={`transition-colors ${
-                          !isSelected
-                            ? 'opacity-60 bg-gray-50/50'
-                            : rowNeedsReview
-                            ? 'bg-[#FBF4E7]/30 hover:bg-[#FBF4E7]/50'
-                            : 'hover:bg-[#FAF8F2]/60'
-                        }`}
-                      >
+                      <React.Fragment key={item.id}>
+                        <tr 
+                          className={`transition-colors ${
+                            !isSelected
+                              ? 'opacity-60 bg-gray-50/50'
+                              : rowNeedsReview
+                              ? 'bg-[#FBF4E7]/30 hover:bg-[#FBF4E7]/50'
+                              : 'hover:bg-[#FAF8F2]/60'
+                          }`}
+                        >
                         <td className="py-3 px-3 text-center">
                           <input
                             type="checkbox"
@@ -1150,6 +1218,52 @@ export const InvoiceScanner: React.FC = () => {
                               Matches: {item.matched_product_name}
                             </span>
                           )}
+                          {/* Selling Type Selector & Loose Config Toggle */}
+                          <div className="mt-1.5 px-2 flex flex-wrap items-center gap-1.5">
+                            <div className="inline-flex rounded-lg border border-[#DDE9DF] p-0.5 bg-[#FAF8F2] text-[10px]">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItem(item.id, 'selling_type', 'packaged')}
+                                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                                  item.selling_type !== 'loose'
+                                    ? 'bg-white text-[#153D32] shadow-sm'
+                                    : 'text-[#5E6C64] hover:text-[#153D32]'
+                                }`}
+                              >
+                                Packaged
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleUpdateItem(item.id, 'selling_type', 'loose');
+                                  if (!item.price_basis_unit) {
+                                    handleUpdateItem(item.id, 'price_basis_unit', item.unit?.toLowerCase().includes('l') ? 'L' : 'kg');
+                                  }
+                                  if (!item.inventory_unit) {
+                                    handleUpdateItem(item.id, 'inventory_unit', item.unit?.toLowerCase().includes('l') ? 'L' : 'kg');
+                                  }
+                                }}
+                                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                                  item.selling_type === 'loose'
+                                    ? 'bg-[#E7F6F1] text-[#16704F] shadow-sm font-bold'
+                                    : 'text-[#5E6C64] hover:text-[#153D32]'
+                                }`}
+                              >
+                                Loose
+                              </button>
+                            </div>
+                            {item.selling_type === 'loose' && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF8F2] hover:bg-[#F3EFE3] text-[10px] font-bold text-[#23866A] border border-[#DDE9DF] cursor-pointer"
+                                title="Configure loose product standard selling unit & storage"
+                              >
+                                <Settings2 className="w-3 h-3" />
+                                <span>{expandedItemId === item.id ? 'Hide Config' : 'Configure Loose'}</span>
+                              </button>
+                            )}
+                          </div>
                           {(item.is_free_item || calculatedFieldLabels(item).length > 0) && (
                             <div className="mt-1 px-2 flex flex-wrap gap-1">
                               {item.is_free_item && (
@@ -1312,7 +1426,9 @@ export const InvoiceScanner: React.FC = () => {
                               type="number"
                               step="0.001"
                               placeholder={
-                                item.mrp
+                                item.selling_type === 'loose'
+                                  ? 'Enter price'
+                                  : item.mrp
                                   ? String(item.mrp)
                                   : item.purchase_price
                                   ? String(Math.round(item.purchase_price * 1.2 * 100) / 100)
@@ -1320,9 +1436,25 @@ export const InvoiceScanner: React.FC = () => {
                               }
                               value={item.selling_price ?? ''}
                               onChange={(e) => handleUpdateItem(item.id, 'selling_price', parseFloat(e.target.value) || null)}
-                              className="w-full pl-5 pr-1 py-1 rounded-md border border-transparent hover:border-[#DDE9DF] focus:border-[#153D32] focus:bg-white focus:outline-none font-medium text-[#252D29]"
+                              className={`w-full pl-5 pr-1 py-1 rounded-md border text-xs font-bold focus:outline-none ${
+                                item.selling_type === 'loose' && (!item.selling_price || item.selling_price <= 0)
+                                  ? 'border-[#D6AE62] bg-[#FBF4E7] text-[#8A6420]'
+                                  : 'border-transparent hover:border-[#DDE9DF] focus:border-[#153D32] focus:bg-white text-[#252D29]'
+                              }`}
                             />
                           </div>
+                          {item.selling_type === 'loose' ? (
+                            <span className="text-[10px] font-semibold text-[#23866A] block px-1 mt-0.5">
+                              per {item.price_basis_quantity || 1} {item.price_basis_unit || 'kg'}
+                            </span>
+                          ) : (
+                            item.mrp && <span className="text-[10px] text-[#5E6C64] block px-1 mt-0.5">per {item.unit || 'pc'}</span>
+                          )}
+                          {item.selling_type === 'loose' && (!item.selling_price || item.selling_price <= 0) && (
+                            <span className="text-[10px] text-[#8A6420] font-bold block px-1 mt-0.5">
+                              Price required
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3">
                           <div className="relative">
@@ -1335,6 +1467,11 @@ export const InvoiceScanner: React.FC = () => {
                               className="w-full pl-5 pr-1 py-1 rounded-md border border-transparent hover:border-[#DDE9DF] focus:border-[#153D32] focus:bg-white focus:outline-none font-medium text-[#252D29]"
                             />
                           </div>
+                          {item.selling_type === 'loose' && item.mrp && (
+                            <span className="text-[10px] text-[#5E6C64] block px-1 mt-0.5">
+                              per {item.price_basis_quantity || 1} {item.price_basis_unit || 'kg'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 px-3">
                           <span className="font-extrabold text-[#23866A] px-2 block">
@@ -1366,6 +1503,169 @@ export const InvoiceScanner: React.FC = () => {
                           </button>
                         </td>
                       </tr>
+
+                      {/* Expandable Loose Product Selling Configuration Panel */}
+                      {item.selling_type === 'loose' && expandedItemId === item.id && (
+                        <tr className="bg-[#FAF8F2]/90 border-b border-[#DDE9DF]">
+                          <td colSpan={11} className="p-4">
+                            <div className="bg-white rounded-xl border border-[#23866A]/30 p-4 shadow-sm space-y-4">
+                              <div className="flex items-center justify-between border-b border-[#DDE9DF] pb-2">
+                                <div className="flex items-center gap-2">
+                                  <Scale className="w-4 h-4 text-[#23866A]" />
+                                  <span className="text-xs font-bold text-[#153D32]">
+                                    Loose Product Selling Configuration — {item.product_name}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedItemId(null)}
+                                  className="text-xs text-[#5E6C64] hover:text-[#153D32] font-semibold cursor-pointer"
+                                >
+                                  Close
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                {/* Box 1: Original OCR Procurement Info */}
+                                <div className="bg-[#FAF8F2] p-3 rounded-lg border border-[#DDE9DF] space-y-1.5">
+                                  <span className="text-[11px] font-bold text-[#5E6C64] uppercase tracking-wider block">
+                                    Invoice Procurement (Wholesale)
+                                  </span>
+                                  <div className="flex justify-between text-[#252D29]">
+                                    <span className="text-[#5E6C64]">Purchased Qty:</span>
+                                    <span className="font-semibold">{item.quantity ?? '-'} {item.unit}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[#252D29]">
+                                    <span className="text-[#5E6C64]">Invoice Rate:</span>
+                                    <span className="font-semibold">{item.purchase_price ? formatMoney(item.purchase_price) : '-'} / {item.unit}</span>
+                                  </div>
+                                  <div className="flex justify-between text-[#252D29]">
+                                    <span className="text-[#5E6C64]">Line Total:</span>
+                                    <span className="font-bold text-[#23866A]">{item.amount ? formatMoney(item.amount) : '-'}</span>
+                                  </div>
+                                  <p className="text-[10px] text-[#5E6C64] pt-1 border-t border-[#DDE9DF]/60">
+                                    Raw invoice procurement values are strictly preserved.
+                                  </p>
+                                </div>
+
+                                {/* Box 2: Retail Standard Selling Unit & Price */}
+                                <div className="p-3 rounded-lg border border-[#DDE9DF] space-y-2">
+                                  <span className="text-[11px] font-bold text-[#153D32] uppercase tracking-wider block">
+                                    Retail Selling Price Configuration
+                                  </span>
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-[#5E6C64] block mb-1">
+                                      Standard Selling Unit Presets
+                                    </label>
+                                    <div className="flex flex-wrap gap-1">
+                                      {[
+                                        { label: '1 kg', qty: 1, unit: 'kg' },
+                                        { label: '500 g', qty: 500, unit: 'g' },
+                                        { label: '100 g', qty: 100, unit: 'g' },
+                                        { label: '1 L', qty: 1, unit: 'L' },
+                                        { label: '500 ml', qty: 500, unit: 'ml' },
+                                      ].map((preset) => (
+                                        <button
+                                          key={preset.label}
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateItem(item.id, 'price_basis_quantity', preset.qty);
+                                            handleUpdateItem(item.id, 'price_basis_unit', preset.unit);
+                                          }}
+                                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border cursor-pointer ${
+                                            item.price_basis_quantity === preset.qty && item.price_basis_unit === preset.unit
+                                              ? 'bg-[#23866A] text-white border-[#23866A]'
+                                              : 'bg-[#FAF8F2] text-[#153D32] border-[#DDE9DF] hover:bg-[#F3EFE3]'
+                                          }`}
+                                        >
+                                          {preset.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2 pt-1">
+                                    <div>
+                                      <label className="text-[10px] font-semibold text-[#5E6C64] block">Selling Price (₹)</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="e.g. 60"
+                                        value={item.selling_price ?? ''}
+                                        onChange={(e) => handleUpdateItem(item.id, 'selling_price', parseFloat(e.target.value) || null)}
+                                        className="w-full px-2 py-1 rounded border border-[#DDE9DF] text-xs font-bold text-[#153D32] focus:border-[#23866A] focus:outline-none"
+                                      />
+                                      <span className="text-[10px] text-[#5E6C64]">
+                                        per {item.price_basis_quantity || 1} {item.price_basis_unit || 'kg'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] font-semibold text-[#5E6C64] block">MRP (₹, Optional)</label>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        placeholder="e.g. 65"
+                                        value={item.mrp ?? ''}
+                                        onChange={(e) => handleUpdateItem(item.id, 'mrp', parseFloat(e.target.value) || null)}
+                                        className="w-full px-2 py-1 rounded border border-[#DDE9DF] text-xs font-semibold text-[#252D29] focus:border-[#23866A] focus:outline-none"
+                                      />
+                                      <span className="text-[10px] text-[#5E6C64]">
+                                        per {item.price_basis_quantity || 1} {item.price_basis_unit || 'kg'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Box 3: Inventory Storage & Conversion */}
+                                <div className="p-3 rounded-lg border border-[#DDE9DF] space-y-2">
+                                  <span className="text-[11px] font-bold text-[#153D32] uppercase tracking-wider block">
+                                    Inventory Storage & Conversion
+                                  </span>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <label className="text-[10px] font-semibold text-[#5E6C64] block">Storage Unit</label>
+                                      <select
+                                        value={item.inventory_unit || (item.unit?.toLowerCase().includes('l') ? 'L' : 'kg')}
+                                        onChange={(e) => handleUpdateItem(item.id, 'inventory_unit', e.target.value)}
+                                        className="w-full px-2 py-1 rounded border border-[#DDE9DF] text-xs font-semibold text-[#252D29] bg-white focus:outline-none"
+                                      >
+                                        <option value="kg">kg (Kilograms)</option>
+                                        <option value="g">g (Grams)</option>
+                                        <option value="L">L (Liters)</option>
+                                        <option value="ml">ml (Milliliters)</option>
+                                        <option value="pcs">pcs (Pieces)</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] font-semibold text-[#5E6C64] block">
+                                        1 {item.unit} = [Units]
+                                      </label>
+                                      <input
+                                        type="number"
+                                        step="0.001"
+                                        min="0.001"
+                                        value={item.conversion_factor ?? 1}
+                                        onChange={(e) => handleUpdateItem(item.id, 'conversion_factor', parseFloat(e.target.value) || 1)}
+                                        className="w-full px-2 py-1 rounded border border-[#DDE9DF] text-xs font-semibold text-[#252D29] focus:border-[#23866A] focus:outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="bg-[#E7F6F1] p-2 rounded text-[11px] text-[#16704F] font-medium">
+                                    Physical stock added:{' '}
+                                    <strong>
+                                      {round3(Number(item.quantity || 0) * Number(item.conversion_factor || 1))}{' '}
+                                      {item.inventory_unit || (item.unit?.toLowerCase().includes('l') ? 'L' : 'kg')}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                     );
                   })}
                 </tbody>

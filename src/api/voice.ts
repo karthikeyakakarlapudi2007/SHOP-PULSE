@@ -14,6 +14,12 @@ export interface VoiceProductCandidate {
   unit: string;
   category?: string;
   sku?: string;
+  price_basis_quantity?: number | null;
+  price_basis_unit?: string | null;
+  pricing_status?: string | null;
+  mrp?: number | null;
+  mrp_basis_quantity?: number | null;
+  mrp_basis_unit?: string | null;
 }
 
 export interface MatchedVoiceItem {

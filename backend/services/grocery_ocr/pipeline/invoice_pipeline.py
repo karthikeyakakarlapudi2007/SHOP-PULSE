@@ -580,6 +580,8 @@ class InvoicePipeline:
 
                         if validated_invoice.supplier_name and not final_invoice.supplier_name:
                             final_invoice.supplier_name = validated_invoice.supplier_name
+                        if validated_invoice.invoice_number and not final_invoice.invoice_number:
+                            final_invoice.invoice_number = validated_invoice.invoice_number
                         if validated_invoice.invoice_date and not final_invoice.invoice_date:
                             final_invoice.invoice_date = validated_invoice.invoice_date
 

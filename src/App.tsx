@@ -3,7 +3,9 @@ import type { SearchOption } from './utils/searchResults';
 import type { PageRoute, Product } from './types';
 import { useAuth } from './hooks/useAuth';
 import { useInventory } from './hooks/useInventory';
+import { useShopRole } from './hooks/useShopRole';
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute';
+import { UnauthorizedAccessBanner } from './components/UnauthorizedAccessBanner';
 
 // Layouts
 import { DashboardLayout } from './layouts/DashboardLayout';
@@ -32,6 +34,7 @@ const PageFallback = () => (
 
 export function App() {
   const { firebaseUser, userProfile, loading, logout } = useAuth();
+  const { role, isCashier, canAccessPage } = useShopRole();
   const {
     products,
     loading: productsLoading,
@@ -110,9 +113,10 @@ export function App() {
     if (loading) return;
 
     if (firebaseUser) {
-      // Logged in: only redirect auth forms (login, signup) to dashboard
+      // Logged in: redirect auth forms to permitted default page
       if (activePage === 'login' || activePage === 'signup') {
-        setActivePage('dashboard');
+        const defaultPage: PageRoute = isCashier ? 'sales' : 'dashboard';
+        setActivePage(defaultPage);
       }
     } else {
       // Not logged in: protect internal dashboard pages
@@ -121,7 +125,7 @@ export function App() {
         setActivePage('login');
       }
     }
-  }, [firebaseUser, loading, activePage]);
+  }, [firebaseUser, loading, activePage, isCashier]);
 
   // Errors are re-thrown so callers (product form, invoice scanner) never report a failed save as success.
   const handleAddProduct = async (newProd: Omit<Product, 'id'>) => {
@@ -221,53 +225,63 @@ export function App() {
       >
         <RouteErrorBoundary key={activePage}>
           <Suspense fallback={<PageFallback />}>
-            {activePage === 'dashboard' && (
-              <Dashboard
-                setActivePage={navigate}
-                products={products}
-                shopName={shopName}
+            {!canAccessPage(activePage) ? (
+              <UnauthorizedAccessBanner
+                page={activePage}
+                currentRole={role}
+                onNavigate={navigate}
               />
-            )}
+            ) : (
+              <>
+                {activePage === 'dashboard' && (
+                  <Dashboard
+                    setActivePage={navigate}
+                    products={products}
+                    shopName={shopName}
+                  />
+                )}
 
-            {activePage === 'inventory' && (
-              <Inventory
-                key={inventoryRequest?.key ?? 'inventory'}
-                searchRequest={inventoryRequest}
-                shopName={shopName}
-                products={products}
-                loading={productsLoading}
-                loadError={productsLoadError}
-                onRetryLoad={refreshInventory}
-                onAddProduct={handleAddProduct}
-                onRestock={increaseStock}
-                onUpdateProduct={updateProduct}
-                onDeleteProduct={deleteProduct}
-              />
-            )}
+                {activePage === 'inventory' && (
+                  <Inventory
+                    key={inventoryRequest?.key ?? 'inventory'}
+                    searchRequest={inventoryRequest}
+                    shopName={shopName}
+                    products={products}
+                    loading={productsLoading}
+                    loadError={productsLoadError}
+                    onRetryLoad={refreshInventory}
+                    onAddProduct={handleAddProduct}
+                    onRestock={increaseStock}
+                    onUpdateProduct={updateProduct}
+                    onDeleteProduct={deleteProduct}
+                  />
+                )}
 
-            {activePage === 'sales' && (
-              <Sales
-                key={saleRequest?.key ?? 'sales'}
-                products={products}
-                shopName={shopName}
-                focusSaleId={saleRequest?.saleId ?? null}
-              />
-            )}
+                {activePage === 'sales' && (
+                  <Sales
+                    key={saleRequest?.key ?? 'sales'}
+                    products={products}
+                    shopName={shopName}
+                    focusSaleId={saleRequest?.saleId ?? null}
+                  />
+                )}
 
-            {activePage === 'insights' && (
-              <Insights />
-            )}
+                {activePage === 'insights' && (
+                  <Insights />
+                )}
 
-            {activePage === 'scanner' && (
-              <InvoiceScanner />
-            )}
+                {activePage === 'scanner' && (
+                  <InvoiceScanner />
+                )}
 
-            {activePage === 'settings' && (
-              <Settings
-                shopName={shopName}
-                setActivePage={navigate}
-                onLogout={handleLogout}
-              />
+                {activePage === 'settings' && (
+                  <Settings
+                    shopName={shopName}
+                    setActivePage={navigate}
+                    onLogout={handleLogout}
+                  />
+                )}
+              </>
             )}
           </Suspense>
         </RouteErrorBoundary>

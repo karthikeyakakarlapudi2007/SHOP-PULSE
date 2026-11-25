@@ -18,7 +18,7 @@ import {
 import { Button } from './Button';
 import { useDialog } from '../hooks/useDialog';
 import type { CartItem, Product } from '../types';
-import { lineTotal, lineTotalPaise, round3 } from '../utils/cartPricing';
+import { catalogPrice, lineTotal, lineTotalPaise, round3 } from '../utils/cartPricing';
 import { voiceLineToCartItem, withEditedLineTotal } from '../utils/voiceBill';
 import {
   voiceApi,
@@ -332,7 +332,13 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
     current_stock: p.stock ?? 0,
     unit: p.unit || 'pcs',
     category: String(p.category || 'General'),
-    sku: p.sku || p.barcode
+    sku: p.sku || p.barcode,
+    price_basis_quantity: (p as any).priceBasisQuantity ?? (p as any).price_basis_quantity ?? 1.0,
+    price_basis_unit: (p as any).priceBasisUnit ?? (p as any).price_basis_unit ?? p.unit,
+    pricing_status: (p as any).pricingStatus ?? (p as any).pricing_status ?? 'VERIFIED',
+    mrp: p.mrp,
+    mrp_basis_quantity: (p as any).mrpBasisQuantity ?? (p as any).mrp_basis_quantity,
+    mrp_basis_unit: (p as any).mrpBasisUnit ?? (p as any).mrp_basis_unit,
   }));
 
   // ---------------------------------------------------------------------------
@@ -726,14 +732,15 @@ export const VoiceBillModal: React.FC<VoiceBillModalProps> = ({
       return;
     }
     const spokenTotal = typeof amb.spoken_price === 'number' && amb.spoken_price > 0 ? amb.spoken_price : null;
-    const unitPrice = spokenTotal !== null ? spokenTotal / amb.quantity : candidate.selling_price;
+    const catRate = catalogPrice(candidate as any);
+    const unitPrice = spokenTotal !== null ? spokenTotal / amb.quantity : catRate;
     const newMatchedItem: MatchedVoiceItem = prepared ?? {
       product_id: candidate.id,
       name: candidate.name,
       quantity: amb.quantity,
       unit_price: Math.round(unitPrice * 1000) / 1000,
       unit_price_exact: unitPrice,
-      total_price: spokenTotal ?? lineTotal(amb.quantity, candidate.selling_price),
+      total_price: spokenTotal ?? lineTotal(amb.quantity, catRate),
       unit: candidate.unit,
       current_stock: candidate.current_stock,
       is_out_of_stock: candidate.current_stock <= 0,

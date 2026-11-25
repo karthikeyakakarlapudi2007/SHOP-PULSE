@@ -423,10 +423,12 @@ async def extract_from_session(
 
     Returns {"extraction": <same body as POST /invoices/extract>, "preparation": {...}}.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
-    if not shop:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="User must create a shop profile before scanning invoices.")
+    shop, member = deps.get_current_shop_and_role(db, current_user)
+    if member.role not in [deps.ShopRole.OWNER.value, deps.ShopRole.MANAGER.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access to invoice scanning and preparation is restricted to Managers and Owners.",
+        )
     try:
         manifest = store.get_session(current_user.id, session_id)
     except SessionNotFound as exc:

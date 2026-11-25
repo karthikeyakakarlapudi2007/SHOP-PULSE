@@ -6,18 +6,21 @@ from pathlib import Path
 from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi.responses import FileResponse
 from fastapi.concurrency import run_in_threadpool
 
 from api import deps
 from db.models.user import User
+from db.models.shop import Shop
+from db.models.shop_member import ShopMember, ShopRole
 from schemas.invoice import (
     InvoiceExtractResponse,
     InvoiceConfirmRequest,
     InvoiceConfirmResponse,
 )
-from services import shop as shop_service
 from services import invoice as invoice_service
+from services.forecasting import invalidate_forecast_cache
 from services.ocr import OcrUnavailableError
 from services.grocery_ocr.exceptions import GroceryOCRError
 
@@ -38,7 +41,7 @@ async def extract_invoice(
     *,
     db: Session = Depends(deps.get_db),
     file: UploadFile = File(...),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
     Extract line items, quantities, prices, and supplier metadata from an uploaded invoice (PDF, image or text).
@@ -74,7 +77,7 @@ def confirm_invoice(
     *,
     db: Session = Depends(deps.get_db),
     confirm_in: InvoiceConfirmRequest,
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
     Confirm reviewed invoice items in one transaction: restocks existing products, creates new ones,
@@ -83,16 +86,23 @@ def confirm_invoice(
     """
     user_shop = get_user_shop_or_raise(db, current_user)
     try:
-        return invoice_service.confirm_and_update_stock(
+        result = invoice_service.confirm_and_update_stock(
             db=db,
             shop_id=user_shop.id,
             confirm_in=confirm_in,
             current_user_id=current_user.id,
         )
+        invalidate_forecast_cache(user_shop.id)
+        return result
     except invoice_service.InvoicePermissionError as pe:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
     except invoice_service.InvoiceConflictError as ce:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(ce))
+    except IntegrityError as ie:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invoice or supplier identity conflict caused by a concurrent transaction. Stock was not changed.",
+        )
     except (ValueError, GroceryOCRError) as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:

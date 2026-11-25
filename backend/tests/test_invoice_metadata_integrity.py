@@ -189,3 +189,235 @@ def test_existing_records_remain_accessible():
     assert (old["invoice_number"], old["invoice_date"]) == ("INV-4462", "2026-11-17")
     blank = by_id[second.json()["purchase_id"]]
     assert blank["invoice_number"] is None and blank["invoice_date"] is None
+
+
+# -----------------------------------------------------------------------------
+# Stage 5.2 Header Regression & Integrity Tests (Scenarios 1 - 10)
+# -----------------------------------------------------------------------------
+
+def test_stage52_scenario_01_supplier_name_extracted_side_by_side_with_invoice_no():
+    """Supplier name printed on the same line as invoice number or date is extracted cleanly."""
+    h = auth()
+    text = (
+        "SRI LAKSHMI WHOLESALE TRADERS Invoice No: INV-00427\n"
+        "14 Market Road, Vijayawada GSTIN 37ABCDE1234F1Z5 Date: 08/10/2026\n"
+        + TABLE
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] == "SRI LAKSHMI WHOLESALE TRADERS"
+    assert data["invoice_number"] == "INV-00427"
+    assert data["invoice_date"] == "08/10/2026"
+
+
+def test_stage52_scenario_02_invoice_number_extracted_with_punctuation():
+    """Alphanumeric invoice numbers with hyphens and slashes are preserved faithfully."""
+    h = auth()
+    text = (
+        "Balaji Agro Traders\n"
+        "Invoice Number: BLJ/2026-27/0894\n"
+        + TABLE
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] == "Balaji Agro Traders"
+    assert data["invoice_number"] == "BLJ/2026-27/0894"
+
+
+def test_stage52_scenario_03_missing_supplier_name_stays_none():
+    """When no supplier name is printed, supplier_name remains None and is never invented."""
+    h = auth()
+    text = (
+        "Invoice No: INV-9988 Date: 01/01/2026\n"
+        + TABLE
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] is None
+    assert data["invoice_number"] == "INV-9988"
+    assert data["invoice_date"] == "01/01/2026"
+
+
+def test_stage52_scenario_04_missing_invoice_number_stays_none():
+    """When no invoice number is printed, invoice_number remains None and is never invented."""
+    h = auth()
+    text = (
+        "Ganesh Wholesale Mart\n"
+        "Date: 14/02/2026\n"
+        + TABLE
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] == "Ganesh Wholesale Mart"
+    assert data["invoice_number"] is None
+    assert data["invoice_date"] == "14/02/2026"
+
+
+@pytest.mark.parametrize("header_line,expected_inv", [
+    ("Invoice No: INV-101", "INV-101"),
+    ("Invoice Number: 2026-0042", "2026-0042"),
+    ("Bill No: B-7788", "B-7788"),
+    ("Bill Number: BL-990", "BL-990"),
+    ("Invoice # 4455", "4455"),
+    ("Bill # B99", "B99"),
+    ("Inv No. INV/88", "INV/88"),
+    ("Invoice: INV-COLON-1", "INV-COLON-1"),
+    ("voice no: VC-11", "VC-11"),
+    ("nvoice number: NV-22", "NV-22"),
+])
+def test_stage52_scenario_05_different_header_label_formats(header_line, expected_inv):
+    """Common label variations and OCR clippings are recognised."""
+    h = auth()
+    text = f"Balaji Provisions\n{header_line}\n" + TABLE
+    data = extract_text(h, text)
+    assert data["invoice_number"] == expected_inv
+
+
+def test_stage52_scenario_06_noisy_ocr_text_and_split_delimiters():
+    """Noisy OCR whitespace around delimiters (e.g. 'INV - 00427') is normalized."""
+    h = auth()
+    text = (
+        "  *** BALAJI WHOLESALE TRADERS ***  \n"
+        "Invoice No :  INV - 00427 \n"
+        "Date : 08 / 10 / 2026\n"
+        + TABLE
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] == "BALAJI WHOLESALE TRADERS"
+    assert data["invoice_number"] == "INV-00427"
+
+
+def test_stage52_scenario_07_supplier_vs_table_heading_confusion():
+    """Table headings (Item Description, Qty, Rate, Total) are NEVER accepted as supplier name."""
+    h = auth()
+    # Invoice without supplier, starting directly with table headings
+    text = (
+        "Tax Invoice\n"
+        "Particulars Qty UOM Rate MRP Amount\n"
+        "Tata Salt 1kg 10 pkt 22.00 28.00 220.00\n"
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] is None
+
+
+def test_stage52_scenario_08_invoice_number_vs_gstin_phone_date_order_confusion():
+    """GSTIN, phone numbers, dates, and Order numbers are never confused with invoice number."""
+    h = auth()
+    text = (
+        "Sri Lakshmi Enterprises\n"
+        "GSTIN: 37ABCDE1234F1Z5\n"
+        "Ph: 9876543210\n"
+        "Date: 08/10/2026\n"
+        "Order No: ORD-9988\n"
+        "Purchase Order: PO-5544\n"
+        + TABLE
+    )
+    data = extract_text(h, text)
+    assert data["supplier_name"] == "Sri Lakshmi Enterprises"
+    # Order No and PO No are NOT invoice numbers; since no invoice number is present, stays None
+    assert data["invoice_number"] is None
+    assert data["gstin"] == "37ABCDE1234F1Z5"
+    assert data["invoice_date"] == "08/10/2026"
+
+
+def test_stage52_scenario_09_existing_supplier_matching_on_confirm():
+    """When confirming with a supplier name matching an existing supplier, links to existing supplier row."""
+    h = auth()
+    # Confirm first invoice with supplier
+    res1 = confirm(h, supplier_name="Balaji Traders", invoice_number="INV-A1")
+    assert res1.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(Supplier).count() == 1
+        supplier_id = db.query(Supplier).first().id
+    finally:
+        db.close()
+
+    # Confirm second invoice with same supplier name
+    res2 = confirm(h, supplier_name="balaji traders", invoice_number="INV-A2")
+    assert res2.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(Supplier).count() == 1  # Reused existing supplier, didn't create duplicate
+        p2 = db.query(Purchase).filter(Purchase.invoice_number == "INV-A2").first()
+        assert p2.supplier_id == supplier_id
+    finally:
+        db.close()
+
+
+def test_stage52_scenario_10_image_fixtures_remain_correct():
+    """Verifies that hdr_full.png extracts supplier name and invoice number accurately."""
+    from doc_prep_dataset import PAGE_1_ITEMS, render_invoice_page
+    import cv2
+    from services.invoice import extract_invoice_from_bytes
+
+    page = render_invoice_page(PAGE_1_ITEMS).image
+    _, png_bytes = cv2.imencode(".png", page)
+    file_bytes = png_bytes.tobytes()
+
+    db = TestingSessionLocal()
+    try:
+        shop = db.query(Purchase).first()
+        # Just create a test shop UUID
+        shop_uuid = uuid.uuid4()
+        res = extract_invoice_from_bytes(file_bytes, "hdr_full.png", db, shop_uuid)
+        assert res.supplier_name == "SRI LAKSHMI WHOLESALE TRADERS"
+        assert res.invoice_number == "INV-00427"
+        assert res.invoice_date == "08/10/2026"
+        assert res.gstin == "37ABCDE1234F1Z5"
+        assert len(res.items) >= 5
+    finally:
+        db.close()
+
+
+def test_stage612_blank_invoice_number_normalization_lifecycle():
+    """Stage 6.1.2: Exhaustive validation of blank invoice number normalization and lifecycle:
+    1. NULL invoice_number remains NULL.
+    2. Empty string is normalized to NULL.
+    3. Whitespace-only string is normalized to NULL.
+    4. Multiple unnumbered purchases are permitted without duplicate collisions.
+    5. Numbered invoice duplicates remain strictly blocked.
+    6. Case and whitespace normalization on numbered invoices is strictly enforced.
+    """
+    h = auth()
+
+    # 1. NULL invoice_number remains NULL
+    res_null = confirm(h, supplier_name="Test Supplier", invoice_number=None)
+    assert res_null.status_code == 201
+    pid_null = res_null.json()["purchase_id"]
+
+    # 2. Empty string is normalized to NULL
+    res_empty = confirm(h, supplier_name="Test Supplier", invoice_number="")
+    assert res_empty.status_code == 201
+    pid_empty = res_empty.json()["purchase_id"]
+
+    # 3. Whitespace-only invoice number is normalized to NULL
+    res_ws = confirm(h, supplier_name="Test Supplier", invoice_number="   ")
+    assert res_ws.status_code == 201
+    pid_ws = res_ws.json()["purchase_id"]
+
+    # 4. Verify all three records have NULL in DB (multiple unnumbered allowed)
+    db = TestingSessionLocal()
+    try:
+        p_null = db.query(Purchase).filter(Purchase.id == uuid.UUID(pid_null)).first()
+        p_empty = db.query(Purchase).filter(Purchase.id == uuid.UUID(pid_empty)).first()
+        p_ws = db.query(Purchase).filter(Purchase.id == uuid.UUID(pid_ws)).first()
+        assert p_null.invoice_number is None
+        assert p_empty.invoice_number is None
+        assert p_ws.invoice_number is None
+    finally:
+        db.close()
+
+    # 5. Numbered invoice confirmation succeeds
+    res_num = confirm(h, supplier_name="Test Supplier", invoice_number="INV-612-TEST")
+    assert res_num.status_code == 201
+
+    # Exact duplicate blocked
+    res_num_dup = confirm(h, supplier_name="Test Supplier", invoice_number="INV-612-TEST")
+    assert res_num_dup.status_code == 409
+    assert "already added to stock" in res_num_dup.json()["detail"]
+
+    # 6. Case and whitespace normalization blocked
+    res_case = confirm(h, supplier_name="Test Supplier", invoice_number="  inv-612-test  ")
+    assert res_case.status_code == 409
+    assert "already added to stock" in res_case.json()["detail"]
+
+

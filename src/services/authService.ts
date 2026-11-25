@@ -4,7 +4,7 @@
  * Belongs in `src/services/authService.ts`.
  */
 
-import type { UserProfile, RegisterInput, LoginCredentials, BusinessType } from '../types/user';
+import type { UserProfile, RegisterInput, LoginCredentials, BusinessType, UserRole } from '../types/user';
 import { authApi } from '../api/auth';
 import { shopsApi } from '../api/shops';
 import { getAccessToken } from '../api/client';
@@ -112,6 +112,24 @@ function mapFrontendToBackendBusinessType(type?: string): string {
   if (lower.includes('plant') || lower.includes('garden')) return 'Plant & Gardening Store';
   if (lower.includes('kirana') || lower.includes('grocery') || lower.includes('supermarket')) return 'Grocery/Kirana';
   return 'Other Retail Store';
+}
+
+function resolveUserRole(shopRole?: string | null, isOwner = false, cachedRole?: string | null): UserRole {
+  if (shopRole) {
+    const norm = shopRole.trim().toLowerCase();
+    if (norm === 'owner') return 'owner';
+    if (norm === 'manager') return 'manager';
+    if (norm === 'cashier' || norm === 'staff') return 'cashier';
+  }
+  if (isOwner) return 'owner';
+  if (cachedRole) {
+    const norm = cachedRole.trim().toLowerCase();
+    if (norm === 'owner' || norm === 'manager' || norm === 'cashier') {
+      return norm as UserRole;
+    }
+    if (norm === 'staff') return 'cashier';
+  }
+  return 'cashier';
 }
 
 function mapBackendToFrontendBusinessType(type?: string): BusinessType {
@@ -224,7 +242,7 @@ export async function signInWithEmail(
     shopName: shop?.shop_name || 'My Shop',
     businessType: mapBackendToFrontendBusinessType(shop?.business_type),
     phone: shop?.location || '',
-    role: 'owner',
+    role: resolveUserRole(shop?.current_user_role, shop ? shop.owner_id === user.id : true),
     theme: (localStorage.getItem('shoppulse_theme') as any) || 'light',
     language: (localStorage.getItem('shoppulse_language') as any) || 'en',
     createdAt: user.created_at || now,
@@ -292,7 +310,7 @@ export async function getCurrentUserProfile(_uid?: string): Promise<UserProfile 
       shopName: shop?.shop_name || cached?.shopName || 'My Shop',
       businessType: mapBackendToFrontendBusinessType(shop?.business_type || cached?.businessType),
       phone: shop?.location || cached?.phone || '',
-      role: 'owner',
+      role: resolveUserRole(shop?.current_user_role, shop ? shop.owner_id === user.id : false, cached?.role),
       theme: cached?.theme || (localStorage.getItem('shoppulse_theme') as any) || 'light',
       language: cached?.language || (localStorage.getItem('shoppulse_language') as any) || 'en',
       createdAt: user.created_at || cached?.createdAt || new Date().toISOString(),

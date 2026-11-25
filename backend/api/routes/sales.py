@@ -12,6 +12,7 @@ from schemas.sale import (
 )
 from services import shop as shop_service
 from services import sale as sale_service
+from services.forecasting import invalidate_forecast_cache
 
 router = APIRouter()
 
@@ -37,7 +38,9 @@ def create_sale(
     """
     user_shop = get_user_shop_or_raise(db, current_user)
     try:
-        return sale_service.create_sale(db, sale_in=sale_in, shop_id=user_shop.id)
+        sale = sale_service.create_sale(db, sale_in=sale_in, shop_id=user_shop.id)
+        invalidate_forecast_cache(user_shop.id)
+        return sale
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -53,7 +56,7 @@ def get_sales(
     """
     Get paginated sales history for the authenticated user's shop.
     """
-    shop = shop_service.get_shop_by_owner(db, owner_id=current_user.id)
+    shop = deps.get_user_accessible_shop(db, current_user)
     if not shop:
         return PaginatedSaleResponse(items=[], total=0, skip=skip, limit=limit)
     

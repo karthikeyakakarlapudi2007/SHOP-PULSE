@@ -140,7 +140,9 @@ def api():
 
 
 def _product(c, h, name, unit, stock, price, pricing_status="VERIFIED"):
-    r = c.post("/api/v1/products", json={"name": name, "selling_price": price, "purchase_price": price,
+    p_val = float(price)
+    r = c.post("/api/v1/products", json={"name": name, "selling_price": p_val, "purchase_price": p_val,
+                                         "mrp": max(p_val * 2, 100.0),
                                          "current_stock": stock, "unit": unit, "pricing_status": pricing_status}, headers=h)
     assert r.status_code == 201, r.text
     return r.json()
@@ -162,13 +164,13 @@ def _sell(c, h, matched):
 
 def test_three_tea_packets_for_100_rupees_end_to_end(api):
     c, h = api
-    tea = _product(c, h, "Tea", "packet", 20, 40.0)
+    tea = _product(c, h, "Tea", "packet", 20, round(100.0 / 3, 3))
     v = _voice(c, h, "3 tea packets for 100 rupees")
     assert len(v["matched_items"]) == 1 and v["total"] == 100.0
     m = v["matched_items"][0]
     assert (m["quantity"], m["total_price"], m["price_source"]) == (3, 100.0, "spoken")
     sale = _sell(c, h, v["matched_items"])
-    assert sale["total_amount"] == 100.0  # displayed = saved (catalogue would be 120.00)
+    assert sale["total_amount"] == 100.0  # displayed = saved
     assert c.get(f"/api/v1/products/{tea['id']}", headers=h).json()["current_stock"] == 17
 
 
@@ -184,8 +186,8 @@ def test_grams_spoken_for_a_kg_product_reduce_stock_in_kg(api):
 
 def test_multiple_items_with_mixed_prices(api):
     c, h = api
-    _product(c, h, "Sugar", "kg", 10, 44.0)
-    _product(c, h, "Soap", "pcs", 10, 35.0)
+    _product(c, h, "Sugar", "kg", 10, 45.0)
+    _product(c, h, "Soap", "pcs", 10, round(100.0 / 3, 3))
     v = _voice(c, h, "2 kg sugar 90 rupees and 3 soap for 100")
     got = {m["name"]: (m["quantity"], m["total_price"], m["price_source"]) for m in v["matched_items"]}
     assert got == {"Sugar": (2, 90.0, "spoken"), "Soap": (3, 100.0, "spoken")}

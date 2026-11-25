@@ -41,6 +41,9 @@ const CHECKS = {
   unit_registry_check: null,
   invoice_units_fraction_check: null,
   voice_bill_price_check: null,
+  role_access_check: null,
+  stage_6_7_1_browser_acceptance: null,
+  demand_forecast_check: null,
 };
 
 const log = (msg) => console.log(`[e2e] ${msg}`);
@@ -89,7 +92,12 @@ function fingerprint() {
 // ---------------------------------------------------------------------------- servers
 
 function pythonBin() {
-  for (const p of [path.join(BACKEND_DIR, '.venv', 'bin', 'python'), path.join(ROOT, '.venv', 'bin', 'python')]) {
+  for (const p of [
+    path.join(BACKEND_DIR, '.venv', 'Scripts', 'python.exe'),
+    path.join(ROOT, '.venv', 'Scripts', 'python.exe'),
+    path.join(BACKEND_DIR, '.venv', 'bin', 'python'),
+    path.join(ROOT, '.venv', 'bin', 'python')
+  ]) {
     if (fs.existsSync(p)) return p;
   }
   return 'python3';
@@ -105,7 +113,7 @@ function get(url, timeoutMs = 2000) {
 
 function start(name, cmd, args, opts, logFile) {
   const out = fs.openSync(logFile, 'a');
-  const child = spawn(cmd, args, { ...opts, stdio: ['ignore', out, out], detached: true });
+  const child = spawn(cmd, args, { ...opts, stdio: ['ignore', out, out], detached: process.platform !== 'win32' });
   child.exitCode_ = null;
   child.on('exit', (code, signal) => { child.exitCode_ = code ?? signal; });
   log(`started ${name} (pid ${child.pid}); log: ${logFile}`);
@@ -127,7 +135,13 @@ async function waitReady(name, child, url, logFile, timeoutMs = 90000) {
 
 function stop(child) {
   if (!child || child.exitCode_ !== null) return;
-  try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already gone */ }
+  try {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    } else {
+      process.kill(-child.pid, 'SIGTERM');
+    }
+  } catch { /* already gone */ }
 }
 
 // ---------------------------------------------------------------------------- main
@@ -152,7 +166,7 @@ function stop(child) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shoppulse-e2e-'));
   const artifacts = process.env.E2E_ARTIFACT_DIR ? path.resolve(process.env.E2E_ARTIFACT_DIR) : path.join(tmp, 'artifacts');
   fs.mkdirSync(artifacts, { recursive: true });
-  const dbUrl = `sqlite:///${path.join(tmp, 'e2e.db')}`;
+  const dbUrl = `sqlite:///${path.join(tmp, 'e2e.db').replace(/\\/g, '/')}`;
   const API_TARGET = `http://127.0.0.1:${BACKEND_PORT}`;
   const WEB = `http://127.0.0.1:${WEB_PORT}`;
   const baseEnv = { ...process.env, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' };
@@ -170,12 +184,12 @@ function stop(child) {
   try {
     const beLog = path.join(tmp, 'backend.log');
     backend = start('test backend', pythonBin(), ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(BACKEND_PORT)],
-      { cwd: BACKEND_DIR, env: { ...baseEnv, SHOPPULSE_TEST_MODE: '1', DATABASE_URL: dbUrl, PYTHONUNBUFFERED: '1' } }, beLog);
+      { cwd: BACKEND_DIR, env: { ...baseEnv, SHOPPULSE_TEST_MODE: '1', AUTO_INIT_DB: '1', DATABASE_URL: dbUrl, PYTHONUNBUFFERED: '1' } }, beLog);
     await waitReady('test backend', backend, `${API_TARGET}/api/v1/health`, beLog);
 
     const webLog = path.join(tmp, 'web.log');
-    const viteBin = path.join(ROOT, 'node_modules', '.bin', 'vite');
-    web = start('test web server', viteBin, ['--host', '127.0.0.1', '--port', String(WEB_PORT), '--strictPort'],
+    const viteBin = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+    web = start('test web server', 'node', [viteBin, '--host', '127.0.0.1', '--port', String(WEB_PORT), '--strictPort'],
       { cwd: ROOT, env: { ...baseEnv, SHOPPULSE_TEST_MODE: '1', SHOPPULSE_API_TARGET: API_TARGET, VITE_API_URL: '' } }, webLog);
     await waitReady('test web server', web, `${WEB}/`, webLog);
     // The page's /api calls must reach the test backend through the Vite proxy
@@ -208,7 +222,7 @@ function stop(child) {
     shutdown();
     await new Promise((r) => setTimeout(r, 1500));
     for (const c of [web, backend]) {
-      if (c && c.exitCode_ === null) { try { process.kill(-c.pid, 'SIGKILL'); } catch { /* gone */ } }
+      if (c && c.exitCode_ === null) { stop(c); }
     }
   }
 

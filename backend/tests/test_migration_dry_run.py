@@ -540,3 +540,70 @@ def test_13_purchase_concurrency_and_basis_migration_cycle(temp_db):
     item_cols4 = {c["name"] for c in insp4.get_columns("purchase_items")}
     assert "price_basis_quantity" in item_cols4
 
+
+# -----------------------------------------------------------------------------
+# 14. Invoice Identity Normalized Indexes Migration Cycle (708192a3b4c5)
+# -----------------------------------------------------------------------------
+def test_14_invoice_identity_indexes_migration_cycle(temp_db):
+    """Verify that Alembic upgrades to add normalized expression indexes and downgrades cleanly."""
+    cfg = get_alembic_config(temp_db)
+
+    # 1. Upgrade to 6f708192a3b4
+    command.upgrade(cfg, "6f708192a3b4")
+
+    engine = create_engine(f"sqlite:///{temp_db}")
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS purchases (
+                id VARCHAR PRIMARY KEY,
+                shop_id VARCHAR NOT NULL,
+                supplier_id VARCHAR,
+                invoice_number VARCHAR,
+                total_amount FLOAT DEFAULT 0.0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS suppliers (
+                id VARCHAR PRIMARY KEY,
+                shop_id VARCHAR NOT NULL,
+                supplier_name VARCHAR NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+    # 2. Upgrade to 708192a3b4c5
+    command.upgrade(cfg, "708192a3b4c5")
+
+    with engine.connect() as conn:
+        res = conn.execute(text("PRAGMA index_list(purchases)")).fetchall()
+        purchase_idx_names = {r[1] for r in res}
+        res_sup = conn.execute(text("PRAGMA index_list(suppliers)")).fetchall()
+        supplier_idx_names = {r[1] for r in res_sup}
+
+    assert "uq_purchases_shop_supplier_lower_inv" in purchase_idx_names
+    assert "uq_purchases_shop_null_supplier_lower_inv" in purchase_idx_names
+    assert "uq_suppliers_shop_lower_name" in supplier_idx_names
+
+    # 3. Downgrade back to 6f708192a3b4
+    command.downgrade(cfg, "6f708192a3b4")
+
+    with engine.connect() as conn:
+        res_down = conn.execute(text("PRAGMA index_list(purchases)")).fetchall()
+        down_purchase_idx = {r[1] for r in res_down}
+        res_down_sup = conn.execute(text("PRAGMA index_list(suppliers)")).fetchall()
+        down_supplier_idx = {r[1] for r in res_down_sup}
+
+    assert "uq_purchases_shop_supplier_lower_inv" not in down_purchase_idx
+    assert "uq_purchases_shop_null_supplier_lower_inv" not in down_purchase_idx
+    assert "uq_suppliers_shop_lower_name" not in down_supplier_idx
+
+    # 4. Re-upgrade to head
+    command.upgrade(cfg, "head")
+
+    with engine.connect() as conn:
+        res_reup = conn.execute(text("PRAGMA index_list(purchases)")).fetchall()
+        reup_purchase_idx = {r[1] for r in res_reup}
+    assert "uq_purchases_shop_null_supplier_lower_inv" in reup_purchase_idx
+
+

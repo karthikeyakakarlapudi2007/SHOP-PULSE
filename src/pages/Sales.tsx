@@ -148,8 +148,41 @@ export const Sales: React.FC<SalesProps> = ({
     }, 150);
   };
 
-  const handleVoiceDirectCheckout = (items: CartItem[]) => {
-    handleVoiceItemsConfirmed(items);
+  const handleVoiceDirectCheckout = async (items: CartItem[]) => {
+    if (items.length === 0 || isProcessing || checkoutInFlight.current) return;
+    setSaleError(null);
+    const newCart = mergeIntoCart(cart, items);
+    setCart(newCart);
+
+    checkoutInFlight.current = true;
+    setIsProcessing(true);
+
+    try {
+      const { sale } = await recordSale({
+        items: newCart.map(item => ({
+          productId: item.product.id,
+          name: item.product.name,
+          quantity: item.quantity,
+          price: cartUnitPrice(item),
+          unit: item.product.unit
+        })),
+        paymentMethod: paymentMethod as PaymentMethod,
+        customerName: customerName.trim() || undefined
+      }, 'cashier_1', shopName);
+
+      setCompletedSale(sale);
+      setSelectedReceiptSale(sale);
+      setLastSaleTotal(sale.total);
+      setShowSuccessModal(true);
+      setCart([]);
+      setCustomerName('');
+      onSaleComplete?.(sale);
+    } catch (err: any) {
+      setSaleError(describeError(err, 'Transaction failed. Please check stock and try again.'));
+    } finally {
+      setIsProcessing(false);
+      checkoutInFlight.current = false;
+    }
   };
 
   // History State & Receipt Modal

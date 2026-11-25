@@ -19,6 +19,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { ShelforaLogo } from './branding/ShelforaLogo';
 import { useSync } from '../hooks/useSync';
 import { useDialog } from '../hooks/useDialog';
+import { useShopRole } from '../hooks/useShopRole';
 
 export interface MobileNavDrawerProps {
   isOpen: boolean;
@@ -56,6 +57,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
 }) => {
   const { t, currentLanguageMeta } = useLanguage();
   const { isOnline, isSyncing, totalPendingCount, syncNow } = useSync();
+  const { canAccessPage } = useShopRole();
 
   const drawerRef = useDialog<HTMLDivElement>({
     isOpen,
@@ -107,6 +109,13 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
     setActivePage(page);
     onClose();
   };
+
+  const visibleMobileNavGroups = mobileNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessPage(item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const syncStatusClasses = !isOnline
     ? 'bg-[#FBF4E7] text-[#D6AE62] border-[#D6AE62]/40 cursor-pointer'
@@ -198,7 +207,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
 
           {/* Grouped Navigation List */}
           <nav aria-label="Main navigation" className="space-y-3">
-            {mobileNavGroups.map((group) => (
+            {visibleMobileNavGroups.map((group) => (
               <div key={group.id} className="space-y-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-[#5E6C64] px-3 pb-0.5" aria-hidden="true">
                   {group.label}

@@ -27,65 +27,144 @@ def normalize_text_for_search(text: str) -> str:
 
 PRODUCT_CONCEPT_ALIASES = {
     "Rice": [
-        "rice", "basmati rice", "chawal", "white rice",
+        "rice", "basmati rice", "chawal", "white rice", "brown rice",
         "బియ్యం", "బాస్మతి బియ్యం", "రైస్",
         "चावल", "बासमती चावल", "राइस",
         "அரிசி", "பாஸ்மதி அரிசி",
         "ಅಕ್ಕಿ", "ಬಾಸ್ಮತಿ ಅಕ್ಕಿ",
         "അരി", "ബസ്മതി അരി",
-        "तांदूळ", "बासमती तांदूळ",
+        "तांदूळ", "बासमती तांदूळ", "भात",
         "চাল", "বাসমতী চাল",
-        "ચોખા", "ਬਾਸਮਤੀ ਚੌਲ", "ଚାଉଳ"
+        "ચોખા", "બાસમતી ચોખા",
+        "ਚੌਲ", "ਬਾਸਮਤੀ ਚੌਲ",
+        "ଚାଉଳ", "ବାସମତୀ ଚାଉଳ",
+        "চাউল", "বাসমতী চাউল"
     ],
     "Tata Salt": [
-        "tata salt", "salt", "tata salt 1kg",
+        "tata salt", "tata salt 1kg", "salt", "iodized salt",
         "టాటా సాల్ట్", "టాటా ఉప్పు", "ఉప్పు", "సాల్ట్",
         "टाटा नमक", "टाटा साल्ट", "नमक", "साल्ट",
         "டாடா உப்பு", "டாடா சால்ட்",
-        "ಟಾಟಾ ಉಪ್ಪು", "ಟಾಟಾ ಸಾಲ್ಟ್"
+        "ಟಾಟಾ ಉಪ್ಪು", "ಟಾಟಾ ಸಾಲ್ಟ್",
+        "ടാറ്റ ഉപ്പ്", "ടാറ്റ സോൾട്ട്",
+        "टाटा मीठ", "टाटा सॉल्ट", "मीठ",
+        "টাটা লবণ", "টাটা নুন", "লবণ", "নুন",
+        "ટાટા મીઠું", "ટાટા સોલ્ટ", "મીઠું",
+        "ਟਾਟਾ ਲੂਣ", "ਟਾਟਾ ਸਾਲਟ", "ਲੂਣ",
+        "ଟାଟା ଲୁଣ", "ଲୁଣ",
+        "টাটা নিমখ", "নিমখ"
     ],
     "Parle-G": [
         "parle-g", "parle g", "parleg", "parle g biscuits", "biscuits",
-        "పార్లే-జి", "పార్లే జి", "పార్లే జీ", "బిస్కెట్లు",
+        "పార్లే-జి", "పార్లే జి", "పార్లే జీ", "బిస్కెట్లు", "బిస్కట్",
         "पारले-जी", "पारले जी", "पारलेजी", "बिस्कुट",
-        "பார்லே-ஜி", "ಪಾರ್ಲೆ-ಜಿ"
+        "பார்லே-ஜி", "பார்லே ஜி", "பிஸ்கட்",
+        "ಪಾರ್ಲೆ-ಜಿ", "ಪಾರ್ಲೆ ಜಿ", "ಬಿಸ್ಕತ್ತು",
+        "പാർലെ-ജി", "പാർലെ ജി", "ബിസ്‌ക്കറ്റ്",
+        "पारले-जी", "पारले जी", "बिस्कीट",
+        "পার্লে-জি", "পার্লে জি", "বিস্কুট",
+        "પાર્લે-જી", "પાર્લે જી", "બિસ્કિટ",
+        "ਪਾਰਲੇ-ਜੀ", "ਪਾਰਲੇ ਜੀ", "ਬਿਸਕੁਟ",
+        "ପାର୍ଲେ-ଜି", "ପାର୍ଲେ ଜି", "ବିସ୍କୁଟ",
+        "পাৰ্লে-জি", "পাৰ্লে জি", "বিস্কুট"
     ],
     "Aashirvaad Atta": [
-        "aashirvaad atta", "ashirvad atta", "atta", "wheat flour",
-        "ఆశీర్వాద్ గోధుమ పిండి", "ఆశీర్వాద్ పిండి", "ఆశీర్వాద్ ఆటా", "గోధుమ పిండి", "పిండి",
+        "aashirvaad atta", "ashirvad atta", "atta", "wheat flour", "flour",
+        "ఆశీర్వాద్ గోధుమ పిండి", "ఆశీర్వాద్ పిండి", "ఆశీర్వాద్ ఆటా", "గోధుమ పిండి", "పిండి", "ఆటా",
         "आशीर्वाद आटा", "आटा", "गेहूं का आटा",
-        "ஆசீர்வாத் கோதுமை மாவு", "ஆசீர்வாத் மாவு",
-        "ಆಶೀರ್ವಾದ್ ಗೋಧಿ ಹಿಟ್ಟು"
+        "ஆசீர்வாத் கோதுமை மாவு", "ஆசீர்வாத் மாவு", "கோதுமை மாவு", "மாவு",
+        "ಆಶೀರ್ವಾದ್ ಗೋಧಿ ಹಿಟ್ಟು", "ಆಶೀರ್ವಾದ್ ಹಿಟ್ಟು", "ಗೋಧಿ ಹಿಟ್ಟು", "ಹಿಟ್ಟು",
+        "ആശീർവാദ് ഗോതമ്പ് മാവ്", "ഗോതമ്പ് മാവ്",
+        "आशीर्वाद आटा", "गव्हाचे पीठ", "आटा",
+        "আশীর্বাদ আটা", "গম আটা", "আটা",
+        "આશીર્વાદ લોટ", "ઘઉંનો લોਟ", "લોટ",
+        "ਆਸ਼ੀਰਵਾਦ ਆਟਾ", "ਕਣਕ ਦਾ ਆਟਾ", "ਆਟਾ",
+        "ଆଶୀର୍ବାଦ ଅଟା", "ଗହମ ଅଟା", "ଅଟା",
+        "আশীৰ্বাদ আটা", "আটা"
     ],
     "Toned Milk": [
-        "toned milk", "milk", "amul milk",
-        "టోన్డ్ పాలు", "పాలు",
+        "toned milk", "toned milk (500ml)", "milk", "amul milk",
+        "టోన్డ్ పాలు", "పాలు", "మిల్క్",
+        "टोन्ड दूध", "दूध", "मिल्क",
+        "டோன்ட் பால்", "பால்",
+        "ಟೋನ್ಡ್ ಹಾಲು", "ಹಾಲು",
+        "ടോൺഡ് പാൽ", "പാൽ",
         "टोन्ड दूध", "दूध",
-        "பால்", "ಹಾಲು", "പാൽ"
+        "টোনড দুধ", "দুধ",
+        "ટોન્ડ દૂધ", "દૂધ",
+        "ਟੋਨਡ ਦੁੱਧ", "ਦੁੱਧ",
+        "ଟୋନଡ୍ କ୍ଷୀର", "କ୍ଷୀର",
+        "টোনড গাখীৰ", "গাখীৰ"
     ],
     "Fresh White Bread": [
-        "fresh white bread", "white bread", "bread",
+        "fresh white bread", "white bread", "bread", "loaf of bread",
         "వైట్ బ్రెడ్", "బ్రెడ్",
         "व्हाइट ब्रेड", "ब्रेड",
-        "ரொட்டி", "ರೊಟ್ಟಿ"
+        "வெள்ளை ரொட்டி", "ரொட்டி", "பிரெட்",
+        "ವೈಟ್ ಬ್ರೆಡ್", "ಬ್ರೆಡ್",
+        "വൈറ്റ് ബ്രെഡ്", "ബ്രെഡ്",
+        "व्हाईट ब्रेड", "ब्रेड",
+        "সাদা পাউরুটি", "পাউরুটি",
+        "વ્હાઇટ બ્રેડ", "બ્રેડ",
+        "ਵਾਈਟ ਬਰੈੱਡ", "ਬਰੈੱਡ",
+        "ହ୍ୱାଇଟ୍ ବ୍ରେଡ୍", "ବ୍ରେଡ୍",
+        "বগা পাউৰুটী", "পাউৰুটী"
     ],
     "Refined Sugar": [
-        "refined sugar", "sugar",
-        "చక్కెర", "పంచదార",
-        "चीनी", "शक्कर",
-        "சர்க்கரை", "ಸಕ್ಕರೆ"
+        "refined sugar", "sugar", "sugar (1kg)",
+        "చక్కెర", "పంచదార", "షుగర్",
+        "चीनी", "शक्कर", "शुगर",
+        "சர்க்கரை", "சீனி",
+        "ಸಕ್ಕರೆ",
+        "പഞ്ചസാര",
+        "साखर",
+        "চিনি",
+        "ખાંડ",
+        "ਖੰਡ",
+        "ଚିନି",
+        "চেনি"
     ],
     "Sunflower Cooking Oil": [
         "sunflower cooking oil", "sunflower oil", "oil", "cooking oil",
-        "సన్‌ఫ్లవర్ నూనె", "వంట నూనె", "నూనె",
-        "सनफ्लावर तेल", "तेल",
-        "எண்ணெய்", "ಎಣ್ಣೆ"
+        "సన్‌ఫ్లవర్ నూనె", "వంట నూనె", "నూనె", "ఆయిల్",
+        "सनफ्लावर तेल", "खाना पकाने का तेल", "तेल", "ऑयल",
+        "சூரியகாந்தி எண்ணெய்", "சமையல் எண்ணெய்", "எண்ணெய்",
+        "ಸೂರ್ಯಕಾಂತಿ ಎಣ್ಣೆ", "ಅಡುಗೆ ಎಣ್ಣೆ", "ಎಣ್ಣೆ",
+        "സൂര്യകാന്തി എണ്ണ", "പാചക എണ്ണ", "എണ്ണ",
+        "सूर्यफूल तेल", "खाद्यतेल", "तेल",
+        "সূর্যমুখী তেল", "রান্নার তেল", "তেল",
+        "સૂર્યમુખી તેલ", "તેલ",
+        "ਸੂਰਜਮੁਖੀ ਤੇਲ", "ਤੇਲ",
+        "ସୂର୍ଯ୍ୟମୁଖୀ ତେଲ", "ତେଲ",
+        "সূৰ্য্যমুখী তেল", "তেল"
     ],
     "Premium Assam Tea": [
-        "premium assam tea", "assam tea", "tea",
-        "అస్సాం టీ", "టీ", "చాయ్",
-        "असम चाय", "चाय",
-        "தேநீர்", "ಚಹಾ"
+        "premium assam tea", "assam tea", "tea", "tea powder",
+        "అస్సాం టీ", "టీ", "చాయ్", "టీ పొడి",
+        "असम चाय", "चाय", "चाय पत्ती",
+        "அசாம் தேநீர்", "தேநீர்", "டீ",
+        "ಅಸ್ಸಾಂ ಚಹಾ", "ಚಹಾ", "ಟೀ",
+        "അസം ചായ", "ചായ",
+        "आसाम चहा", "चहा",
+        "আসাম চা", "চা",
+        "આસામ ચા", "ચા",
+        "ਅਸਾਮ ਚਾਹ", "ਚਾਹ",
+        "ଆସାମ ଚା", "ଚା",
+        "অসম চাহ", "চাহ"
+    ],
+    "Coca Cola": [
+        "coca cola", "coke", "cola", "cold drink",
+        "కోకా కోలా", "కోక్", "కూల్ డ్రింక్",
+        "कोका कोला", "कोक", "कोल्ड ड्रिंक",
+        "கோகோ கோலா", "கோக்",
+        "ಕೋಕಾ ಕೋಲಾ", "ಕೋಕ್",
+        "കൊക്കകോള", "കോക്ക്",
+        "कोका कोला", "कोक",
+        "কোকা কোলা", "কোক",
+        "કોકા કોલા", "કોક",
+        "ਕੋਕਾ ਕੋਲਾ", "ਕੋਕ",
+        "କୋକା କୋଲା", "କୋକ୍",
+        "কোকা কোলা", "কোক"
     ]
 }
 
@@ -141,6 +220,89 @@ def to_candidate(p: Any) -> VoiceProductCandidate:
 
 # Precision of the exact unit price derived from a spoken total (so quantity x price reproduces the total)
 _EXACT_UNIT_PRICE = Decimal("0.0000000001")
+
+WEIGHT_AND_CONTAINER_TOKENS = {
+    "1kg", "2kg", "5kg", "10kg", "500g", "250g", "200g", "100g", "50g",
+    "1l", "2l", "5l", "500ml", "250ml", "200ml", "100ml",
+    "kg", "g", "gm", "gms", "l", "ltr", "liter", "liters", "litre", "litres", "ml",
+    "packet", "packets", "pkt", "pkts", "pack", "packs", "pcs", "piece", "pieces",
+    "bottle", "bottles", "can", "cans", "box", "boxes", "tin", "tins", "pouch", "pouches",
+    "loose", "bag", "bags"
+}
+
+DISTINGUISHING_MODIFIERS = {"flour", "powder", "free", "brown", "black", "essential", "cream", "hair"}
+
+PRODUCT_CONCEPT_COMMODITY_TOKENS = {
+    "Rice": {"rice"},
+    "Tata Salt": {"salt"},
+    "Refined Sugar": {"sugar"},
+    "Sunflower Cooking Oil": {"oil"},
+    "Premium Assam Tea": {"tea"},
+    "Toned Milk": {"milk"},
+    "Fresh White Bread": {"bread"},
+    "Aashirvaad Atta": {"atta"},
+    "Parle-G": {"parle", "biscuit"},
+    "Coca Cola": {"cola", "coke"},
+}
+
+def stem_token(t: str) -> str:
+    """Normalizes simple English plurals for token-level matching."""
+    if len(t) > 3 and t.endswith("s") and not t.endswith("ss"):
+        return t[:-1]
+    return t
+
+def query_matches_alias(query_norm: str, alias_norm: str) -> bool:
+    """Matches a spoken query against an alias using token awareness to prevent substring bleed."""
+    if query_norm == alias_norm:
+        return True
+    q_tokens = query_norm.split()
+    a_tokens = alias_norm.split()
+    if set(q_tokens) == set(a_tokens):
+        return True
+    q_stemmed = {stem_token(t) for t in q_tokens if t not in WEIGHT_AND_CONTAINER_TOKENS}
+    a_stemmed = {stem_token(t) for t in a_tokens if t not in WEIGHT_AND_CONTAINER_TOKENS}
+    if q_stemmed and q_stemmed == a_stemmed:
+        return True
+    return False
+
+def candidate_matches_concept(cand: VoiceProductCandidate, concept_name: str, aliases: List[str]) -> bool:
+    """Checks if a catalog candidate product corresponds to a generic concept without false-positive bleed."""
+    c_norm = normalize_text_for_search(cand.name)
+    concept_norm = normalize_text_for_search(concept_name)
+    alias_norms = [normalize_text_for_search(a) for a in aliases]
+
+    if c_norm == concept_norm or c_norm in alias_norms:
+        return True
+
+    c_tokens = set(c_norm.split())
+    c_stemmed = {stem_token(t) for t in c_tokens if t not in WEIGHT_AND_CONTAINER_TOKENS}
+
+    for a_norm in [concept_norm] + alias_norms:
+        a_stemmed = {stem_token(t) for t in a_norm.split() if t not in WEIGHT_AND_CONTAINER_TOKENS}
+        if c_stemmed and c_stemmed == a_stemmed:
+            return True
+
+    # Commodity subset matching: e.g. "Sona Masoori Rice 1kg" matches generic concept "Rice"
+    commodity_tokens = PRODUCT_CONCEPT_COMMODITY_TOKENS.get(concept_name)
+    if commodity_tokens and any(t in c_stemmed for t in commodity_tokens):
+        extra_modifiers = c_stemmed & DISTINGUISHING_MODIFIERS
+        if not extra_modifiers:
+            return True
+
+    concept_tokens = {stem_token(t) for t in concept_norm.split() if t not in WEIGHT_AND_CONTAINER_TOKENS}
+    if concept_tokens and concept_tokens.issubset(c_stemmed):
+        extra_modifiers = (c_stemmed - concept_tokens) & DISTINGUISHING_MODIFIERS
+        if not extra_modifiers:
+            return True
+
+    if cand.category:
+        cat_norm = normalize_text_for_search(str(cand.category))
+        if concept_norm in cat_norm:
+            extra_modifiers = c_stemmed & DISTINGUISHING_MODIFIERS
+            if not extra_modifiers:
+                return True
+
+    return False
 
 
 def _kind(unit_id: str) -> str:
@@ -345,20 +507,50 @@ def match_items_to_inventory(
         q_tokens = [w for w in query_norm.split() if len(w) > 1]
         query_weights = [w for w in weights if w in query_norm]
         
-        # 0. Check Multilingual Concept Aliases (e.g. బియ్యం -> Rice, टाटा नमक -> Tata Salt)
+        # 1. Exact Catalog Match (Highest Priority)
+        exact_matches = [
+            c for c in candidates_catalog 
+            if normalize_text_for_search(c.name) == query_norm
+        ]
+
+        if len(exact_matches) == 1:
+            add_match(exact_matches[0], item)
+            continue
+        elif len(exact_matches) > 1:
+            if query_weights:
+                variant_filtered = [
+                    c for c in exact_matches
+                    if any(w in normalize_text_for_search(c.name) for w in query_weights)
+                ]
+                if len(variant_filtered) == 1:
+                    add_match(variant_filtered[0], item)
+                    continue
+            add_ambiguous(item, exact_matches)
+            continue
+
+        # 2. Multilingual Concept Alias Search (Token-Aware)
         alias_matched_prod = None
         for concept_name, aliases in PRODUCT_CONCEPT_ALIASES.items():
-            if any(alias in query_norm or query_norm in alias for alias in aliases):
-                # Search candidates matching this concept
-                concept_lower = concept_name.lower()
+            if any(query_matches_alias(query_norm, normalize_text_for_search(a)) for a in aliases):
                 c_matches = [
                     c for c in candidates_catalog
-                    if concept_lower in c.name.lower() or (c.category and concept_lower in str(c.category).lower())
+                    if candidate_matches_concept(c, concept_name, aliases)
                 ]
                 if len(c_matches) == 1:
                     alias_matched_prod = c_matches[0]
                     break
                 elif len(c_matches) > 1:
+                    q_meaningful = [stem_token(t) for t in q_tokens if t not in WEIGHT_AND_CONTAINER_TOKENS]
+                    if len(q_meaningful) > 1:
+                        specific_matches = [
+                            c for c in c_matches 
+                            if set(q_meaningful).issubset({stem_token(t) for t in normalize_text_for_search(c.name).split() if t not in WEIGHT_AND_CONTAINER_TOKENS})
+                        ]
+                        if len(specific_matches) == 1:
+                            alias_matched_prod = specific_matches[0]
+                            break
+                        elif len(specific_matches) > 1:
+                            c_matches = specific_matches
                     if query_weights:
                         weight_match = next((c for c in c_matches if any(w in normalize_text_for_search(c.name) and w in query_weights for w in query_weights)), None)
                         if weight_match:
@@ -374,22 +566,12 @@ def match_items_to_inventory(
             add_match(alias_matched_prod, item)
             continue
 
-        # 1. Check for exact full-name match (case-insensitive)
-        exact_matches = [
-            c for c in candidates_catalog 
-            if normalize_text_for_search(c.name) == query_norm
-        ]
-
-        if len(exact_matches) == 1:
-            add_match(exact_matches[0], item)
-            continue
-
-        # 2. Token containment search
-        # Find candidates whose name contains all tokens of query
+        # 3. Token containment search (all tokens of query must be present in candidate)
         all_token_matches = []
         for c in candidates_catalog:
             c_norm = normalize_text_for_search(c.name)
-            if all(token in c_norm for token in q_tokens):
+            c_tokens = set(c_norm.split())
+            if all(token in c_tokens or any(token in ct for ct in c_tokens) for token in q_tokens):
                 all_token_matches.append(c)
 
         if len(all_token_matches) > 1 and query_weights:
@@ -407,18 +589,23 @@ def match_items_to_inventory(
             add_ambiguous(item, all_token_matches)
             continue
 
-        # 3. Partial overlap search (at least significant brand token matches)
+        # 4. Partial overlap search with safety check
         scored_matches = []
         for c in candidates_catalog:
             c_norm = normalize_text_for_search(c.name)
-            match_count = sum(1 for token in q_tokens if token in c_norm)
+            c_tokens = set(c_norm.split())
+            match_count = sum(1 for token in q_tokens if token in c_tokens or any(token in ct for ct in c_tokens))
             if match_count > 0:
                 scored_matches.append((match_count, c))
 
         if scored_matches:
             scored_matches.sort(key=lambda x: -x[0])
             max_score = scored_matches[0][0]
-            best_candidates = [c for score, c in scored_matches if score == max_score and score >= len(q_tokens) * 0.5]
+            # Must match at least 60% of query tokens
+            best_candidates = [
+                c for score, c in scored_matches 
+                if score == max_score and score >= len(q_tokens) * 0.6
+            ]
 
             if len(best_candidates) > 1 and query_weights:
                 variant_filtered = [
@@ -429,7 +616,17 @@ def match_items_to_inventory(
                     best_candidates = variant_filtered
 
             if len(best_candidates) == 1:
-                add_match(best_candidates[0], item)
+                # If query has un-matched descriptive tokens (e.g. brown, free, black, essential), mark ambiguous rather than silent match
+                c_norm = normalize_text_for_search(best_candidates[0].name)
+                c_tokens = set(c_norm.split())
+                unmatched_q_tokens = [
+                    t for t in q_tokens 
+                    if t not in c_tokens and not any(t in ct for ct in c_tokens) and t not in WEIGHT_AND_CONTAINER_TOKENS
+                ]
+                if unmatched_q_tokens:
+                    add_ambiguous(item, best_candidates)
+                else:
+                    add_match(best_candidates[0], item)
             elif len(best_candidates) > 1:
                 add_ambiguous(item, best_candidates)
             else:

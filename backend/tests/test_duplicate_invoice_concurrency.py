@@ -19,7 +19,7 @@ from decimal import Decimal
 import uuid
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.exc import IntegrityError
@@ -36,12 +36,26 @@ from db.models.purchase_item import PurchaseItem
 from api.deps import get_db
 from core.security import get_password_hash, create_access_token
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+import tempfile
+import sqlite3
+from pathlib import Path
+
+_temp_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_temp_db_path = _temp_db_file.name
+_temp_db_file.close()
+
+_conn = sqlite3.connect(_temp_db_path)
+_conn.execute("PRAGMA journal_mode=WAL;")
+_conn.execute("PRAGMA busy_timeout=10000;")
+_conn.commit()
+_conn.close()
+
+clean_db_path = str(Path(_temp_db_path).resolve()).replace("\\", "/")
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{clean_db_path}"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    connect_args={"check_same_thread": False, "timeout": 30},
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -54,14 +68,30 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def setup_db():
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_purchases_shop_supplier_lower_inv
+            ON purchases (shop_id, supplier_id, lower(trim(invoice_number)))
+            WHERE supplier_id IS NOT NULL AND invoice_number IS NOT NULL
+        """))
+        conn.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_purchases_shop_null_supplier_lower_inv
+            ON purchases (shop_id, lower(trim(invoice_number)))
+            WHERE supplier_id IS NULL AND invoice_number IS NOT NULL
+        """))
+        conn.execute(text("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_suppliers_shop_lower_name
+            ON suppliers (shop_id, lower(trim(supplier_name)))
+        """))
     yield
+    app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
 
 
@@ -490,3 +520,200 @@ def test_10_purchases_without_invoice_number_do_not_conflict(test_data):
 
     res2 = client.post("/api/v1/purchases", json=payload, headers=test_data["headers"])
     assert res2.status_code == 201
+
+
+# -----------------------------------------------------------------------------
+# 11. Concurrent NULL supplier same invoice rejected
+# -----------------------------------------------------------------------------
+def test_11_concurrent_null_supplier_same_invoice_rejected(test_data):
+    """Simultaneous requests for same shop + NULL supplier + same invoice number.
+    Exactly one succeeds; others receive 409 Conflict; product stock only increments once.
+    """
+    payload = {
+        "invoice_number": "INV-NULL-CONC-1",
+        "supplier_id": None,
+        "supplier_name": None,
+        "items": [{
+            "name": "Premium Rice 1kg",
+            "matched_product_id": str(test_data["product_id"]),
+            "quantity": 10.0,
+            "unit": "kg",
+            "purchase_price": 60.0,
+            "selling_price": 80.0,
+        }]
+    }
+
+    def send_req(_):
+        return client.post("/api/v1/invoices/confirm", json=payload, headers=test_data["headers"])
+
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        results = list(ex.map(send_req, range(8)))
+
+    status_codes = [r.status_code for r in results]
+    assert status_codes.count(201) == 1
+    assert status_codes.count(409) == 7
+
+    db = TestingSessionLocal()
+    try:
+        purchases = db.query(Purchase).filter(
+            Purchase.shop_id == test_data["shop_id"],
+            Purchase.invoice_number == "INV-NULL-CONC-1"
+        ).all()
+        assert len(purchases) == 1
+        p = db.query(Product).filter(Product.id == test_data["product_id"]).first()
+        # Initial stock was 100.0, single increment +10.0 = 110.0
+        assert p.current_stock == 110.0
+    finally:
+        db.close()
+
+
+# -----------------------------------------------------------------------------
+# 12. Concurrent NULL supplier different casing rejected
+# -----------------------------------------------------------------------------
+def test_12_concurrent_null_supplier_different_casing_rejected(test_data):
+    """Simultaneous requests for same shop + NULL supplier + different casing ('INV-CASE-1' vs 'inv-case-1')."""
+    payload_upper = {
+        "invoice_number": "INV-CASE-1",
+        "supplier_id": None,
+        "items": [{
+            "name": "Premium Rice 1kg",
+            "matched_product_id": str(test_data["product_id"]),
+            "quantity": 5.0,
+            "unit": "kg",
+            "purchase_price": 60.0,
+            "selling_price": 80.0,
+        }]
+    }
+    payload_lower = {
+        "invoice_number": "inv-case-1",
+        "supplier_id": None,
+        "items": [{
+            "name": "Premium Rice 1kg",
+            "matched_product_id": str(test_data["product_id"]),
+            "quantity": 5.0,
+            "unit": "kg",
+            "purchase_price": 60.0,
+            "selling_price": 80.0,
+        }]
+    }
+
+    res1 = client.post("/api/v1/invoices/confirm", json=payload_upper, headers=test_data["headers"])
+    assert res1.status_code == 201
+
+    res2 = client.post("/api/v1/invoices/confirm", json=payload_lower, headers=test_data["headers"])
+    assert res2.status_code == 409
+
+    db = TestingSessionLocal()
+    try:
+        p = db.query(Product).filter(Product.id == test_data["product_id"]).first()
+        assert p.current_stock == 105.0
+    finally:
+        db.close()
+
+
+# -----------------------------------------------------------------------------
+# 13. Concurrent NULL supplier whitespace differences rejected
+# -----------------------------------------------------------------------------
+def test_13_concurrent_null_supplier_whitespace_differences_rejected(test_data):
+    """Simultaneous requests for same shop + NULL supplier + whitespace differences ('  INV-SPACE-1  ' vs 'INV-SPACE-1')."""
+    payload_padded = {
+        "invoice_number": "   INV-SPACE-1   ",
+        "supplier_id": None,
+        "items": [{
+            "name": "Premium Rice 1kg",
+            "matched_product_id": str(test_data["product_id"]),
+            "quantity": 5.0,
+            "unit": "kg",
+            "purchase_price": 60.0,
+            "selling_price": 80.0,
+        }]
+    }
+    payload_clean = {
+        "invoice_number": "INV-SPACE-1",
+        "supplier_id": None,
+        "items": [{
+            "name": "Premium Rice 1kg",
+            "matched_product_id": str(test_data["product_id"]),
+            "quantity": 5.0,
+            "unit": "kg",
+            "purchase_price": 60.0,
+            "selling_price": 80.0,
+        }]
+    }
+
+    res1 = client.post("/api/v1/invoices/confirm", json=payload_padded, headers=test_data["headers"])
+    assert res1.status_code == 201
+
+    res2 = client.post("/api/v1/invoices/confirm", json=payload_clean, headers=test_data["headers"])
+    assert res2.status_code == 409
+
+
+# -----------------------------------------------------------------------------
+# 14. Supplier name wildcard injection protection
+# -----------------------------------------------------------------------------
+def test_14_supplier_name_wildcard_injection_protection(test_data):
+    """Confirming an invoice with wildcard characters (% or _) does not match unintended suppliers."""
+    # Create supplier 'Global Foods Distributor'
+    res_wild = client.post("/api/v1/invoices/confirm", json={
+        "invoice_number": "INV-WILDCARD-1",
+        "supplier_name": "%",  # Wildcard that would match any supplier under naive LIKE/ILIKE
+        "items": [{
+            "name": "Premium Rice 1kg",
+            "matched_product_id": str(test_data["product_id"]),
+            "quantity": 5.0,
+            "unit": "kg",
+            "purchase_price": 60.0,
+            "selling_price": 80.0,
+        }]
+    }, headers=test_data["headers"])
+    assert res_wild.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        # A new supplier named '%' was created, rather than attaching to 'Global Foods Distributor'
+        suppliers = db.query(Supplier).filter(Supplier.shop_id == test_data["shop_id"]).all()
+        assert len(suppliers) == 2
+        names = {s.supplier_name for s in suppliers}
+        assert "%" in names
+        assert "Global Foods Distributor" in names
+    finally:
+        db.close()
+
+
+# -----------------------------------------------------------------------------
+# 15. Concurrent equivalent supplier name creation idempotency
+# -----------------------------------------------------------------------------
+def test_15_concurrent_equivalent_supplier_creation_idempotency(test_data):
+    """Concurrent requests creating the same supplier with varying casing/spacing create only 1 supplier record."""
+    def send_sup(name):
+        return client.post("/api/v1/invoices/confirm", json={
+            "invoice_number": f"INV-SUP-ISO-{uuid.uuid4().hex[:6]}",
+            "supplier_name": name,
+            "items": [{
+                "name": "Premium Rice 1kg",
+                "matched_product_id": str(test_data["product_id"]),
+                "quantity": 1.0,
+                "unit": "kg",
+                "purchase_price": 60.0,
+                "selling_price": 80.0,
+            }]
+        }, headers=test_data["headers"])
+
+    names = ["Agro Traders", "  agro traders ", "AGRO TRADERS", "agro traders", " Agro Traders "]
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        results = list(ex.map(send_sup, names))
+
+    for r in results:
+        assert r.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        agro_sups = db.query(Supplier).filter(
+            Supplier.shop_id == test_data["shop_id"],
+            Supplier.supplier_name.ilike("agro traders")
+        ).all()
+        # Exactly ONE supplier record was created despite 5 distinct concurrent confirmations
+        assert len(agro_sups) == 1
+    finally:
+        db.close()
+
