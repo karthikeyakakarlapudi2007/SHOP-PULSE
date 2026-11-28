@@ -2,12 +2,6 @@
 
 **Tagline:** *"Smarter Shelves. Better Decisions."*
 
-[![React](https://img.shields.io/badge/React-19.2.8-153D32?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-23866A?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8.3-D6AE62?style=for-the-badge&logo=vite&logoColor=black)](https://vitejs.dev/)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind-4.3-153D32?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-B9E5D0.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-
 > **SHELFORA** is a premium, offline-first grocery management and invoice intelligence platform engineered specifically for retail stores and Indian Kirana merchants. It blends header-guided dynamic invoice extraction, rapid multi-item POS billing, real-time multi-counter synchronization, AI demand forecasting, smart weighing scale / ESP32 IoT counter integration, and 12-language Voice-to-Bill.
 
 ---
