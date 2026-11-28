@@ -1,4 +1,4 @@
-# 🌿 SHELFORA — Grocery Management & Invoice Intelligence Platform
+#  SHELFORA — Grocery Management & Invoice Intelligence Platform
 
 **Tagline:** *"Smarter Shelves. Better Decisions."*
 
@@ -12,22 +12,22 @@
 
 ---
 
-## 🌟 Key Capabilities & Pillars
+##  Key Capabilities & Pillars
 
 | Pillar | Features & Technical Highlights |
 | :--- | :--- |
-| **🧾 Invoice Intelligence Scanner** | Header-guided dynamic invoice extraction layer that isolates Rate, Purchase Price, Selling Price, and MRP with spatial boundary verification and banker's Decimal rounding. Generates audit workbooks (.xlsx) and performs idempotent stock updates. |
-| **📷 Invoice Photo Preparation** | Camera capture of multi-page invoices with automatic quality grading, upright/sideways/upside-down detection, deskewing, perspective correction and measured, adaptive enhancement before the existing OCR engine; manual rotate/retake/reorder, lossless PDF, originals kept. See [docs/document-prep](docs/document-prep/README.md). |
-| **⚡ Lightning POS & Billing** | Rapid multi-item checkout, instant bill calculation, cash & UPI split payments, thermal receipt generator, keyboard shortcuts, and barcode scanner integration. |
-| **🎙️ Voice-to-Bill (12 Languages)** | Fast natural language billing powered by multilingual voice parsing supporting Hindi, Telugu, Tamil, Kannada, Marathi, Bengali, Gujarati, Punjabi, Malayalam, Odia, Assamese, and Urdu. |
-| **📦 Dynamic Inventory & Restocking** | Real-time stock decrement transactions, low-stock threshold triggers, multi-category taxonomy, supplier management, and instant stock adjustments. |
-| **📊 Shelf Analytics & Demand Intelligence** | Rolling daily/weekly/monthly revenue trends, gross margin analytics `(sellingPrice - costPrice)`, top seller rankings, slow-moving dead-capital detection, and velocity-based stockout forecasts. |
-| **📶 Offline-First Resilience** | Zero-latency local caching, persistent queueing of offline sales and product mutations, atomic conflict resolution, and automatic background sync upon reconnection. |
-| **📡 ESP32 IoT Counter & Scale** | Ready-to-pair hardware communication bridge for ESP32 digital scales and smart optical counters with simulator fallback mode. |
+| ** Invoice Intelligence Scanner** | Header-guided dynamic invoice extraction layer that isolates Rate, Purchase Price, Selling Price, and MRP with spatial boundary verification and banker's Decimal rounding. Generates audit workbooks (.xlsx) and performs idempotent stock updates. |
+| ** Invoice Photo Preparation** | Camera capture of multi-page invoices with automatic quality grading, upright/sideways/upside-down detection, deskewing, perspective correction and measured, adaptive enhancement before the existing OCR engine; manual rotate/retake/reorder, lossless PDF, originals kept. See [docs/document-prep](docs/document-prep/README.md). |
+| ** Lightning POS & Billing** | Rapid multi-item checkout, instant bill calculation, cash & UPI split payments, thermal receipt generator, keyboard shortcuts, and barcode scanner integration. |
+| ** Voice-to-Bill (12 Languages)** | Fast natural language billing powered by multilingual voice parsing supporting Hindi, Telugu, Tamil, Kannada, Marathi, Bengali, Gujarati, Punjabi, Malayalam, Odia, Assamese, and Urdu. |
+| ** Dynamic Inventory & Restocking** | Real-time stock decrement transactions, low-stock threshold triggers, multi-category taxonomy, supplier management, and instant stock adjustments. |
+| ** Shelf Analytics & Demand Intelligence** | Rolling daily/weekly/monthly revenue trends, gross margin analytics `(sellingPrice - costPrice)`, top seller rankings, slow-moving dead-capital detection, and velocity-based stockout forecasts. |
+| ** Offline-First Resilience** | Zero-latency local caching, persistent queueing of offline sales and product mutations, atomic conflict resolution, and automatic background sync upon reconnection. |
+| ** ESP32 IoT Counter & Scale** | Ready-to-pair hardware communication bridge for ESP32 digital scales and smart optical counters with simulator fallback mode. |
 
 ---
 
-## 🏛️ System Architecture
+##  System Architecture
 
 ```
                                   +-----------------------------+
@@ -53,7 +53,7 @@
 
 ---
 
-## 📂 Project Structure
+##  Project Structure
 
 ```bash
 SHELFORA/
@@ -87,7 +87,7 @@ SHELFORA/
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Prerequisites
 * **Node.js** v20+ or v22+
@@ -137,7 +137,7 @@ npx tsc --noEmit -p tests/tsconfig.json
 
 ---
 
-## 🗄️ Database Architecture & Safety
+##  Database Architecture & Safety
 
 - **Engine & Storage:** SQLite3 managed via SQLAlchemy ORM (`backend/shoppulse.db`).
 - **Core Entities:**
@@ -151,7 +151,7 @@ npx tsc --noEmit -p tests/tsconfig.json
 
 ---
 
-## 🎨 Shelfora Design Tokens & Palette
+##  Shelfora Design Tokens & Palette
 
 The Shelfora interface utilizes a sophisticated natural grocery palette:
 - **Primary Deep Forest Green (`#153D32`):** Brand anchors, primary actions, and prominent typography.
